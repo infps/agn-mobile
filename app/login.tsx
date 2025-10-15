@@ -1,14 +1,8 @@
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  Pressable,
-} from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Pressable } from "react-native";
 import { Link } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
-const Signup = () => {
+const Login = () => {
   return (
     <View className="flex-1 bg-white px-6 py-10">
       <View className="mt-16">
@@ -16,7 +10,7 @@ const Signup = () => {
           Welcome Pigeon pulse
         </Text>
         <Text className="text-base mt-4 text-center">
-          Create an account so you can explore all the existing jobs
+          Welcome back you've been missed!
         </Text>
       </View>
 
@@ -42,29 +36,28 @@ const Signup = () => {
           />
         </View>
 
-        {/* Confirm Password Input */}
-        <View className="border-2 border-gray-200 rounded-xl px-4 py-4 bg-gray-50 mt-6">
-          <TextInput
-            placeholder="Confirm Password"
-            placeholderTextColor="#9CA3AF"
-            className="text-base"
-            secureTextEntry
-          />
+        {/* Forgot Password Link */}
+        <View className="mt-4 items-end">
+          <Pressable>
+            <Text className="text-cyan-600 font-medium">
+              Forgot your password?
+            </Text>
+          </Pressable>
         </View>
 
-        {/* Sign Up Button */}
+        {/* Sign In Button */}
         <TouchableOpacity className="bg-cyan-600 rounded-xl py-4 mt-8">
           <Text className="text-white text-center text-lg font-semibold">
-            Sign up
+            Sign in
           </Text>
         </TouchableOpacity>
 
-        {/* Login Link */}
+        {/* Create Account Link */}
         <View className="mt-6 flex-row justify-center">
-          <Text className="text-gray-600">Already have an account </Text>
-          <Link href={"/login"} asChild>
+          <Text className="text-gray-600">Create new account </Text>
+          <Link href="/signup" asChild>
             <Pressable>
-              <Text className="font-bold text-gray-900">Login</Text>
+              <Text className="font-bold text-gray-900">Signup</Text>
             </Pressable>
           </Link>
         </View>
@@ -97,4 +90,4 @@ const Signup = () => {
   );
 };
 
-export default Signup;
+export default Login;

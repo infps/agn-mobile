@@ -19,10 +19,14 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={DefaultTheme}>
-      <Stack>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+        }}
+      >
         <Stack.Screen
           name="modal"
-          options={{ presentation: "modal", title: "Modal" }}
+          options={{ presentation: "modal", title: "Modal", headerShown: true }}
         />
       </Stack>
       <StatusBar style="auto" />
