@@ -1,12 +1,8 @@
-import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
-} from "@react-navigation/native";
+import { DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
-import "./globals.css";
+import "./global.css";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
@@ -22,14 +18,12 @@ export default function RootLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
+          statusBarStyle: 'dark',
         }}
       >
-        <Stack.Screen
-          name="modal"
-          options={{ presentation: "modal", title: "Modal", headerShown: true }}
-        />
+        <Stack.Screen name="loft-detail" />
       </Stack>
-      <StatusBar style="auto" />
+      <StatusBar style="light"/>
     </ThemeProvider>
   );
 }

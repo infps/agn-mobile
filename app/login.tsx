@@ -1,12 +1,21 @@
-import { View, Text, TextInput, TouchableOpacity, Pressable } from "react-native";
-import { Link } from "expo-router";
+/* eslint-disable react/no-unescaped-entities */
 import { Ionicons } from "@expo/vector-icons";
+import { Link, useRouter } from "expo-router";
+
+import {
+  Pressable,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 const Login = () => {
+  const router = useRouter();
   return (
     <View className="flex-1 bg-white px-6 py-10">
       <View className="mt-16">
-        <Text className="text-3xl font-bold text-cyan-600">
+        <Text className="text-4xl font-bold text-cyan-600 text-center">
           Welcome Pigeon pulse
         </Text>
         <Text className="text-base mt-4 text-center">
@@ -46,7 +55,13 @@ const Login = () => {
         </View>
 
         {/* Sign In Button */}
-        <TouchableOpacity className="bg-cyan-600 rounded-xl py-4 mt-8">
+        <TouchableOpacity
+          className="bg-cyan-600 rounded-xl py-4 mt-8"
+          onPress={() => {
+            // Navigate to next onboarding screen or login
+            router.push("/home");
+          }}
+        >
           <Text className="text-white text-center text-lg font-semibold">
             Sign in
           </Text>
