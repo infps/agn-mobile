@@ -1,21 +1,12 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import Header from "@/components/header";
 import React from "react";
-import { Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const Payment = () => {
-  const router = useRouter();
   return (
     <SafeAreaView>
-      <View className={`bg-primary px-2 py-4 flex-row justify-between w-full`}>
-        <TouchableOpacity onPress={() => router.back()} className="w-[5%]">
-          <Ionicons name="chevron-back" size={24} color="white" />
-        </TouchableOpacity>
-        <Text className="text-white text-center text-xl font-bold w-[95%]">
-          Payment
-        </Text>
-      </View>
+      <Header title="Payment" />
       <View className="p-2 flex-row flex-wrap w-full mt-2">
         <View className="w-1/2 pr-2">
           <Text>Name</Text>

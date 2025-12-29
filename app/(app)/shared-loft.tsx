@@ -1,27 +1,19 @@
+import Header from "@/components/header";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import React from "react";
 import {
-    FlatList,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const SharedLoft = () => {
-  const router = useRouter();
   return (
     <SafeAreaView>
-      <View className={`bg-primary px-2 py-4 flex-row justify-between w-full`}>
-        <TouchableOpacity onPress={() => router.back()} className="w-[5%]">
-          <Ionicons name="chevron-back" size={24} color="white" />
-        </TouchableOpacity>
-        <Text className="text-white text-center text-xl font-bold w-[95%]">
-          Shared Loft
-        </Text>
-      </View>
+      <Header title="Shared Loft" />
       <View className="flex-row items-center justify-between mx-2 p-2 border-b border-gray-300">
         <View className="w-[33%]">
           <Text className="text-lg font-bold">Loft Name</Text>

@@ -1,10 +1,11 @@
+import { useAuth } from "@/context";
 import { Ionicons } from "@expo/vector-icons";
 import { Link, useRouter } from "expo-router";
 import React from "react";
 import {
   FlatList,
   Image,
-  StyleSheet,
+  Share,
   Text,
   TouchableOpacity,
   View,
@@ -14,40 +15,56 @@ import { SafeAreaView } from "react-native-safe-area-context";
 const settingOption1: {
   title: string;
   icon: React.ReactNode;
-  link?:
-    | "/onboarding"
-    | "/home"
-    | "/"
-    | "/login"
-    | "/payments"
-    | "/about-us"
-    | "/privacy-policy"
-    | "/terms-condition";
+  link?: "/races" | "/events" | "/teams" | "/birds";
+   //"/own-loft" | "/shared-loft" | "/result" |
 }[] = [
   {
     title: "Races",
     icon: (
-      <Image source={require("../assets/journey.png")} className="w-8 h-8" />
+      <Image source={require("../../assets/journey.png")} className="w-8 h-8" />
     ),
+    link: "/races",
   },
   {
-    title: "Own Loft",
-    icon: (
-      <Image source={require("../assets/parcel.png")} className="w-8 h-8" />
-    ),
+    title:" Teams",
+    icon:"",
+    link:"/teams"
   },
   {
-    title: "Shared Loft",
+    title:"Events",
     icon: (
-      <Image source={require("../assets/money-bag.png")} className="w-8 h-8" />
+      <Image source={require("../../assets/parcel.png")} className="w-8 h-8" />
     ),
+    link: "/events",
   },
-  {
-    title: "Result",
+    {
+    title:"Birds",
     icon: (
-      <Image source={require("../assets/quality.png")} className="w-8 h-8" />
+      <Image source={require("../../assets/parcel.png")} className="w-8 h-8" />
     ),
+    link: "/birds",
   },
+  // {
+  //   title: "Own Loft",
+  //   icon: (
+  //     <Image source={require("../../assets/parcel.png")} className="w-8 h-8" />
+  //   ),
+  //   link: "/own-loft",
+  // },
+  // {
+  //   title: "Shared Loft",
+  //   icon: (
+  //     <Image source={require("../../assets/money-bag.png")} className="w-8 h-8" />
+  //   ),
+  //   link: "/shared-loft",
+  // },
+  // {
+  //   title: "Result",
+  //   icon: (
+  //     <Image source={require("../../assets/quality.png")} className="w-8 h-8" />
+  //   ),
+  //   link: "/result",
+  // },
 ];
 
 const settingOption2: {
@@ -85,22 +102,39 @@ const settingOption2: {
   },
 ];
 const Settings = () => {
+  const { user,signOut } = useAuth();
   const router = useRouter();
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message:
+          "🚀 Check out this awesome app!\nDownload now:\nhttps://play.google.com/store/apps/details?id=com.yourapp",
+        // iOS only
+        url: "https://yourwebsite.com",
+        title: "Share App",
+      });
+    } catch (error) {
+      console.log("Share error:", error);
+    }
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-[#f5f5f5]">
       <View className={`bg-primary p-4 flex-row justify-between`}>
         <View>
-          <Text className="text-white text-xl font-bold">Hi Indrajit</Text>
-          <Link href="/profile" className="text-white">
+          <Text className="text-white text-xl font-bold">
+            Hi {user?.firstName} {user?.lastName}
+          </Text>
+          <Link href="/profile-update" className="text-white">
             Edit Profile
           </Link>
         </View>
-        <View className="bg-white p-1 rounded-full w-14 h-14">
+        <Link href="/profile" className="bg-white p-1 rounded-full w-14 h-14">
           <Image
-            source={require("../assets/profile.png")}
+            source={require("../../assets/profile.png")}
             className="w-full h-full"
           />
-        </View>
+        </Link>
       </View>
       <View className="mt-8 bg-white p-4">
         <FlatList
@@ -113,6 +147,7 @@ const Settings = () => {
                   ? "border-b border-gray-200"
                   : ""
               }`}
+              onPress={() => router.push(item.link as any)}
             >
               <View className="flex-row items-center">
                 {item.icon}
@@ -148,18 +183,21 @@ const Settings = () => {
           )}
         />
       </View>
-      <View className="mt-8 bg-white p-4 flex-row items-center mb-4">
+      <TouchableOpacity
+        className="mt-8 bg-white p-4 flex-row items-center mb-4"
+        onPress={handleShare}
+      >
         <Image
-          source={require("../assets/share.png")}
+          source={require("../../assets/share.png")}
           className="w-8 h-8 mr-2"
         />
         <Text className="text-xl font-bold">Share This App</Text>
-      </View>
+      </TouchableOpacity>
 
       {/* This empty view pushes the logout button to the bottom */}
       <View className="flex-1" />
 
-      <View className="bg-white p-4 border-t border-gray-200">
+      <TouchableOpacity onPress={signOut} className="bg-white p-4 border-t border-gray-200">
         <View className="flex-row items-center">
           <Ionicons
             name="log-out-outline"
@@ -169,11 +207,9 @@ const Settings = () => {
           />
           <Text className="text-xl font-bold text-red-500">Logout</Text>
         </View>
-      </View>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 };
 
 export default Settings;
-
-const styles = StyleSheet.create({});

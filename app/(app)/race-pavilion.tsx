@@ -1,33 +1,21 @@
 import Carousel from "@/components/carousel";
-import { Ionicons } from "@expo/vector-icons";
+import Header from "@/components/header";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
 import React from "react";
 import {
   Image,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const RacePavilion = () => {
-  const router = useRouter();
   return (
     <SafeAreaView>
       <ScrollView>
-        <View
-          className={`bg-primary px-2 py-4 flex-row justify-between w-full`}
-        >
-          <TouchableOpacity onPress={() => router.back()} className="w-[5%]">
-            <Ionicons name="chevron-back" size={24} color="white" />
-          </TouchableOpacity>
-          <Text className="text-white text-center text-xl font-bold w-[95%]">
-            Race Pavilion
-          </Text>
-        </View>
+        <Header title="Race Pavilion" />
         <LinearGradient
           colors={["#fff", "#dbeafe"]}
           start={{ x: 0, y: 0.5 }} // Start from the left center
@@ -46,7 +34,7 @@ const RacePavilion = () => {
           </View>
 
           <Image
-            source={require("../assets/pigeon.png")}
+            source={require("../../assets/pigeon.png")}
             className="w-32 mt-4"
             style={{ objectFit: "contain" }}
           />

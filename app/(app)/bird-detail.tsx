@@ -1,25 +1,17 @@
+import Header from "@/components/header";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import React from "react";
-import { Image, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Image, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const BirdDetail = () => {
-  const router = useRouter();
   return (
     <SafeAreaView>
-      <View className={`bg-primary px-2 py-4 flex-row justify-between w-full`}>
-        <TouchableOpacity onPress={() => router.back()} className="w-[5%]">
-          <Ionicons name="chevron-back" size={24} color="white" />
-        </TouchableOpacity>
-        <Text className="text-white text-center text-xl font-bold w-[95%]">
-          Bird Detail
-        </Text>
-      </View>
+      <Header title="Bird Detail"/>
       <View className="flex-row items-center justify-between mx-2 p-2 border-b border-gray-300">
         <View className="w-[28%]">
           <Image
-            source={require("../assets/profile.png")}
+            source={require("../../assets/profile.png")}
             className="w-20 h-20 rounded-full"
           />
           <View className="absolute ml-[60px] mt-10 bg-primary p-1 border border-white rounded-full ">

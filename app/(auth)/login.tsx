@@ -1,6 +1,8 @@
 /* eslint-disable react/no-unescaped-entities */
+import { useAuth } from "@/context";
 import { Ionicons } from "@expo/vector-icons";
-import { Link, useRouter } from "expo-router";
+import { Link } from "expo-router";
+import { useState } from "react";
 
 import {
   Pressable,
@@ -11,7 +13,18 @@ import {
 } from "react-native";
 
 const Login = () => {
-  const router = useRouter();
+  const { signIn, isLoading } = useAuth();
+  const [user,setUser]=useState({
+    email:"",
+    password:""
+  })
+  const handelLogin= async ()=>{
+    try {
+      await signIn(user.email,user.password)
+    } catch (error) {
+      console.log(error)
+    }
+  }
   return (
     <View className="flex-1 bg-white px-6 py-10">
       <View className="mt-16">
@@ -29,9 +42,13 @@ const Login = () => {
           <TextInput
             placeholder="Email"
             placeholderTextColor="#9CA3AF"
-            className="text-base"
+            className="text-base py-0"
             keyboardType="email-address"
             autoCapitalize="none"
+            value={user.email}
+            onChangeText={(text) => {
+              setUser({ ...user, email: text });
+            }}
           />
         </View>
 
@@ -40,8 +57,12 @@ const Login = () => {
           <TextInput
             placeholder="Password"
             placeholderTextColor="#9CA3AF"
-            className="text-base"
+            className="text-base py-0"
             secureTextEntry
+            value={user.password}
+            onChangeText={(text) => {
+              setUser({ ...user, password: text });
+            }}
           />
         </View>
 
@@ -57,10 +78,7 @@ const Login = () => {
         {/* Sign In Button */}
         <TouchableOpacity
           className="bg-cyan-600 rounded-xl py-4 mt-8"
-          onPress={() => {
-            // Navigate to next onboarding screen or login
-            router.push("/home");
-          }}
+          onPress={handelLogin}
         >
           <Text className="text-white text-center text-lg font-semibold">
             Sign in

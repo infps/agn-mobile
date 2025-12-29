@@ -1,21 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { Header } from "@react-navigation/elements";
 import React from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const PaymentDetail = () => {
-  const router = useRouter();
   return (
     <SafeAreaView>
-      <View className={`bg-primary px-2 py-4 flex-row justify-between w-full`}>
-        <TouchableOpacity onPress={() => router.back()} className="w-[5%]">
-          <Ionicons name="chevron-back" size={24} color="white" />
-        </TouchableOpacity>
-        <Text className="text-white text-center text-xl font-bold w-[95%]">
-          Result
-        </Text>
-      </View>
+      <Header title="Payment Detail" />
       <View className="p-2 bg-primary flex-row justify-between">
         <Text className="text-white text-[10px]">Race Name</Text>
         <Text className="text-white text-[10px]">Loft Name</Text>

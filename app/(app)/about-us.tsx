@@ -1,5 +1,5 @@
 import React from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 
 const AboutUs = () => {
   return (
@@ -10,5 +10,3 @@ const AboutUs = () => {
 }
 
 export default AboutUs
-
-const styles = StyleSheet.create({})

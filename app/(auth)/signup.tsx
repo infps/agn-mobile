@@ -1,14 +1,52 @@
+// app/signup.tsx
+import { useAuth } from "@/context/AuthContext";
+import { Ionicons } from "@expo/vector-icons";
+import { Link } from "expo-router";
+import { useState } from "react";
 import {
-  View,
+  Alert,
+  Pressable,
   Text,
   TextInput,
   TouchableOpacity,
-  Pressable,
+  View,
 } from "react-native";
-import { Link } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 
 const Signup = () => {
+  const { signUp, isLoading } = useAuth();
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    loginName: "",
+    loginPassword: "",
+  });
+
+  const handleSignUp = async () => {
+    try {
+      if (
+        !formData.firstName ||
+        !formData.lastName ||
+        !formData.loginName ||
+        !formData.loginPassword
+      ) {
+        Alert.alert("Error", "Please fill in all fields");
+        return;
+      }
+
+      await signUp({
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        loginName: formData.loginName,
+        loginPassword: formData.loginPassword,
+      });
+
+      // Navigation will be handled by the auth context after successful signup
+    } catch (error) {
+      // Error is already handled in the auth context
+      console.error("Signup error:", error);
+    }
+  };
+
   return (
     <View className="flex-1 bg-white px-6 py-10">
       <View className="mt-16">
@@ -21,14 +59,42 @@ const Signup = () => {
       </View>
 
       <View className="mt-16">
-        {/* Email Input */}
         <View className="border-2 border-cyan-600 rounded-xl px-4 py-4 bg-gray-50">
+          <TextInput
+            placeholder="First Name"
+            placeholderTextColor="#9CA3AF"
+            className="text-base py-0"
+            autoCapitalize="none"
+            value={formData.firstName}
+            onChangeText={(text) => {
+              setFormData({ ...formData, firstName: text });
+            }}
+          />
+        </View>
+        <View className="border-2 border-cyan-600 rounded-xl px-4 py-4 bg-gray-50 mt-6">
+          <TextInput
+            placeholder="Last Name"
+            placeholderTextColor="#9CA3AF"
+            className="text-base py-0"
+            autoCapitalize="none"
+            value={formData.lastName}
+            onChangeText={(text) => {
+              setFormData({ ...formData, lastName: text });
+            }}
+          />
+        </View>
+        {/* Email Input */}
+        <View className="border-2 border-cyan-600 rounded-xl px-4 py-4 bg-gray-50 mt-6">
           <TextInput
             placeholder="Email"
             placeholderTextColor="#9CA3AF"
-            className="text-base"
+            className="text-base py-0"
             keyboardType="email-address"
             autoCapitalize="none"
+            value={formData.loginName}
+            onChangeText={(text) => {
+              setFormData({ ...formData, loginName: text });
+            }}
           />
         </View>
 
@@ -37,23 +103,16 @@ const Signup = () => {
           <TextInput
             placeholder="Password"
             placeholderTextColor="#9CA3AF"
-            className="text-base"
+            className="text-base py-0"
             secureTextEntry
+            value={formData.loginPassword}
+            onChangeText={(text) => {
+              setFormData({ ...formData, loginPassword: text });
+            }}
           />
         </View>
-
-        {/* Confirm Password Input */}
-        <View className="border-2 border-gray-200 rounded-xl px-4 py-4 bg-gray-50 mt-6">
-          <TextInput
-            placeholder="Confirm Password"
-            placeholderTextColor="#9CA3AF"
-            className="text-base"
-            secureTextEntry
-          />
-        </View>
-
         {/* Sign Up Button */}
-        <TouchableOpacity className="bg-cyan-600 rounded-xl py-4 mt-8">
+        <TouchableOpacity className="bg-cyan-600 rounded-xl py-4 mt-8" onPress={handleSignUp}>
           <Text className="text-white text-center text-lg font-semibold">
             Sign up
           </Text>

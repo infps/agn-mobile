@@ -1,7 +1,9 @@
 import Carousel from "@/components/carousel";
+import { useAuth, useEvents } from "@/context";
+import { EventType } from "@/context/EventContext";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import {
   FlatList,
   Image,
@@ -9,7 +11,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 const pedigree = [
@@ -19,29 +21,47 @@ const pedigree = [
   { id: "4", name: "XYZ" },
   { id: "5", name: "XYZ" },
 ];
-const races = [
-  {
-    id: "1",
-    title: "2024 Pigeon Race Amsterdam VS USA",
-    date: "November 22, 2023 12:07 PM",
-    participants: "673",
-    distance: "289 KM",
-    image:
-      "http://www.globaltimes.cn/Portals/0/attachment/2011/04d9b7ca-811d-4d5b-98cd-ece1fff81130.jpeg",
-  },
-  {
-    id: "2",
-    title: "2024 Pigeon Race Amsterdam VS USA",
-    date: "November 22, 2023 12:07 PM",
-    participants: "673",
-    distance: "289 KM",
-    image:
-      "http://www.globaltimes.cn/Portals/0/attachment/2011/04d9b7ca-811d-4d5b-98cd-ece1fff81130.jpeg",
-  },
-];
 
 export default function HomeScreen() {
+  const { user } = useAuth();
+  const { events, loading, error } = useEvents();
   const router = useRouter();
+
+  // Split events into ongoing and upcoming
+  const categorizeEvents = (events: EventType[]) => {
+    const now = new Date();
+    const ongoing: EventType[] = [];
+    const upcoming: EventType[] = [];
+
+    events.forEach((event) => {
+      const eventDate = new Date(event.eventDate);
+      if (eventDate >= now) {
+        upcoming.push(event);
+      } else {
+        ongoing.push(event);
+      }
+    });
+
+    return { ongoing, upcoming };
+  };
+
+  const { ongoing, upcoming } = categorizeEvents(events || []);
+
+  if (loading) {
+    return (
+      <SafeAreaView className="flex-1 bg-white items-center justify-center">
+        <Text>Loading events...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView className="flex-1 bg-white items-center justify-center">
+        <Text className="text-red-500">Error loading events: {error}</Text>
+      </SafeAreaView>
+    );
+  }
   return (
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -71,7 +91,7 @@ export default function HomeScreen() {
           <View className="bg-white rounded-full border border-gray-300 px-4 py-3 flex-row items-center">
             <TextInput
               placeholder="Search here"
-              className="flex-1 text-gray-700"
+              className="flex-1 text-gray-700 p-0 my-0 mx-0"
             />
           </View>
         </View>
@@ -95,7 +115,7 @@ export default function HomeScreen() {
           </View>
 
           <Image
-            source={require("../assets/pigeon.png")}
+            source={require("../../assets/pigeon.png")}
             className="w-32 mt-4"
             style={{ objectFit: "contain" }}
           />
@@ -116,42 +136,21 @@ export default function HomeScreen() {
           )}
         />
 
-        {/* UPCOMING RACES */}
-        <Text className="text-xl font-semibold px-4 mt-6">Upcoming Races</Text>
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={races}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View className="bg-white shadow rounded-xl mx-3 mt-4 w-64 justify-between">
-              <Image
-                source={{ uri: item.image }}
-                className="w-full h-36 rounded-t-xl"
-              />
-
-              <View className="p-3">
-                <Text className="font-semibold text-gray-800">
-                  {item.title}
-                </Text>
-                <Text className="text-gray-500 text-xs mt-1">{item.date}</Text>
-
-                <View className="flex-row justify-between mt-2">
-                  <Text className="text-gray-700 text-xs">
-                    {item.participants} Participants
-                  </Text>
-                  <Text className="text-gray-700 text-xs">{item.distance}</Text>
-                </View>
-
-                <TouchableOpacity className="mt-2 bg-white py-2 items-center border border-primary w-32">
-                  <Text className="text-primary text-sm font-medium">
-                    Register
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+        <View className="mt-8">
+          <View className="flex-row justify-between items-center px-4 mb-3">
+            <Text className="text-xl font-bold">Ongoing Races</Text>
+            <Link href="/events">
+              <Text className="text-blue-500">See All</Text>
+            </Link>
+          </View>
+          {loading ? (
+            <Text>Loading events...</Text>
+          ) : error ? (
+            <Text className="text-red-500">Error loading events: {error}</Text>
+          ) : (
+            <Carousel data={ongoing.slice(0, 5)} />
           )}
-        />
+        </View>
 
         {/* LIVE SECTION */}
         <View className="mx-4 mt-8 bg-white flex-row shadow">
@@ -199,7 +198,21 @@ export default function HomeScreen() {
           </View>
         </View>
         {/* STATS */}
-        <Carousel />
+        <View className="mt-8">
+          <View className="flex-row justify-between items-center px-4 mb-3">
+            <Text className="text-xl font-bold">Upcoming Races</Text>
+            <TouchableOpacity>
+              <Text className="text-blue-500">See All</Text>
+            </TouchableOpacity>
+          </View>
+          {loading ? (
+            <Text>Loading events...</Text>
+          ) : error ? (
+            <Text className="text-red-500">Error loading events: {error}</Text>
+          ) : (
+            <Carousel data={upcoming?.slice(0, 5)} />
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

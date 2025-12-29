@@ -1,13 +1,6 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import Header from "@/components/header";
 import React from "react";
-import {
-  FlatList,
-  Image,
-  Text,
-  TouchableOpacity,
-  View
-} from "react-native";
+import { FlatList, Image, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 const carouselItems = [
   {
@@ -39,30 +32,11 @@ const carouselItems = [
       "https://static.independent.co.uk/s3fs-public/thumbnails/image/2015/08/19/23/web-racing-pigeons-getty.jpg?quality=75&width=1250&crop=3%3A2%2Csmart&auto=webp",
   },
 ];
-const Race = () => {
-  const router = useRouter();
+const Result = () => {
   return (
     <SafeAreaView>
-      <View className={`bg-primary px-2 py-4 flex-row justify-between w-full`}>
-        <TouchableOpacity onPress={() => router.back()} className="w-[5%]">
-          <Ionicons name="chevron-back" size={24} color="white" />
-        </TouchableOpacity>
-        <Text className="text-white text-center text-xl font-bold w-[95%]">
-          Race Pavilion
-        </Text>
-      </View>
+      <Header title="Result" />
       <View className="p-2">
-        <View className="flex-row justify-between border-b border-gray-500">
-          <View>
-            <Text>Join Race</Text>
-            <Text>12</Text>
-          </View>
-          <View>
-            <Text>Races</Text>
-            <Text>0</Text>
-          </View>
-        </View>
-        <Text className="font-bold">Races</Text>
         <FlatList
           data={carouselItems}
           numColumns={2} // This will make it show 2 items per row
@@ -97,4 +71,4 @@ const Race = () => {
   );
 };
 
-export default Race;
+export default Result;
