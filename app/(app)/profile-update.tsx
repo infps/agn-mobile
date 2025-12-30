@@ -5,15 +5,15 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-    Alert,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -21,37 +21,37 @@ const ProfileUpdate = () => {
   const { user, updateProfile } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const [profileImage, setProfileImage] = useState(user?.idPicture || '');
+  const [profileImage, setProfileImage] = useState(user?.idPicture || "");
   const [formData, setFormData] = useState<Partial<User>>({});
 
   // Initialize form with user data
   useEffect(() => {
     if (user) {
       setFormData({
-        firstName: user.firstName || '',
-        lastName: user.lastName || '',
-        email: user.email || '',
-        email2: user.email2 || '',
-        phone: user.phone || '',
-        cell: user.cell || '',
-        address1: user.address1 || '',
-        address2: user.address2 || '',
-        city1: user.city1 || '',
-        state1: user.state1 || '',
-        zip1: user.zip1 || '',
-        country: user.country || '',
-        taxNumber: user.taxNumber || '',
-        socialSecurityNumber: user.socialSecurityNumber || '',
-        webAddress: user.webAddress || '',
-        note: user.note || '',
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        loginName: user.loginName || "",
+        email2: user.email2 || "",
+        phone: user.phone || "",
+        cell: user.cell || "",
+        address1: user.address1 || "",
+        address2: user.address2 || "",
+        city1: user.city1 || "",
+        state1: user.state1 || "",
+        zip1: user.zip1 || "",
+        country: user.country || "",
+        taxNumber: user.taxNumber || "",
+        socialSecurityNumber: user.socialSecurityNumber || "",
+        webAddress: user.webAddress || "",
+        note: user.note || "",
       });
     }
   }, [user]);
 
   const handleInputChange = (field: keyof User, value: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }));
   };
 
@@ -71,31 +71,44 @@ const ProfileUpdate = () => {
   const onSubmit = async () => {
     try {
       setIsLoading(true);
-      
-      // Create the user data to update
-      const userData: User = {
-        ...user, // Keep existing user data
-        ...formData, // Add updated form data
-        idPicture: profileImage // Add profile image
-      };
 
-      await updateProfile(userData);
-      Alert.alert('Success', 'Profile updated successfully');
+      // Filter out undefined values from formData
+      const definedFormData = Object.fromEntries(
+        Object.entries(formData).filter(([_, value]) => value !== undefined)
+      );
+
+      // Create the user data to update
+      const userData: any = {
+        ...user, // Keep existing user data
+        ...definedFormData, // Add only defined form data
+        idPicture: profileImage, // Add profile image
+      };
+      const cleanedUserData = Object.fromEntries(
+        Object.entries(userData).filter(
+          ([_, value]) => value !== undefined && value !== null && value !== ""
+        )
+      );
+      await updateProfile(cleanedUserData);
+      Alert.alert("Success", "Profile updated successfully");
       router.back();
     } catch (error) {
-      console.error('Update error:', error);
-      Alert.alert('Error', 'Failed to update profile. Please try again.');
+      console.error("Update error:", error);
+      Alert.alert("Error", "Failed to update profile. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
-
-  const renderInput = (field: keyof User, label: string, placeholder: string, props = {}) => (
+  const renderInput = (
+    field: keyof User,
+    label: string,
+    placeholder: string,
+    props = {}
+  ) => (
     <View className="mb-4">
       <Text className="text-gray-600 text-sm mb-1">{label}</Text>
       <TextInput
         className="border border-gray-300 rounded-lg px-4 py-2"
-        value={formData[field] as string || ''}
+        value={(formData[field] as string) || ""}
         onChangeText={(text) => handleInputChange(field, text)}
         placeholder={placeholder}
         placeholderTextColor="#9CA3AF"
@@ -111,7 +124,9 @@ const ProfileUpdate = () => {
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color="white" />
           </TouchableOpacity>
-          <Text className="text-white text-xl font-bold ml-4">Edit Profile</Text>
+          <Text className="text-white text-xl font-bold ml-4">
+            Edit Profile
+          </Text>
         </View>
         <TouchableOpacity onPress={onSubmit} disabled={isLoading}>
           <Text className="text-white text-base font-medium">
@@ -159,7 +174,7 @@ const ProfileUpdate = () => {
                 {renderInput("lastName", "Last Name", "Enter last name")}
               </View>
             </View>
-            {renderInput("email", "Primary Email", "Enter primary email", {
+            {renderInput("loginName", "Primary Email", "Enter primary email", {
               keyboardType: "email-address",
               autoCapitalize: "none",
             })}
@@ -190,7 +205,9 @@ const ProfileUpdate = () => {
 
           {/* Address */}
           <View className="bg-white p-4 rounded-lg mb-4">
-            <Text className="text-lg font-bold mb-4 text-gray-800">Address</Text>
+            <Text className="text-lg font-bold mb-4 text-gray-800">
+              Address
+            </Text>
             {renderInput("address1", "Address Line 1", "Enter address line 1")}
             {renderInput(
               "address2",
@@ -240,8 +257,8 @@ const ProfileUpdate = () => {
                 className="border border-gray-300 rounded-lg px-4 py-2 h-24 text-align-top"
                 multiline
                 numberOfLines={4}
-                onChangeText={(text) => handleInputChange('note', text)}
-                value={formData.note || ''}
+                onChangeText={(text) => handleInputChange("note", text)}
+                value={formData.note || ""}
                 placeholder="Enter any additional notes"
                 placeholderTextColor="#9CA3AF"
               />

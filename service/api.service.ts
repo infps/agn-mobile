@@ -29,9 +29,8 @@ const getApiUrl = () => {
 };
 
 const apiUrl = getApiUrl();
-console.log(apiUrl)
 const api = axios.create({
-  baseURL: apiUrl,
+  baseURL: "https://api.infps-demo.com/api",
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',

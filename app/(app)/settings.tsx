@@ -27,20 +27,18 @@ const settingOption1: {
   },
   {
     title:" Teams",
-    icon:"",
+    icon:<Ionicons name="people-outline" size={24}/>,
     link:"/teams"
   },
   {
     title:"Events",
-    icon: (
-      <Image source={require("../../assets/parcel.png")} className="w-8 h-8" />
-    ),
+    icon: <Ionicons name="calendar-outline" size={24} color="black" className="mr-[4px]"/>,
     link: "/events",
   },
     {
     title:"Birds",
     icon: (
-      <Image source={require("../../assets/parcel.png")} className="w-8 h-8" />
+      <Image source={require("../../assets/pigeon-icon.png")} className="w-8 h-8 mr-[1px]" />
     ),
     link: "/birds",
   },

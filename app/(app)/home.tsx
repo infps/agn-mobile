@@ -47,21 +47,6 @@ export default function HomeScreen() {
 
   const { ongoing, upcoming } = categorizeEvents(events || []);
 
-  if (loading) {
-    return (
-      <SafeAreaView className="flex-1 bg-white items-center justify-center">
-        <Text>Loading events...</Text>
-      </SafeAreaView>
-    );
-  }
-
-  if (error) {
-    return (
-      <SafeAreaView className="flex-1 bg-white items-center justify-center">
-        <Text className="text-red-500">Error loading events: {error}</Text>
-      </SafeAreaView>
-    );
-  }
   return (
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView showsVerticalScrollIndicator={false}>

@@ -52,7 +52,7 @@ interface AuthContextType {
   }) => Promise<void>;
   signIn: (loginName: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  updateProfile: (userData: User) => Promise<void>;
+  updateProfile: (userData: any) => Promise<void>;
   initializeAuth: () => Promise<void>;
   isAuthenticated: boolean;
 }
@@ -197,16 +197,14 @@ const signIn = useCallback(async (email: string, password: string) => {
       throw error;
     }
   }, []);
-  const updateProfile = useCallback(async (userData:User)=>{
+  const updateProfile = useCallback(async (userData:any)=>{
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await api.post('/auth/breeder/signup', {
-        email: userData.loginName,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-      });
+      console.log(userData)
+      const response = await api.put('/user/breeder/profile', userData);
+      console.log(response.data);
       const { token, user } = response.data;
 
       // // Store tokens and user data
@@ -221,10 +219,8 @@ const signIn = useCallback(async (email: string, password: string) => {
 
       // Set default auth header
       (api as any).defaults.headers.common['Authorization'] = `Bearer ${token}`;
-
-      // Navigate to home or verify email screen
-      router.replace('/(tabs)' as any);
     } catch (error: any) {
+      console.log(error)
       const errorMessage = error.response?.data?.message || 'Registration failed. Please try again.';
       setError(errorMessage);
       Alert.alert('Registration Error', errorMessage);
