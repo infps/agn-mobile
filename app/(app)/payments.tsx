@@ -107,23 +107,20 @@
 import Header from "@/components/header";
 import { usePayments } from "@/context";
 import { PaymentType } from "@/context/PaymentContext";
-import React from "react";
-import {
-  FlatList,
-  StyleSheet,
-  Text,
-  View
-} from "react-native";
+import { format } from "date-fns";
+import { useEffect } from "react";
+import { FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-
 const PaymentsList = () => {
-  const { payments, loading } = usePayments();
-  console.log(payments);
+  const { payments, loading, getMyPayments } = usePayments();
+  useEffect(() => {
+    getMyPayments();
+  }, []);
   return (
     <SafeAreaView className="flex-1 bg-[#f5f5f5]">
       <Header title="Payments" />
-      <View className="p-2 bg-primary flex-row justify-between mt-2">
+      <View className="p-2 bg-primary flex-row justify-between mt-2 mx-2">
         <Text className="text-white text-[10px]">SL. NO.</Text>
         <Text className="text-white text-[10px]">Event Name</Text>
         <Text className="text-white text-[10px]">Event Date</Text>
@@ -131,15 +128,7 @@ const PaymentsList = () => {
         <Text className="text-white text-[10px]">Payment Value</Text>
         <Text className="text-white text-[10px]">Payment Status</Text>
       </View>
-      {/* <View className="p-2 flex-row justify-between">
-              <View className="text-gray-400 h-[10px]"/>
-              <View className="text-gray-400 h-[10px]"/>
-              <View className="text-gray-400 h-[10px]"/>
-              <View className="text-gray-400 h-[10px]"/>
-              <View className="text-gray-400 h-[10px]"/>
-              <View className="text-gray-400 h-[10px]"/>
-            </View> */}
-      <View>
+      <View className="mx-2">
         {loading ? (
           [1, 2, 3, 4, 5].map((_, index) => (
             <View className="p-2 flex-row justify-between" key={index}>
@@ -151,38 +140,49 @@ const PaymentsList = () => {
               <View className="text-gray-400 h-[10px]" />
             </View>
           ))
-        ) : payments.length>0? (
+        ) : payments.length > 0 ? (
           <FlatList
-            horizontal
-            showsHorizontalScrollIndicator={false}
             data={payments}
             keyExtractor={(item: PaymentType) => item.idPayment.toString()}
-            renderItem={({ item }: { item: PaymentType }) => (
-              <View className="bg-white shadow rounded-xl mx-3 mt-4 w-64 justify-between">
-                <View className="p-3">
-                  <Text className="font-semibold text-gray-800">
-                    {item.idPayment}
-                  </Text>
-                  <Text className="text-gray-500 text-xs mt-1">
-                    {item.paymentType}
-                  </Text>
+            renderItem={({
+              item,
+              index,
+            }: {
+              item: PaymentType;
+              index: number;
+            }) => (
+              <View className="p-2 flex-row justify-between mt-2 border-b border-gray-200">
+                <Text className="text-[10px]">{index + 1}</Text>
 
-                  <View className="flex-row justify-between mt-2">
-                    <Text className="text-gray-700 text-xs">
-                      {item.paymentDate.toISOString()}
-                    </Text>
-                    <Text className="text-gray-700 text-xs">
-                      {item.paymentValue}
-                    </Text>
-                  </View>
-                    <Text className="text-primary text-sm font-medium">
-                      {item.status}
-                    </Text>
-                </View>
+                <Text className="text-[10px] text-left ml-4">
+                  {item?.eventInventory?.event?.eventName || "Not specified"}
+                </Text>
+
+                <Text className="text-[10px] text-left ml-4">
+                  {item?.eventInventory?.event?.eventDate
+                    ? format(
+                        new Date(item.eventInventory.event.eventDate),
+                        "MMM dd, yyyy"
+                      )
+                    : "Unknown Date"}
+                </Text>
+                <Text className="text-[10px] text-left mr-10">
+                  {format(new Date(item?.paymentDate), "MMM dd, yyyy") ||
+                    "Unknown Date"}
+                </Text>
+
+                <Text className="text-[10px] text-left mr-10">
+                  {item?.paymentValue || "0"}
+                </Text>
+                <Text className="text-[10px] text-center">
+                  {item?.status === 0 ? "Pending" : "Success"}
+                </Text>
               </View>
             )}
           />
-        ):<Text className="text-center py-4">No Payment Transaction</Text>}
+        ) : (
+          <Text className="text-center py-4">No Payment Transaction</Text>
+        )}
       </View>
     </SafeAreaView>
   );

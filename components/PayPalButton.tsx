@@ -1,91 +1,63 @@
-import { useToast } from '@/context/ToastContext';
-import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Text, TouchableOpacity } from 'react-native';
+import { useToast } from "@/context/ToastContext";
+import api from "@/service/api.service";
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import { ActivityIndicator, Text, TouchableOpacity } from "react-native";
 
-interface PayPalButtonProps {
-  eventId: number;
-  selectedBirds: any[];
-  selectedTeam: string;
-  totalAmount: number;
-  onSuccess?: () => void;
-  onError?: (error: string) => void;
-}
+const API_BASE = "https://your-api.com/payment";
 
-const PayPalButton: React.FC<PayPalButtonProps> = ({
+export default function PayPalButton({
   eventId,
   selectedBirds,
   selectedTeam,
-  totalAmount,
-  onSuccess,
-  onError,
-}) => {
-  const [isLoading, setIsLoading] = useState(false);
+}: any) {
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
   const toast = useToast();
 
-  const handlePayPalPayment = async () => {
+  const startPayment = async () => {
     try {
-      setIsLoading(true);
+      setLoading(true);
 
-      // For now, we'll simulate PayPal integration
-      // In production, you would integrate with PayPal SDK here
-      
-      // Option 1: Open PayPal in web browser
-      const paypalUrl = `https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=your-business-email@example.com&item_name=Event Registration&amount=${totalAmount}&currency_code=USD`;
-      
-      Alert.alert(
-        'PayPal Payment',
-        'You will be redirected to PayPal to complete your payment.',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-            onPress: () => setIsLoading(false),
-          },
-          {
-            text: 'Continue',
-            onPress: () => {
-              Linking.openURL(paypalUrl).then(() => {
-                toast.success('Redirected to PayPal');
-                onSuccess?.();
-              }).catch((error) => {
-                toast.error('Failed to open PayPal');
-                onError?.('Failed to open PayPal');
-              });
-              setIsLoading(false);
-            },
-          },
-        ]
-      );
+      const res = await api.post(`/event-inventory`, {
+        eventId,
+        birds: selectedBirds.map((b: any) => b.idBird),
+        loft: selectedTeam || undefined,
+      });
+      const result = await res.data.data;
+      const response = await api.post("/payments/capture", {
+        orderId: result.orderId,
+      });
+      console.log(response.data);
+      if (!result?.approvalUrl || !result?.orderId) {
+        throw new Error("Failed to create PayPal order");
+      }
 
-    } catch (error: any) {
-      console.error('PayPal payment error:', error);
-      const errorMessage = error.message || 'Payment failed. Please try again.';
-      toast.error(errorMessage);
-      onError?.(errorMessage);
-      setIsLoading(false);
+      // ✅ Open PayPal in WebView
+      router.push({
+        pathname: "/paypal-checkout",
+        params: {
+          approvalUrl: result.approvalUrl,
+          orderId: result.orderId,
+        },
+      });
+    } catch (err: any) {
+      toast.error(err.message || "Payment failed");
+      setLoading(false);
     }
   };
 
   return (
     <TouchableOpacity
-      onPress={handlePayPalPayment}
-      disabled={isLoading}
-      className={`w-full py-4 rounded-lg flex-row items-center justify-center ${
-        isLoading
-          ? 'bg-gray-400'
-          : 'bg-[#FFC439] hover:bg-[#FFB300]'
-      } transition-colors`}
+      onPress={startPayment}
+      disabled={loading}
+      className="bg-[#FFC439] py-4 rounded-lg items-center"
     >
-      {isLoading ? (
-        <ActivityIndicator color="#000" size="small" />
+      {loading ? (
+        <ActivityIndicator color="#000" />
       ) : (
-        <>
-          <Text className="text-black font-bold text-lg mr-2">Pay</Text>
-          <Text className="text-black font-bold text-lg">Pal</Text>
-        </>
+        <Text className="text-black font-bold text-lg">PayPal</Text>
       )}
     </TouchableOpacity>
   );
-};
-
-export default PayPalButton;
+}

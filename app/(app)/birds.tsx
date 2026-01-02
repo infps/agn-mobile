@@ -2,7 +2,7 @@ import Header from "@/components/header";
 import Modal from "@/components/Modal";
 import { useBirds } from "@/context";
 import { BirdType } from "@/context/BirdContext";
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   FlatList,
   StyleSheet,
@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const Birds = () => {
-  const { birds, loading, addBird } = useBirds();
+  const { birds, loading, addBird, fetchBirds } = useBirds();
   const [open, setOpen] = useState(false);
   const [sexModalOpen, setSexModalOpen] = useState(false);
   const [birdData, setBirdData] = useState({
@@ -22,6 +22,9 @@ const Birds = () => {
     color: "",
     sex: 0,
   });
+  useEffect(() => {
+    fetchBirds();
+  }, []);
   const addNewBird = async () => {
     try {
       const success = await addBird(birdData);
@@ -38,7 +41,7 @@ const Birds = () => {
     }
   };
   return (
-    <SafeAreaView>
+    <SafeAreaView className="flex-1">
       <Header title="Birds" />
       <View className="p-2 bg-primary flex-row justify-between mt-2 mx-2">
         <Text className="text-white text-[10px]">SL. NO.</Text>
@@ -47,7 +50,7 @@ const Birds = () => {
         <Text className="text-white text-[10px]">Sex</Text>
         <Text className="text-white text-[10px]">Action</Text>
       </View>
-      <View className="px-2 w-full">
+      <View className="px-2 w-full pb-[100px]">
         {loading ? (
           [1, 2, 3, 4, 5].map((_, index) => (
             <View className="p-2 flex-row justify-between" key={index}>
@@ -66,7 +69,7 @@ const Birds = () => {
               item?.idBird?.toString() || index.toString()
             }
             renderItem={({ item }: { item: BirdType }) => (
-              <View className="w-full p-2 flex-row justify-between border-b border-gray-300">
+              <View className="w-full p-2 flex-row justify-between border border-b border-t-[0px] border-gray-300">
                 <Text className="text-gray-400 text-[12px]">{item.idBird}</Text>
                 <Text className="text-gray-400 text-[12px]">
                   {item.birdName}
@@ -85,22 +88,12 @@ const Birds = () => {
           </Text>
         )}
       </View>
-      <View className="absolute bottom-0 left-0 right-0 p-4 pb-6">
-        <TouchableOpacity
-          className="bg-primary py-3 px-6 rounded-full items-center"
-          onPress={() => setOpen(true)}
-        >
-          <Text className="text-white font-semibold text-base">
-            Add New Bird
-          </Text>
-        </TouchableOpacity>
-      </View>
       <Modal open={open} setOpen={setOpen}>
         <Text className="text-2xl font-bold">Add Bird</Text>
         <View className="mt-2">
           <Text className="text-lg">Bird Name</Text>
           <TextInput
-            className="border rounded-[8px] p-2"
+            className="border rounded-[8px] p-2 text-black"
             value={birdData.birdName}
             onChangeText={(text) =>
               setBirdData({ ...birdData, birdName: text })
@@ -110,7 +103,7 @@ const Birds = () => {
         <View className="mt-2">
           <Text className="text-lg">Color</Text>
           <TextInput
-            className="border rounded-[8px] p-2"
+            className="border rounded-[8px] p-2 text-black"
             value={birdData.color}
             onChangeText={(text) => setBirdData({ ...birdData, color: text })}
           />
@@ -184,6 +177,16 @@ const Birds = () => {
           <Text className="text-black">Cancel</Text>
         </TouchableOpacity>
       </Modal>
+      <View className="absolute bottom-0 left-0 right-0 p-4 pb-8 bg-white">
+        <TouchableOpacity
+          className="bg-primary py-3 px-6 rounded-full items-center"
+          onPress={() => setOpen(true)}
+        >
+          <Text className="text-white font-semibold text-base">
+            Add New Bird
+          </Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 };

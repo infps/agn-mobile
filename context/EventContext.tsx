@@ -137,7 +137,7 @@ interface EventContextType {
     limit?: number
   ) => Promise<{ events: Event[]; totalCount: number }>;
   listCreatorEvents: () => Promise<{ events: Event[]; totalCount: number }>;
-  getEvent: (id: number) => Promise<Event | null>;
+  getEvent: (id: string) => Promise<Event | null>;
   getMoreEvents: (
     currentEventId: number,
     isOpen?: boolean,
@@ -145,7 +145,7 @@ interface EventContextType {
     limit?: number
   ) => Promise<{ events: Event[]; totalCount: number }>;
   getEventParticipants: (
-    eventId: number
+    eventId: string
   ) => Promise<{ participants: Participant[]; totalParticipants: number }>;
   createEventInventory: (
     eventId: number,
@@ -311,7 +311,7 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  const getEvent = useCallback(async (id: number) => {
+  const getEvent = useCallback(async (id: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -370,12 +370,12 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
     []
   );
 
-  const getEventParticipants = useCallback(async (eventId: number) => {
+  const getEventParticipants = useCallback(async (eventId: string) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(
-        `${API_URL}/api/events/${eventId}/participants`,
+      const response = await api.get(
+        `/events/${eventId}/participants`,
         {
           headers: {
             Authorization: `Bearer ${await SecureStore.getItemAsync("auth_token")}`,
@@ -383,11 +383,11 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
         }
       );
 
-      if (!response.ok) {
+      if (!response.data.success) {
         throw new Error("Failed to fetch event participants");
       }
 
-      const data = await response.json();
+      const data = await response.data.data;
       setParticipants(data.participants);
       return data;
     } catch (err: any) {

@@ -15,30 +15,40 @@ import { SafeAreaView } from "react-native-safe-area-context";
 const settingOption1: {
   title: string;
   icon: React.ReactNode;
-  link?: "/races" | "/events" | "/teams" | "/birds";
-   //"/own-loft" | "/shared-loft" | "/result" |
+  link?: "/events" | "/teams" | "/birds" | "my-events";
+  //"/own-loft" | "/shared-loft" | "/result" |
 }[] = [
-  {
-    title: "Races",
+  // {
+  //   title: "Races",
+  //   icon: (
+  //     <Image source={require("../../assets/journey.png")} className="w-8 h-8" />
+  //   ),
+  //   link: "/races",
+  // },
+    {
+    title: "Events",
     icon: (
       <Image source={require("../../assets/journey.png")} className="w-8 h-8" />
     ),
-    link: "/races",
-  },
-  {
-    title:" Teams",
-    icon:<Ionicons name="people-outline" size={24}/>,
-    link:"/teams"
-  },
-  {
-    title:"Events",
-    icon: <Ionicons name="calendar-outline" size={24} color="black" className="mr-[4px]"/>,
     link: "/events",
   },
     {
-    title:"Birds",
+    title: "My Events",
+    icon: <Ionicons name="calendar-outline" size={24} />,
+    link: "my-events",
+  },
+  {
+    title: " Teams",
+    icon: <Ionicons name="people-outline" size={24} />,
+    link: "/teams",
+  },
+  {
+    title: "Birds",
     icon: (
-      <Image source={require("../../assets/pigeon-icon.png")} className="w-8 h-8 mr-[1px]" />
+      <Image
+        source={require("../../assets/pigeon-icon.png")}
+        className="w-8 h-8 mr-[1px]"
+      />
     ),
     link: "/birds",
   },
@@ -100,7 +110,7 @@ const settingOption2: {
   },
 ];
 const Settings = () => {
-  const { user,signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const router = useRouter();
   const handleShare = async () => {
     try {
@@ -120,10 +130,15 @@ const Settings = () => {
     <SafeAreaView className="flex-1 bg-[#f5f5f5]">
       <View className={`bg-primary p-4 flex-row justify-between`}>
         <View>
-          <Text className="text-white text-xl font-bold">
-            Hi {user?.firstName} {user?.lastName}
-          </Text>
-          <Link href="/profile-update" className="text-white">
+          <View className="flex-row">
+            <TouchableOpacity onPress={() => router.back()} className="mr-0">
+              <Ionicons name="arrow-back" size={24} color="white" />
+            </TouchableOpacity>
+            <Text className="text-white text-xl font-bold">
+              Hi {user?.firstName} {user?.lastName}
+            </Text>
+          </View>
+          <Link href="/profile-update" className="text-white ml-8">
             Edit Profile
           </Link>
         </View>
@@ -195,7 +210,10 @@ const Settings = () => {
       {/* This empty view pushes the logout button to the bottom */}
       <View className="flex-1" />
 
-      <TouchableOpacity onPress={signOut} className="bg-white p-4 border-t border-gray-200">
+      <TouchableOpacity
+        onPress={signOut}
+        className="bg-white p-4 border-t border-gray-200"
+      >
         <View className="flex-row items-center">
           <Ionicons
             name="log-out-outline"

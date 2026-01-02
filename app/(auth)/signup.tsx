@@ -63,7 +63,7 @@ const Signup = () => {
           <TextInput
             placeholder="First Name"
             placeholderTextColor="#9CA3AF"
-            className="text-base py-0"
+            className="text-base py-0 text-black"
             autoCapitalize="none"
             value={formData.firstName}
             onChangeText={(text) => {
@@ -75,7 +75,7 @@ const Signup = () => {
           <TextInput
             placeholder="Last Name"
             placeholderTextColor="#9CA3AF"
-            className="text-base py-0"
+            className="text-base py-0 text-black"
             autoCapitalize="none"
             value={formData.lastName}
             onChangeText={(text) => {
@@ -88,7 +88,7 @@ const Signup = () => {
           <TextInput
             placeholder="Email"
             placeholderTextColor="#9CA3AF"
-            className="text-base py-0"
+            className="text-base py-0 text-black"
             keyboardType="email-address"
             autoCapitalize="none"
             value={formData.loginName}
@@ -103,7 +103,7 @@ const Signup = () => {
           <TextInput
             placeholder="Password"
             placeholderTextColor="#9CA3AF"
-            className="text-base py-0"
+            className="text-base py-0 text-black"
             secureTextEntry
             value={formData.loginPassword}
             onChangeText={(text) => {

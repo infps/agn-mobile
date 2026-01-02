@@ -1,16 +1,17 @@
 import Header from "@/components/header";
+import SkeletonCard from "@/components/skeletonCard";
 import { EventType, useEvents } from "@/context/EventContext";
 import { format } from "date-fns";
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    FlatList,
-    Image,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  FlatList,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -36,85 +37,105 @@ const EventsList = () => {
     setRefreshing(true);
     loadEvents();
   };
+  const skeletonData = Array.from({ length: 10 }, (_, index) => ({
+    id: `skeleton-${index}`,
+    isSkeleton: true,
+  }));
 
-  const renderEventItem = ({ item }: { item: EventType }) => (
-    <View
-      style={{
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-      }}
-      className="w-[48%] bg-white rounded-[8px] mb-[16px] overflow-hidden "
-    >
-      <Image
-        source={{
-          uri: "https://static.independent.co.uk/s3fs-public/thumbnails/image/2015/08/19/23/web-racing-pigeons-getty.jpg?quality=75&width=1250&crop=3%3A2%2Csmart&auto=webp",
-        }}
-        className="w-full h-40"
-        resizeMode="cover"
-      />
+  const displayData = loading ? skeletonData : events;
+  const renderEventItem = ({
+    item,
+  }: {
+    item: EventType | { id: string; isSkeleton: boolean };
+  }) => {
+    if ("isSkeleton" in item && item.isSkeleton) {
+      return <SkeletonCard width="48%" marginBottom={16} />;
+    }
+      const eventItem = item as EventType;
+    return (
       <View
         style={{
-          position: "absolute",
-          top: 8,
-          left: 8,
-          backgroundColor: item.isOpen
-            ? "rgba(76, 175, 80, 0.9)"
-            : "rgba(244, 67, 54, 0.9)",
-          paddingHorizontal: 8,
-          paddingVertical: 4,
-          borderRadius: 12,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 3,
         }}
+        className="w-[48%] bg-white rounded-[8px] mb-[16px] overflow-hidden "
       >
-        <Text style={{ color: "white", fontWeight: "600", fontSize: 12 }}>
-          {item.isOpen ? "Registration Open" : "Closed"}
-        </Text>
-      </View>
-      <View className="px-2 py-2">
-        <Text className="text-lg text-gray-600">
-          {format(new Date(item.eventDate), "PPP")}
-        </Text>
-        <Text className="text-lg text-gray-600">
-          {item?._count.eventInventories} Participants
-        </Text>
-        <Text className="text-lg font-semibold">{item.eventName}</Text>
-        <TouchableOpacity
-          className={`mt-2 py-2 items-center border w-full ${
-            item.isOpen
-              ? "bg-white border-primary"
-              : "bg-gray-200 border-gray-400"
-          }`}
-          onPress={() => {
-            if (item.isOpen) {
-              router.push({
-                pathname: "/register-in-event",
-                params: { eventId: item.idEvent },
-              });
-            }
-          }}
-          disabled={!item.isOpen}
+        <Pressable
+          onPress={() => router.push(`/(app)/event-detail?id=${eventItem.idEvent}`)}
+          style={{ position: "relative" }}
         >
-          <Text
-            className={`text-sm font-medium ${
-              item.isOpen ? "text-primary" : "text-gray-500"
-            }`}
+          <Image
+            source={{
+              uri: "https://static.independent.co.uk/s3fs-public/thumbnails/image/2015/08/19/23/web-racing-pigeons-getty.jpg?quality=75&width=1250&crop=3%3A2%2Csmart&auto=webp",
+            }}
+            className="w-full h-40"
+            resizeMode="cover"
+          />
+          <View
+            style={{
+              position: "absolute",
+              top: 8,
+              left: 8,
+              backgroundColor: eventItem.isOpen
+                ? "rgba(76, 175, 80, 0.9)"
+                : "rgba(244, 67, 54, 0.9)",
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 12,
+            }}
           >
-            {item.isOpen ? "Register" : "Registration Closed"}
+            <Text style={{ color: "white", fontWeight: "600", fontSize: 12 }}>
+              {eventItem.isOpen ? "Registration Open" : "Closed"}
+            </Text>
+          </View>
+        </Pressable>
+        <View className="px-2 py-2">
+          <Text className="text-lg text-gray-600">
+            {format(new Date(eventItem.eventDate), "PPP")}
           </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  if (loading && !refreshing) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" />
+          <Text className="text-lg text-gray-600">
+            {eventItem?._count.eventInventories} Participants
+          </Text>
+          <Text className="text-lg font-semibold">{eventItem.eventName}</Text>
+          <TouchableOpacity
+            className={`mt-2 py-2 items-center border w-full ${
+              eventItem.isOpen
+                ? "bg-white border-primary"
+                : "bg-gray-200 border-gray-400"
+            }`}
+            onPress={() => {
+              if (eventItem.isOpen) {
+                router.push({
+                  pathname: "/register-in-event",
+                  params: { eventId: eventItem.idEvent },
+                });
+              }
+            }}
+            disabled={!eventItem.isOpen}
+          >
+            <Text
+              className={`text-sm font-medium ${
+                eventItem.isOpen ? "text-primary" : "text-gray-500"
+              }`}
+            >
+              {eventItem.isOpen ? "Register" : "Registration Closed"}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
-  }
+  };
+
+  // if (loading && !refreshing) {
+  //   return (
+  //     <View style={styles.centered}>
+  //       <ActivityIndicator size="large" />
+  //     </View>
+  //   );
+  // }
 
   if (error) {
     return (
@@ -131,9 +152,11 @@ const EventsList = () => {
     <SafeAreaView>
       <Header title="Events" />
       <FlatList
-        data={events}
+        data={displayData}
         renderItem={renderEventItem}
-        keyExtractor={(item) => item.idEvent.toString()}
+        keyExtractor={(item) =>
+          "isSkeleton" in item ? item.id : item.idEvent.toString()
+        }
         numColumns={2}
         columnWrapperStyle={{ justifyContent: "space-between" }}
         contentContainerStyle={styles.listContent}
@@ -156,6 +179,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 8,
+    paddingBottom: 50,
   },
   eventHeader: {
     flexDirection: "row",

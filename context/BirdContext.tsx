@@ -6,8 +6,7 @@ import {
   ReactNode,
   useCallback,
   useContext,
-  useEffect,
-  useState,
+  useState
 } from "react";
 import { Alert } from "react-native";
 
@@ -40,9 +39,6 @@ export const BirdProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchBirds();
-  }, []);
   const fetchBirds = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -69,8 +65,6 @@ export const BirdProvider = ({ children }: { children: ReactNode }) => {
       setError(null);
       try {
         const response = await api.post(`/birds`, birdData);
-        console.log(response);
-
         if (!response.data.success) {
           throw new Error("Failed to add bird");
         }

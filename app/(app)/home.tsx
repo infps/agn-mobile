@@ -51,20 +51,17 @@ export default function HomeScreen() {
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* HEADER */}
-        <View className="px-4 pt-2 flex-row items-center justify-between">
+        <View className="px-4 flex-row items-center justify-between">
           <View className="flex-row">
             <TouchableOpacity
               onPress={() => router.push("/settings")}
-              className="mr-2"
+              className="mr-2 mt-2"
             >
               <MaterialIcons name="menu" size={28} color="#000" />
             </TouchableOpacity>
-            <Image
-              source={{
-                uri: "https://dummyimage.com/100x40/cccccc/000000.png&text=Logo",
-              }}
-              className="w-24 h-8"
-            />
+            <View className="justify-center items-center w-12 h-12 rounded-full bg-black">
+              <Text className=" text-white  text-center">AGN</Text>
+            </View>
           </View>
           <TouchableOpacity>
             <Ionicons name="notifications-outline" size={24} color="#000" />
@@ -129,11 +126,11 @@ export default function HomeScreen() {
             </Link>
           </View>
           {loading ? (
-            <Text>Loading events...</Text>
+            <Carousel data={[]} loading={true} />
           ) : error ? (
             <Text className="text-red-500">Error loading events: {error}</Text>
           ) : (
-            <Carousel data={ongoing.slice(0, 5)} />
+            <Carousel data={ongoing?.slice(0, 5)} />
           )}
         </View>
 
@@ -183,21 +180,25 @@ export default function HomeScreen() {
           </View>
         </View>
         {/* STATS */}
-        <View className="mt-8">
-          <View className="flex-row justify-between items-center px-4 mb-3">
-            <Text className="text-xl font-bold">Upcoming Races</Text>
-            <TouchableOpacity>
-              <Text className="text-blue-500">See All</Text>
-            </TouchableOpacity>
+        {upcoming.length > 0 && (
+          <View className="m-8">
+            <View className="flex-row justify-between items-center px-4 mb-3">
+              <Text className="text-xl font-bold">Upcoming Races</Text>
+              <TouchableOpacity>
+                <Text className="text-blue-500">See All</Text>
+              </TouchableOpacity>
+            </View>
+            {loading ? (
+              <Text>Loading events...</Text>
+            ) : error ? (
+              <Text className="text-red-500">
+                Error loading events: {error}
+              </Text>
+            ) : (
+              <Carousel data={upcoming?.slice(0, 5)} />
+            )}
           </View>
-          {loading ? (
-            <Text>Loading events...</Text>
-          ) : error ? (
-            <Text className="text-red-500">Error loading events: {error}</Text>
-          ) : (
-            <Carousel data={upcoming?.slice(0, 5)} />
-          )}
-        </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

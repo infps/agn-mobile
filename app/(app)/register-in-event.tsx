@@ -6,7 +6,7 @@ import { EventType, useEvents } from "@/context/EventContext";
 import api from "@/service/api.service";
 import { Picker } from "@react-native-picker/picker";
 import { useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -26,7 +26,7 @@ const RegisterInEvent = () => {
   const toast = useToast();
 
   useEffect(() => {
-    getEvent(Number(eventId));
+    getEvent(eventId.toString());
   }, [eventId]);
   if (loading) {
     return (
@@ -54,7 +54,7 @@ const RegisterInEvent = () => {
                 <TextInput
                   placeholder="Last Name"
                   placeholderTextColor="#9CA3AF"
-                  className="text-[12px] py-0"
+                  className="text-[12px] py-0 text-black"
                   autoCapitalize="none"
                   value={`${user?.firstName} ${user?.lastName}`}
                 />
@@ -66,7 +66,7 @@ const RegisterInEvent = () => {
                 <TextInput
                   placeholder="Email"
                   placeholderTextColor="#9CA3AF"
-                  className="text-[12px] py-0"
+                  className="text-[12px] py-0 text-black"
                   autoCapitalize="none"
                   value={user?.loginName}
                 />
@@ -339,7 +339,7 @@ const SelectBirds = ({
             {selectedBirds.map((bird: BirdType) => (
               <View
                 key={bird.idBird}
-                className="flex-row items-center justify-between p-4 bg-gray-50 rounded-lg border"
+                className="flex-row items-center justify-between p-4 bg-gray-50 rounded-lg border mb-2"
               >
                 <View className="flex-1">
                   <Text className="font-medium text-gray-900">
@@ -375,7 +375,6 @@ function PaymentInformation({
   selectedTeam: string;
 }) {
   const toast = useToast();
-  console.log(event);
   // Calculate total based on individual perch fees for each bird position
   const calculateTotalAmount = () => {
     let total = 0;
@@ -389,7 +388,51 @@ function PaymentInformation({
     });
     return total;
   };
-
+  const onApprove = async () => {
+    try {
+      if (selectedBirds.length === 0) {
+        return toast.error("No birds selected for registration");
+      }
+      const birds: string[] = selectedBirds.map((bird) => {
+        if (!bird.idBird) {
+          toast.error("Bird ID is required for registration");
+          return "";
+        }
+        return bird.idBird;
+      });
+      const res = await api.post("/event-inventory", {
+        eventId: event.idEvent,
+        birds,
+        selectedTeam,
+      });
+      const orderId: string = res?.data?.data?.orderId;
+      if (!orderId) {
+        return toast.error("No order ID received");
+      }
+      toast.success("Event registered successfully");
+    } catch (err) {
+      console.log(err);
+      toast.error("Failed to register event");
+    }
+  };
+  const onCancel = async (data: Record<string, unknown>) => {
+    try {
+      const orderID = data.orderID as string;
+      if(!orderID){
+        return toast.error("No order ID received");
+      }
+      toast.info("Cancelling registration...");
+      const res = await api.post(`/payments/cancel`, { orderID });
+      const orderId = res?.data?.data?.orderId;
+      if (!orderId) {
+        return toast.error("No order ID received");
+      }
+      toast.success("Registration cancelled successfully");
+    } catch (err) {
+      console.log(err);
+      toast.error("Failed to cancel registration");
+    }
+  };
   const totalAmount = calculateTotalAmount();
 
   return (
@@ -426,8 +469,12 @@ function PaymentInformation({
                   key={bird.idBird}
                   className="flex-row justify-between items-center py-2 px-3 bg-gray-50 rounded text-sm"
                 >
-                  <Text className="text-black" style={{color: 'black', fontSize: 14}}>
-                    Bird #{index + 1}: {bird.birdName || 'Unknown'} - ({bird.color || 'Unknown'})
+                  <Text
+                    className="text-black"
+                    style={{ color: "black", fontSize: 14 }}
+                  >
+                    Bird #{index + 1}: {bird.birdName || "Unknown"} - (
+                    {bird.color || "Unknown"})
                   </Text>
                   <Text className="font-medium text-green-600 ml-2">
                     ${perchFee.toFixed(2)}
@@ -437,25 +484,24 @@ function PaymentInformation({
             })}
           </View>
         </View>
-          <View className="flex-row justify-between items-center py-3 border-b-2 border-t mt-2 border-secondary">
-            <Text className="text-base sm:text-lg font-semibold text-secondary">
-              Total Amount:
-            </Text>
-            <Text className="text-lg sm:text-xl font-bold text-secondary">
-              ${totalAmount.toFixed(2)}
-            </Text>
-          </View>
+        <View className="flex-row justify-between items-center py-3 border-b-2 border-t mt-2 border-secondary">
+          <Text className="text-base sm:text-lg font-semibold text-secondary">
+            Total Amount:
+          </Text>
+          <Text className="text-lg sm:text-xl font-bold text-secondary">
+            ${totalAmount.toFixed(2)}
+          </Text>
+        </View>
         <View className="mt-8 flex w-full justify-center">
           <View className="w-full max-w-md">
-            <PayPalButton 
-              eventId={event.idEvent} 
+            <PayPalButton
+              eventId={event.idEvent}
               selectedBirds={selectedBirds}
               selectedTeam={selectedTeam}
               totalAmount={totalAmount}
-              onSuccess={() => {
-                toast.success('Payment successful! Registration completed.');
-                // Navigate to success page or reset form
-              }}
+              onConfirm={onApprove}
+              onSuccess={onApprove}
+              onCancel={onCancel}
               onError={(error: string) => {
                 toast.error(error);
               }}

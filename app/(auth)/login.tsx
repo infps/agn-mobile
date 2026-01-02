@@ -14,17 +14,17 @@ import {
 
 const Login = () => {
   const { signIn, isLoading } = useAuth();
-  const [user,setUser]=useState({
-    email:"",
-    password:""
-  })
-  const handelLogin= async ()=>{
+  const [user, setUser] = useState({
+    email: "",
+    password: "",
+  });
+  const handelLogin = async () => {
     try {
-      await signIn(user.email,user.password)
+      await signIn(user.email, user.password);
     } catch (error) {
-      console.log(error)
+      console.log(error);
     }
-  }
+  };
   return (
     <View className="flex-1 bg-white px-6 py-10">
       <View className="mt-16">
@@ -42,7 +42,7 @@ const Login = () => {
           <TextInput
             placeholder="Email"
             placeholderTextColor="#9CA3AF"
-            className="text-base py-0"
+            className="text-base py-0 text-black"
             keyboardType="email-address"
             autoCapitalize="none"
             value={user.email}
@@ -57,7 +57,7 @@ const Login = () => {
           <TextInput
             placeholder="Password"
             placeholderTextColor="#9CA3AF"
-            className="text-base py-0"
+            className="text-base py-0 text-black"
             secureTextEntry
             value={user.password}
             onChangeText={(text) => {

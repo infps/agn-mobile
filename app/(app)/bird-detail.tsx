@@ -1,6 +1,5 @@
 import Header from "@/components/header";
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
 import { Image, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -34,7 +33,7 @@ const BirdDetail = () => {
             <TextInput
               placeholder="xyz"
               placeholderTextColor="#9CA3AF"
-              className="text-base"
+              className="text-base text-black"
             />
           </View>
         </View>
@@ -44,7 +43,7 @@ const BirdDetail = () => {
             <TextInput
               placeholder="xyz"
               placeholderTextColor="#9CA3AF"
-              className="text-base"
+              className="text-base text-black"
             />
           </View>
         </View>
@@ -54,7 +53,7 @@ const BirdDetail = () => {
             <TextInput
               placeholder="xyz"
               placeholderTextColor="#9CA3AF"
-              className="text-base"
+              className="text-base text-black"
             />
           </View>
         </View>
@@ -64,7 +63,7 @@ const BirdDetail = () => {
             <TextInput
               placeholder="xyz"
               placeholderTextColor="#9CA3AF"
-              className="text-base"
+              className="text-base text-black"
             />
           </View>
         </View>
@@ -74,7 +73,7 @@ const BirdDetail = () => {
             <TextInput
               placeholder="$89.00"
               placeholderTextColor="#9CA3AF"
-              className="text-base"
+              className="text-base text-black"
             />
           </View>
         </View>
@@ -84,7 +83,7 @@ const BirdDetail = () => {
             <TextInput
               placeholder="xyz"
               placeholderTextColor="#9CA3AF"
-              className="text-base"
+              className="text-base text-black"
             />
           </View>
         </View>

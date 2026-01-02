@@ -1,5 +1,4 @@
 import Header from "@/components/header";
-import React from "react";
 import { Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -14,7 +13,7 @@ const Payment = () => {
             <TextInput
               placeholder="xyz"
               placeholderTextColor="#9CA3AF"
-              className="text-base"
+              className="text-base text-black"
             />
           </View>
         </View>
@@ -24,7 +23,7 @@ const Payment = () => {
             <TextInput
               placeholder="xyz"
               placeholderTextColor="#9CA3AF"
-              className="text-base"
+              className="text-base text-black"
             />
           </View>
         </View>
@@ -34,7 +33,7 @@ const Payment = () => {
             <TextInput
               placeholder="xyz"
               placeholderTextColor="#9CA3AF"
-              className="text-base"
+              className="text-base text-black"
             />
           </View>
         </View>
@@ -44,7 +43,7 @@ const Payment = () => {
             <TextInput
               placeholder="xyz"
               placeholderTextColor="#9CA3AF"
-              className="text-base"
+              className="text-base text-black"
             />
           </View>
         </View>
@@ -54,7 +53,7 @@ const Payment = () => {
             <TextInput
               placeholder="$89.00"
               placeholderTextColor="#9CA3AF"
-              className="text-base"
+              className="text-base text-black"
             />
           </View>
         </View>

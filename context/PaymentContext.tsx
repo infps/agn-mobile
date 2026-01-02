@@ -1,4 +1,5 @@
 // context/PaymentContext.tsx
+import api from '@/service/api.service';
 import * as SecureStore from 'expo-secure-store';
 import { createContext, ReactNode, useCallback, useContext, useState } from 'react';
 import { Alert } from 'react-native';
@@ -43,7 +44,7 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/api/payments/capture`, {
+      const response = await api.post(`${API_URL}/api/payments/capture`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -52,12 +53,12 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
         body: JSON.stringify({ orderId }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
+      if (!response.data.success) {
+        const errorData = await response.data.data;
         throw new Error(errorData.message || "Failed to capture payment");
       }
 
-      const data = await response.json();
+      const data = await response.data.data;
       return { success: true, captureId: data.captureId };
     } catch (err: any) {
       setError(err.message || "Failed to capture payment");
@@ -128,16 +129,12 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/api/payments/my-payments`, {
-        headers: {
-          Authorization: `Bearer ${await SecureStore.getItemAsync("auth_token")}`,
-        },
-      });
-      if (!response.ok) {
+      const response = await api.get(`/payments/my`);
+      if (!response.data.success) {
         throw new Error("Failed to fetch payments");
       }
 
-      const data = await response.json();
+      const data = await response.data.data;
       setPayments(data);
       return data;
     } catch (err: any) {

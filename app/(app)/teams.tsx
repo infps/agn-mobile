@@ -1,16 +1,16 @@
 import Header from "@/components/header";
 import Modal from "@/components/Modal";
-import { useAuth } from "@/context";
+import { useAuth, useToast } from "@/context";
 import api from "@/service/api.service";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-    FlatList,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -22,35 +22,83 @@ interface Team {
 
 const Teams = () => {
   const { user } = useAuth();
+  const toast = useToast();
   const [teamsData, setTeams] = useState<Team[]>([]);
-  const [team, setTeam] = useState<string>("");
+  const [team, setTeam] = useState<Team>({
+    idBreeder: null,
+    idTeam: null,
+    teamName:""
+  });
   const [open, setOpen] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
 
   useEffect(() => {
-    const getBreederTeams = async () => {
-      try {
-        const res = await api.get(`/users/teams/${user?.idBreeder.toString()}`);
-        if (res?.data?.success) {
-          setTeams(res?.data?.data);
-        }
-      } catch (err) {
-        console.log(err);
-      }
-    };
     getBreederTeams();
   }, [user?.idBreeder]);
-  const addTeam = async () => {
+  const getBreederTeams = async () => {
     try {
-      const res = api.post(`/users/teams`, {
-        breederId: user?.idBreeder,
-        teamName: team,
-      });
-      console.log((await res).data.data);
+      const res = await api.get(`/users/teams/${user?.idBreeder.toString()}`);
+      if (res?.data?.success) {
+        setTeams(res?.data?.data);
+      }
     } catch (err) {
       console.log(err);
     }
   };
+  const addTeam = async () => {
+    try {
+      if(team.teamName === ""){
+        toast.success("Team name is required");
+        return;
+      }
+      const res =await api.post(`/users/teams`, {
+        breederId: user?.idBreeder,
+        teamName: team.teamName,
+      });
+      if(res.data.success){
+        toast.success("Team added successfully");
+        getBreederTeams();
+      }
+    } catch (err) {
+      console.log(err);
+    }
+  };
+  const deleteTeam = async (teamId: number) => {
+    try {
+      if (!teamId) return;
+      const res = await api.delete(`/users/teams/${teamId}`);
+      if (res.data.success) {
+        toast.success("Team deleted successfully");
+        getBreederTeams();
+      } else {
+        toast.error("Team Not Deleted");
+      }
+    } catch (err: any) {
+      console.log(err.message);
+      toast.error("Failed to delete team: " + (err.message || "Unknown error"));
+    }
+  };
+  const updateTeam = async ()=>{
+    try{
+      if(!team.idTeam) return;
+      if(!team.teamName.trim()) {
+        toast.success("Team name is required");
+        return;
+      }
+      const res = await api.put(`/users/teams/${team.idTeam}`, {
+        teamName: team.teamName
+      });
+      if (res.data.success) {
+        toast.success("Team updated successfully");
+        getBreederTeams();
+        setOpenEdit(false);
+      } else {
+        toast.error("Team Not Updated");
+      }
+    }catch(err:any){
+      console.log(err.message)
+    }
+  }
   return (
     <SafeAreaView className="flex-1 relative">
       <Header title="Teams" />
@@ -64,14 +112,19 @@ const Teams = () => {
                 <Text className="text-sm text-gray-600">{item.teamName}</Text>
               </View>
               <View className="flex-1" />
-              <TouchableOpacity className="px-2 py-2">
+              <TouchableOpacity
+                className="px-2 py-2"
+                onPress={() => {
+                  item.idTeam && deleteTeam(item?.idTeam);
+                }}
+              >
                 <Ionicons name="trash" size={24} color="red" />
               </TouchableOpacity>
               <TouchableOpacity
                 className="px-2 py-2"
                 onPress={() => {
                   setOpenEdit(true);
-                  setTeam(item.teamName);
+                  setTeam(item);
                 }}
               >
                 <Ionicons name="pencil" size={24} color="black" />
@@ -86,9 +139,9 @@ const Teams = () => {
         <View className="mt-2">
           <Text className="text-lg">Team Name</Text>
           <TextInput
-            className="border rounded-[8px] p-2"
-            value={team}
-            onChangeText={(text) => setTeam(text)}
+            className="border rounded-[8px] p-2 text-black"
+            value={team.teamName}
+            onChangeText={(text) => setTeam({...team,teamName:text})}
           />
         </View>
         <View className="flex-row justify-end mt-4">
@@ -102,7 +155,11 @@ const Teams = () => {
             className="bg-primary p-2 rounded-xl items-center"
             onPress={() => {
               setOpen(false);
-              setTeam("");
+              setTeam({
+                idBreeder:null,
+                idTeam:null,
+                teamName:""
+              });
             }}
           >
             <Text className="text-white">Cancel</Text>
@@ -114,15 +171,15 @@ const Teams = () => {
         <View className="mt-2">
           <Text className="text-lg">Team Name</Text>
           <TextInput
-            className="border rounded-[8px] p-2"
-            value={team}
-            onChangeText={(text) => setTeam(text)}
+            className="border rounded-[8px] p-2 text-black"
+            value={team.teamName}
+            onChangeText={(text) => setTeam({...team,teamName:text})}
           />
         </View>
         <View className="flex-row justify-end mt-4">
           <TouchableOpacity
             className="bg-primary mr-4 p-2 rounded-xl items-center"
-            onPress={()=>{}}
+            onPress={updateTeam}
           >
             <Text className="text-white">Submit</Text>
           </TouchableOpacity>
@@ -130,7 +187,11 @@ const Teams = () => {
             className="bg-primary p-2 rounded-xl items-center"
             onPress={() => {
               setOpenEdit(false);
-              setTeam("");
+              setTeam({
+                idBreeder:null,
+                idTeam:null,
+                teamName:""
+              });
             }}
           >
             <Text className="text-white">Cancel</Text>

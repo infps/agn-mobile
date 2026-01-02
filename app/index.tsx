@@ -44,10 +44,23 @@
 // app/index.tsx
 import { useAuth } from "@/context/AuthContext";
 import { Redirect } from "expo-router";
+import { useEffect } from "react";
 import "./global.css";
 
 export default function Index() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, checkSession } = useAuth();
+useEffect(() => {
+  const verifySession = async () => {
+    try {
+      await checkSession();
+    } catch (error) {
+      console.log("Session verification failed:", error);
+    }
+  };
+  
+  verifySession();
+}, []);
+  
   if (isLoading) return null; // ⛔ wait until auth restored
 
   if (user) {

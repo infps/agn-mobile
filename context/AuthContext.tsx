@@ -1,9 +1,16 @@
 // context/AuthContext.tsx
- 
-import SecureStorageService from '@/service/secureStorage.service';
-import { router } from 'expo-router';
-import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
-import { Alert } from 'react-native';
+
+import SecureStorageService from "@/service/secureStorage.service";
+import { router } from "expo-router";
+import {
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+import { Alert } from "react-native";
 import api from "../service/api.service";
 
 export interface User {
@@ -51,6 +58,7 @@ interface AuthContextType {
     lastName: string;
   }) => Promise<void>;
   signIn: (loginName: string, password: string) => Promise<void>;
+  checkSession: () => Promise<boolean>;
   signOut: () => Promise<void>;
   updateProfile: (userData: any) => Promise<void>;
   initializeAuth: () => Promise<void>;
@@ -78,10 +86,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setToken(storedToken);
         setUser(storedUser);
         // Set the default Authorization header
-        (api as any).defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+        (api as any).defaults.headers.common["Authorization"] =
+          `Bearer ${storedToken}`;
       }
     } catch (error) {
-      console.error('Failed to initialize auth:', error);
+      console.error("Failed to initialize auth:", error);
       //await SecureStorageService.clearAll();
     } finally {
       setIsLoading(false);
@@ -94,117 +103,151 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [initializeAuth]);
 
   // Sign up function
-  const signUp = useCallback(async (userData: {
-    loginName: string;
-    loginPassword: string;
-    firstName: string;
-    lastName: string;
-  }) => {
+  const signUp = useCallback(
+    async (userData: {
+      loginName: string;
+      loginPassword: string;
+      firstName: string;
+      lastName: string;
+    }) => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await api.post("/auth/breeder/signup", {
+          email: userData.loginName,
+          password: userData.loginPassword,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+        });
+        const { token, user } = response.data;
+
+        // // Store tokens and user data
+        // await Promise.all([
+        //   SecureStorageService.setAccessToken(token),
+        //   SecureStorageService.setUserData(user),
+        // ]);
+
+        // Update state
+        setToken(token);
+        setUser(user);
+
+        // Set default auth header
+        (api as any).defaults.headers.common["Authorization"] =
+          `Bearer ${token}`;
+        await SecureStorageService.setTokens(token, "ACCESS_TOKEN");
+        await SecureStorageService.setUserData(user);
+        // Navigate to home or verify email screen
+        router.replace("/(tabs)" as any);
+      } catch (error: any) {
+        const errorMessage =
+          error.response?.data?.message ||
+          "Registration failed. Please try again.";
+        setError(errorMessage);
+        Alert.alert("Registration Error", errorMessage);
+        throw error;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  // Sign in function
+  const signIn = useCallback(async (email: string, password: string) => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await api.post('/auth/breeder/signup', {
-        email: userData.loginName,
-        password: userData.loginPassword,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
+      // 1. Login to get the token
+      const loginResponse = await api.post("/auth/breeder/login", {
+        email,
+        password,
       });
-      const { token, user } = response.data;
 
-      // // Store tokens and user data
-      // await Promise.all([
-      //   SecureStorageService.setAccessToken(token),
-      //   SecureStorageService.setUserData(user),
-      // ]);
+      const { token } = loginResponse.data.data;
 
-      // Update state
+      // Set the auth header for subsequent requests
+      (api as any).defaults.headers.common["Authorization"] = `Bearer ${token}`;
+
+      // 2. Fetch user profile
+      const profileResponse = await api.get("/users/breeder/profile");
+      const userData = profileResponse.data.data; // Adjust this based on your API response structure
+      // 3. Store token and user data
+      await SecureStorageService.setTokens(token, "ACCESS_TOKEN");
+      await SecureStorageService.setUserData(userData);
+
+      // 4. Update state
       setToken(token);
-      setUser(user);
+      setUser(userData);
 
-      // Set default auth header
-      (api as any).defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    await SecureStorageService.setTokens(token, 'ACCESS_TOKEN');
-    await SecureStorageService.setUserData(user);
-      // Navigate to home or verify email screen
-      router.replace('/(tabs)' as any);
+      // 5. Navigate to home
+      router.replace("/home" as any);
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Registration failed. Please try again.';
+      const errorMessage =
+        error.response?.data?.message || "Login failed. Please try again.";
       setError(errorMessage);
-      Alert.alert('Registration Error', errorMessage);
       throw error;
     } finally {
       setIsLoading(false);
     }
   }, []);
+  const checkSession = useCallback(async () => {
+    try {
+      // Check if user is already authenticated
+      const token = await SecureStorageService.getAccessToken();
+      const userData = await SecureStorageService.getUserData();
 
-  // Sign in function
-const signIn = useCallback(async (email: string, password: string) => {
-  setIsLoading(true);
-  setError(null);
+      if (!token || !userData) {
+        return false;
+      }
 
-  try {
-    // 1. Login to get the token
-    const loginResponse = await api.post('/auth/breeder/login', {
-      email,
-      password,
-    });
-    
-    const { token } = loginResponse.data.data;
-    
-    // Set the auth header for subsequent requests
-    (api as any).defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    
-    // 2. Fetch user profile
-    const profileResponse = await api.get('/users/breeder/profile');
-    const userData = profileResponse.data.data; // Adjust this based on your API response structure
-    // 3. Store token and user data
-    await SecureStorageService.setTokens(token, 'ACCESS_TOKEN');
-    await SecureStorageService.setUserData(userData);
-
-    // 4. Update state
-    setToken(token);
-    setUser(userData);
-
-    // 5. Navigate to home
-    router.replace('/home' as any);
-  } catch (error: any) {
-    const errorMessage = error.response?.data?.message || 'Login failed. Please try again.';
-    setError(errorMessage);
-    throw error;
-  } finally {
-    setIsLoading(false);
-  }
-}, []);
-
+      // Verify session with server
+      const res = await api.get("/auth/breeder/session");
+      if (token && res.data.data) {
+        setToken(token);
+        setUser(res.data.data);
+        return true;
+      }
+      router.navigate("/login");
+      return false;
+    } catch (error: any) {
+      // Session expired or invalid - clear everything and navigate to login
+      console.log("Session expired:", error.response?.status, error.response?.data);
+      await SecureStorageService.clearAll();
+      delete (api as any).defaults.headers.common["Authorization"];
+      setUser(null);
+      setToken(null);
+      router.push("/login");
+      return false;
+    }
+  }, [setToken, setUser]);
   // Sign out function
   const signOut = useCallback(async () => {
     try {
       // Clear tokens and user data
       await SecureStorageService.clearAll();
-      
+
       // Clear API auth header
-      delete (api as any).defaults.headers.common['Authorization'];
-      
+      delete (api as any).defaults.headers.common["Authorization"];
+
       // Reset state
       setUser(null);
       setToken(null);
-      
+
       // Navigate to login
-      router.push('/login');
+      router.push("/login");
     } catch (error) {
-      console.error('Error during sign out:', error);
+      console.error("Error during sign out:", error);
       throw error;
     }
   }, []);
-  const updateProfile = useCallback(async (userData:any)=>{
+  const updateProfile = useCallback(async (userData: any) => {
     setIsLoading(true);
     setError(null);
 
     try {
-      console.log(userData)
-      const response = await api.put('/user/breeder/profile', userData);
-      console.log(response.data);
+      const response = await api.put("/user/breeder/profile", userData);
       const { token, user } = response.data;
 
       // // Store tokens and user data
@@ -218,17 +261,19 @@ const signIn = useCallback(async (email: string, password: string) => {
       setUser(user);
 
       // Set default auth header
-      (api as any).defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      (api as any).defaults.headers.common["Authorization"] = `Bearer ${token}`;
     } catch (error: any) {
-      console.log(error)
-      const errorMessage = error.response?.data?.message || 'Registration failed. Please try again.';
+      console.log(error);
+      const errorMessage =
+        error.response?.data?.message ||
+        "Registration failed. Please try again.";
       setError(errorMessage);
-      Alert.alert('Registration Error', errorMessage);
+      Alert.alert("Registration Error", errorMessage);
       throw error;
     } finally {
       setIsLoading(false);
     }
-  },[])
+  }, []);
   const value = {
     user,
     token,
@@ -239,6 +284,7 @@ const signIn = useCallback(async (email: string, password: string) => {
     signOut,
     updateProfile,
     initializeAuth,
+    checkSession,
     isAuthenticated: !!user,
   };
 
@@ -248,7 +294,7 @@ const signIn = useCallback(async (email: string, password: string) => {
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };
