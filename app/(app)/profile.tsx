@@ -1,8 +1,8 @@
 import Header from "@/components/header";
 import { useAuth } from "@/context";
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
-import { Image, Linking, ScrollView, Text, View } from "react-native";
+import { router } from "expo-router";
+import { Image, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const Profile = () => {
@@ -20,9 +20,9 @@ const Profile = () => {
             }
             className="w-32 h-32 rounded-full"
           />
-          <View className="absolute ml-[85px] mt-[100px] bg-primary p-2 border-2 border-white rounded-full">
+          <Pressable onPress={() => router.push("/profile-update")} className="absolute ml-[85px] mt-[100px] bg-primary p-2 border-2 border-white rounded-full">
             <Ionicons name="pencil" size={18} color={"#fff"} />
-          </View>
+          </Pressable>
           <Text className="pt-4 text-2xl font-bold">
             {user?.firstName} {user?.lastName}
           </Text>

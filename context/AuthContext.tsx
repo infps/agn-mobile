@@ -60,7 +60,7 @@ interface AuthContextType {
   signIn: (loginName: string, password: string) => Promise<void>;
   checkSession: () => Promise<boolean>;
   signOut: () => Promise<void>;
-  updateProfile: (userData: any) => Promise<void>;
+updateProfile: (userData: any) => Promise<boolean>;
   initializeAuth: () => Promise<void>;
   isAuthenticated: boolean;
 }
@@ -77,14 +77,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const initializeAuth = useCallback(async () => {
     try {
       setIsLoading(true);
-      const [storedToken, storedUser] = await Promise.all([
+      const [storedToken] = await Promise.all([
         SecureStorageService.getAccessToken(),
-        SecureStorageService.getUserData(),
       ]);
-
-      if (storedToken && storedUser) {
+      const profileResponse = await api.get("/users/breeder/profile");
+      const userData = profileResponse.data.data;
+      if (storedToken && userData) {
         setToken(storedToken);
-        setUser(storedUser);
+        setUser(userData);
         // Set the default Authorization header
         (api as any).defaults.headers.common["Authorization"] =
           `Bearer ${storedToken}`;
@@ -164,7 +164,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         email,
         password,
       });
-
       const { token } = loginResponse.data.data;
 
       // Set the auth header for subsequent requests
@@ -212,8 +211,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       router.navigate("/login");
       return false;
     } catch (error: any) {
-      // Session expired or invalid - clear everything and navigate to login
-      console.log("Session expired:", error.response?.status, error.response?.data);
       await SecureStorageService.clearAll();
       delete (api as any).defaults.headers.common["Authorization"];
       setUser(null);
@@ -247,14 +244,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
 
     try {
-      const response = await api.put("/user/breeder/profile", userData);
+      const response = await api.put("/users/breeder/profile", userData);
       const { token, user } = response.data;
 
       // // Store tokens and user data
-      // await Promise.all([
-      //   SecureStorageService.setAccessToken(token),
-      //   SecureStorageService.setUserData(user),
-      // ]);
+      await Promise.all([
+        SecureStorageService.setTokens(token, "ACCESS_TOKEN"),
+        SecureStorageService.setUserData(user),
+      ]);
 
       // Update state
       setToken(token);
@@ -262,6 +259,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       // Set default auth header
       (api as any).defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      return true;
     } catch (error: any) {
       console.log(error);
       const errorMessage =

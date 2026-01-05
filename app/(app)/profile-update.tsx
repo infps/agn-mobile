@@ -1,27 +1,26 @@
-import { useAuth } from "@/context";
+import { useAuth, useToast } from "@/context";
 import { User } from "@/context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Alert,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const ProfileUpdate = () => {
   const { user, updateProfile } = useAuth();
+  const toast = useToast();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [profileImage, setProfileImage] = useState(user?.idPicture || "");
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<Partial<User>>({});
 
   // Initialize form with user data
@@ -30,20 +29,25 @@ const ProfileUpdate = () => {
       setFormData({
         firstName: user.firstName || "",
         lastName: user.lastName || "",
-        loginName: user.loginName || "",
-        email2: user.email2 || "",
-        phone: user.phone || "",
-        cell: user.cell || "",
+        country: user.country || "",
         address1: user.address1 || "",
-        address2: user.address2 || "",
         city1: user.city1 || "",
         state1: user.state1 || "",
         zip1: user.zip1 || "",
-        country: user.country || "",
-        taxNumber: user.taxNumber || "",
-        socialSecurityNumber: user.socialSecurityNumber || "",
+        address2: user.address2 || "",
+        city2: user.city2 || "",
+        state2: user.state2 || "",
+        zip2: user.zip2 || "",
+        phone: user.phone || "",
+        cell: user.cell || "",
+        fax: user.fax || "",
+        email2: user.email2 || "",
         webAddress: user.webAddress || "",
         note: user.note || "",
+        sms: user.sms || "",
+        taxNumber: user.taxNumber || "",
+        defNameAgn: user.defNameAgn || "",
+        defNameAs: user.defNameAs || "",
       });
     }
   }, [user]);
@@ -55,24 +59,38 @@ const ProfileUpdate = () => {
     }));
   };
 
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      setProfileImage(result.assets[0].uri);
-    }
-  };
-
   const onSubmit = async () => {
     try {
       setIsLoading(true);
 
-      // Filter out undefined values from formData
+      const requiredFields = [
+        "country",
+        "address1",
+        "city1",
+        "state1",
+        "zip1",
+        "phone",
+      ];
+      const newErrors: Record<string, string> = {};
+      requiredFields.forEach((field) => {
+        const value =
+          formData[field as keyof User] || user?.[field as keyof User];
+        if (!value || value?.toString()?.trim() === "") {
+          const fieldNames: Record<string, string> = {
+            country: "Country",
+            address1: "Address Line 1",
+            phone: "Phone Number",
+            city1: "City",
+            state1: "State",
+            zip1: "Zip Code",
+          };
+          newErrors[field] = `${fieldNames[field]} is required`;
+        }
+      });
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        return;
+      }
       const definedFormData = Object.fromEntries(
         Object.entries(formData).filter(([_, value]) => value !== undefined)
       );
@@ -88,12 +106,14 @@ const ProfileUpdate = () => {
           ([_, value]) => value !== undefined && value !== null && value !== ""
         )
       );
-      await updateProfile(cleanedUserData);
-      Alert.alert("Success", "Profile updated successfully");
-      router.back();
+      const result = await updateProfile(cleanedUserData);
+      if (result) {
+        toast.success("Profile updated successfully");
+        router.navigate('/profile');
+      }
     } catch (error) {
       console.error("Update error:", error);
-      Alert.alert("Error", "Failed to update profile. Please try again.");
+      toast.error("Failed to update profile. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -107,13 +127,24 @@ const ProfileUpdate = () => {
     <View className="mb-4">
       <Text className="text-gray-600 text-sm mb-1">{label}</Text>
       <TextInput
-        className="border border-gray-300 rounded-lg px-4 py-2"
+        className={`border rounded-lg px-4 py-2 ${
+          errors[field] ? "border-red-500" : "border-gray-300"
+        }`}
         value={(formData[field] as string) || ""}
-        onChangeText={(text) => handleInputChange(field, text)}
+        onChangeText={(text) => {
+          handleInputChange(field, text);
+          // Clear error when user starts typing
+          if (errors[field]) {
+            setErrors((prev) => ({ ...prev, [field]: "" }));
+          }
+        }}
         placeholder={placeholder}
         placeholderTextColor="#9CA3AF"
         {...props}
       />
+      {errors[field] && (
+        <Text className="text-red-500 text-xs mt-1">{errors[field]}</Text>
+      )}
     </View>
   );
 
@@ -141,7 +172,7 @@ const ProfileUpdate = () => {
       >
         <ScrollView className="flex-1 p-4">
           {/* Profile Picture */}
-          <View className="items-center my-4">
+          {/* <View className="items-center my-4">
             <View className="relative">
               <Image
                 source={
@@ -159,7 +190,7 @@ const ProfileUpdate = () => {
               </TouchableOpacity>
             </View>
             <Text className="mt-2 text-gray-600">Tap to change photo</Text>
-          </View>
+          </View> */}
 
           {/* Personal Information */}
           <View className="bg-white p-4 rounded-lg mb-4">
@@ -174,11 +205,7 @@ const ProfileUpdate = () => {
                 {renderInput("lastName", "Last Name", "Enter last name")}
               </View>
             </View>
-            {renderInput("loginName", "Primary Email", "Enter primary email", {
-              keyboardType: "email-address",
-              autoCapitalize: "none",
-            })}
-            {renderInput("email2", "Secondary Email", "Enter secondary email", {
+            {renderInput("country", "Country", "Enter country", {
               keyboardType: "email-address",
               autoCapitalize: "none",
             })}
@@ -201,19 +228,22 @@ const ProfileUpdate = () => {
                 })}
               </View>
             </View>
+            {renderInput("loginName", "Primary Email", "Enter primary email", {
+              keyboardType: "email-address",
+              autoCapitalize: "none",
+            })}
+            {renderInput("email2", "Secondary Email", "Enter secondary email", {
+              keyboardType: "email-address",
+              autoCapitalize: "none",
+            })}
           </View>
 
           {/* Address */}
           <View className="bg-white p-4 rounded-lg mb-4">
             <Text className="text-lg font-bold mb-4 text-gray-800">
-              Address
+              Address 1
             </Text>
             {renderInput("address1", "Address Line 1", "Enter address line 1")}
-            {renderInput(
-              "address2",
-              "Address Line 2",
-              "Enter address line 2 (optional)"
-            )}
             <View className="flex-row">
               <View className="flex-1 mr-2">
                 {renderInput("city1", "City", "Enter city")}
@@ -226,12 +256,31 @@ const ProfileUpdate = () => {
               <View className="flex-1 mr-2">
                 {renderInput("zip1", "Postal Code", "Enter postal code")}
               </View>
+            </View>
+          </View>
+          <View className="bg-white p-4 rounded-lg mb-4">
+            <Text className="text-lg font-bold mb-4 text-gray-800">
+              Address 2
+            </Text>
+            {renderInput(
+              "address2",
+              "Address Line 2",
+              "Enter address line 2 (optional)"
+            )}
+            <View className="flex-row">
+              <View className="flex-1 mr-2">
+                {renderInput("city2", "City", "Enter city")}
+              </View>
               <View className="flex-1 ml-2">
-                {renderInput("country", "Country", "Enter country")}
+                {renderInput("state2", "State/Province", "Enter state")}
+              </View>
+            </View>
+            <View className="flex-row">
+              <View className="flex-1 mr-2">
+                {renderInput("zip2", "Postal Code", "Enter postal code")}
               </View>
             </View>
           </View>
-
           {/* Additional Information */}
           <View className="bg-white p-4 rounded-lg mb-4">
             <Text className="text-lg font-bold mb-4 text-gray-800">

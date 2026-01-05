@@ -27,8 +27,9 @@ const Teams = () => {
   const [team, setTeam] = useState<Team>({
     idBreeder: null,
     idTeam: null,
-    teamName:""
+    teamName: "",
   });
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
 
@@ -40,22 +41,24 @@ const Teams = () => {
       const res = await api.get(`/users/teams/${user?.idBreeder.toString()}`);
       if (res?.data?.success) {
         setTeams(res?.data?.data);
+        setLoading(false);
       }
     } catch (err) {
       console.log(err);
+      setLoading(false);
     }
   };
   const addTeam = async () => {
     try {
-      if(team.teamName === ""){
+      if (team.teamName === "") {
         toast.success("Team name is required");
         return;
       }
-      const res =await api.post(`/users/teams`, {
+      const res = await api.post(`/users/teams`, {
         breederId: user?.idBreeder,
         teamName: team.teamName,
       });
-      if(res.data.success){
+      if (res.data.success) {
         toast.success("Team added successfully");
         getBreederTeams();
       }
@@ -78,15 +81,15 @@ const Teams = () => {
       toast.error("Failed to delete team: " + (err.message || "Unknown error"));
     }
   };
-  const updateTeam = async ()=>{
-    try{
-      if(!team.idTeam) return;
-      if(!team.teamName.trim()) {
+  const updateTeam = async () => {
+    try {
+      if (!team.idTeam) return;
+      if (!team.teamName.trim()) {
         toast.success("Team name is required");
         return;
       }
       const res = await api.put(`/users/teams/${team.idTeam}`, {
-        teamName: team.teamName
+        teamName: team.teamName,
       });
       if (res.data.success) {
         toast.success("Team updated successfully");
@@ -95,44 +98,57 @@ const Teams = () => {
       } else {
         toast.error("Team Not Updated");
       }
-    }catch(err:any){
-      console.log(err.message)
+    } catch (err: any) {
+      console.log(err.message);
     }
-  }
+  };
   return (
     <SafeAreaView className="flex-1 relative">
       <Header title="Teams" />
       <View className="flex-1 w-full px-2">
-        <FlatList
-          data={teamsData}
-          keyExtractor={(_, index) => index.toString()}
-          renderItem={({ item }) => (
-            <View className="w-full flex-row bg-white rounded-xl shadow-sm border border-gray-100 mt-2">
-              <View className="px-2 py-2">
-                <Text className="text-sm text-gray-600">{item.teamName}</Text>
-              </View>
-              <View className="flex-1" />
-              <TouchableOpacity
-                className="px-2 py-2"
-                onPress={() => {
-                  item.idTeam && deleteTeam(item?.idTeam);
-                }}
-              >
-                <Ionicons name="trash" size={24} color="red" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="px-2 py-2"
-                onPress={() => {
-                  setOpenEdit(true);
-                  setTeam(item);
-                }}
-              >
-                <Ionicons name="pencil" size={24} color="black" />
-              </TouchableOpacity>
+        {loading ? (
+          [1, 2, 3, 4, 5].map((_, index) => (
+            <View className="p-2 mr-4 flex-row justify-between" key={index}>
+              <View className="w-full h-8 bg-gray-200 rounded" />
+              <View className="w-full h-8 bg-gray-200 rounded" />
+              <View className="w-full h-8 bg-gray-200 rounded" />
+              <View className="w-full h-8 bg-gray-200 rounded" />
+              <View className="w-full h-8 bg-gray-200 rounded" />
+              <View className="w-full h-8 bg-gray-200 rounded" />
             </View>
-          )}
-          className="flex-1"
-        />
+          ))
+        ) : (
+          <FlatList
+            data={teamsData}
+            keyExtractor={(_, index) => index.toString()}
+            renderItem={({ item }) => (
+              <View className="w-full flex-row bg-white rounded-xl shadow-sm border border-gray-100 mt-2">
+                <View className="px-2 py-2">
+                  <Text className="text-sm text-gray-600">{item.teamName}</Text>
+                </View>
+                <View className="flex-1" />
+                <TouchableOpacity
+                  className="px-2 py-2"
+                  onPress={() => {
+                    item.idTeam && deleteTeam(item?.idTeam);
+                  }}
+                >
+                  <Ionicons name="trash" size={24} color="red" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  className="px-2 py-2"
+                  onPress={() => {
+                    setOpenEdit(true);
+                    setTeam(item);
+                  }}
+                >
+                  <Ionicons name="pencil" size={24} color="black" />
+                </TouchableOpacity>
+              </View>
+            )}
+            className="flex-1"
+          />
+        )}
       </View>
       <Modal open={open} setOpen={setOpen}>
         <Text className="text-2xl font-bold">Add Bird</Text>
@@ -141,7 +157,7 @@ const Teams = () => {
           <TextInput
             className="border rounded-[8px] p-2 text-black"
             value={team.teamName}
-            onChangeText={(text) => setTeam({...team,teamName:text})}
+            onChangeText={(text) => setTeam({ ...team, teamName: text })}
           />
         </View>
         <View className="flex-row justify-end mt-4">
@@ -156,9 +172,9 @@ const Teams = () => {
             onPress={() => {
               setOpen(false);
               setTeam({
-                idBreeder:null,
-                idTeam:null,
-                teamName:""
+                idBreeder: null,
+                idTeam: null,
+                teamName: "",
               });
             }}
           >
@@ -173,7 +189,7 @@ const Teams = () => {
           <TextInput
             className="border rounded-[8px] p-2 text-black"
             value={team.teamName}
-            onChangeText={(text) => setTeam({...team,teamName:text})}
+            onChangeText={(text) => setTeam({ ...team, teamName: text })}
           />
         </View>
         <View className="flex-row justify-end mt-4">
@@ -188,9 +204,9 @@ const Teams = () => {
             onPress={() => {
               setOpenEdit(false);
               setTeam({
-                idBreeder:null,
-                idTeam:null,
-                teamName:""
+                idBreeder: null,
+                idTeam: null,
+                teamName: "",
               });
             }}
           >

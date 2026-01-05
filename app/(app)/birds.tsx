@@ -53,13 +53,13 @@ const Birds = () => {
       <View className="px-2 w-full pb-[100px]">
         {loading ? (
           [1, 2, 3, 4, 5].map((_, index) => (
-            <View className="p-2 flex-row justify-between" key={index}>
-              <View className="text-gray-400 h-[10px]" />
-              <View className="text-gray-400 h-[10px]" />
-              <View className="text-gray-400 h-[10px]" />
-              <View className="text-gray-400 h-[10px]" />
-              <View className="text-gray-400 h-[10px]" />
-              <View className="text-gray-400 h-[10px]" />
+            <View className="p-2 mr-4 flex-row justify-between" key={index}>
+              <View className="w-full h-8 bg-gray-200 rounded" />
+              <View className="w-full h-8 bg-gray-200 rounded" />
+              <View className="w-full h-8 bg-gray-200 rounded" />
+              <View className="w-full h-8 bg-gray-200 rounded" />
+              <View className="w-full h-8 bg-gray-200 rounded" />
+              <View className="w-full h-8 bg-gray-200 rounded" />
             </View>
           ))
         ) : birds.length > 0 ? (

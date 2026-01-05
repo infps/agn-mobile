@@ -2,7 +2,7 @@ import Header from "@/components/header";
 import api from "@/service/api.service";
 import { format } from "date-fns";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Text, View } from "react-native";
+import { FlatList, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const MyEvent = () => {
@@ -23,40 +23,43 @@ const MyEvent = () => {
   return (
     <SafeAreaView className="flex-1">
       <Header title="My Event" />
-      {loading ? (
-        <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" />
+      <View className="flex-row justify-between bg-primary p-3 mt-4 mx-2 border-b border-gray-200">
+        <View className="w-12">
+          <Text className="font-bold text-sm text-white">SI. No.</Text>
         </View>
+        <View className="w-30">
+          <Text className="font-bold text-sm text-center text-white">
+            Event Name
+          </Text>
+        </View>
+        <View className="w-30">
+          <Text className="font-bold text-sm text-center text-white">
+            Event Date
+          </Text>
+        </View>
+        <View className="w-18">
+          <Text className="font-bold text-sm text-white">Reserved Birds</Text>
+        </View>
+        <View className="w-18">
+          <Text className="font-bold text-sm text-white">Loft</Text>
+        </View>
+      </View>
+      {loading ? (
+        [1, 2, 3, 4, 5].map((_, index) => (
+          <View className="p-2 mx-2 flex-row justify-between" key={index}>
+            <View className="w-full h-8 bg-gray-200 rounded" />
+            <View className="w-full h-8 bg-gray-200 rounded" />
+            <View className="w-full h-8 bg-gray-200 rounded" />
+            <View className="w-full h-8 bg-gray-200 rounded" />
+            <View className="w-full h-8 bg-gray-200 rounded" />
+            <View className="w-full h-8 bg-gray-200 rounded" />
+          </View>
+        ))
       ) : (
         <FlatList
           data={events}
-          ListHeaderComponent={() => (
-            <View className="flex-row justify-between bg-primary p-3 mt-4 border-b border-gray-200">
-              <View className="w-12">
-                <Text className="font-bold text-sm text-white">SI. No.</Text>
-              </View>
-              <View className="w-30">
-                <Text className="font-bold text-sm text-center text-white">
-                  Event Name
-                </Text>
-              </View>
-              <View className="w-30">
-                <Text className="font-bold text-sm text-center text-white">
-                  Event Date
-                </Text>
-              </View>
-              <View className="w-18">
-                <Text className="font-bold text-sm text-white">
-                  Reserved Birds
-                </Text>
-              </View>
-              <View className="w-18">
-                <Text className="font-bold text-sm text-white">Loft</Text>
-              </View>
-            </View>
-          )}
           renderItem={({ item, index }) => (
-            <View className="flex-row justify-between p-4 border-b border-gray-200">
+            <View className="flex-row justify-between p-4 border-b mx-2 border-gray-200">
               <View className="w-16">
                 <Text className="text-sm">{index + 1}</Text>
               </View>

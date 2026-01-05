@@ -125,7 +125,6 @@ const Settings = () => {
       console.log("Share error:", error);
     }
   };
-
   return (
     <SafeAreaView className="flex-1 bg-[#f5f5f5]">
       <View className={`bg-primary p-4 flex-row justify-between`}>

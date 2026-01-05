@@ -32,7 +32,6 @@ const EventsList = () => {
   useEffect(() => {
     loadEvents();
   }, []);
-
   const handleRefresh = () => {
     setRefreshing(true);
     loadEvents();

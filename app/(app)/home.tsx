@@ -181,22 +181,20 @@ export default function HomeScreen() {
         </View>
         {/* STATS */}
         {upcoming.length > 0 && (
-          <View className="m-8">
+          <View className="mt-8">
             <View className="flex-row justify-between items-center px-4 mb-3">
               <Text className="text-xl font-bold">Upcoming Races</Text>
               <TouchableOpacity>
                 <Text className="text-blue-500">See All</Text>
               </TouchableOpacity>
             </View>
-            {loading ? (
-              <Text>Loading events...</Text>
-            ) : error ? (
-              <Text className="text-red-500">
-                Error loading events: {error}
-              </Text>
-            ) : (
-              <Carousel data={upcoming?.slice(0, 5)} />
-            )}
+          {loading ? (
+            <Carousel data={[]} loading={true} />
+          ) : error ? (
+            <Text className="text-red-500">Error loading events: {error}</Text>
+          ) : (
+            <Carousel data={upcoming?.slice(0, 5)} />
+          )}
           </View>
         )}
       </ScrollView>

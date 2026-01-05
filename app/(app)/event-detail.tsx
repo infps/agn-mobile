@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { format } from "date-fns";
 import { useLocalSearchParams } from "expo-router";
 import { useEffect } from "react";
-import { ActivityIndicator, FlatList, Text, View } from "react-native";
+import { FlatList, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const EventDetail = () => {
@@ -22,7 +22,6 @@ const EventDetail = () => {
       getEventParticipants(id as string);
     }
   }, [id, getEvent, getEventParticipants]);
-  console.log(participants);
   return (
     <SafeAreaView className="flex-1">
       <Header title={currentEvent ? currentEvent?.eventName : "Event Name"} />
@@ -75,31 +74,36 @@ const EventDetail = () => {
           </Text>
         </View>
       </View>
-      {loading ? (
-        <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" />
+      <View className="flex-row bg-primary justify-between bg-gray-100 p-3 border-b border-gray-200">
+        <View className="w-12">
+          <Text className="font-bold text-sm text-white">#</Text>
         </View>
+        <View className="w-32">
+          <Text className="font-bold text-sm text-center text-white">
+            Breeder Name
+          </Text>
+        </View>
+        <View className="w-32">
+          <Text className="font-bold text-sm text-center text-white">Loft Name</Text>
+        </View>
+        <View className="w-18">
+          <Text className="font-bold text-sm text-white">Total Birds</Text>
+        </View>
+      </View>
+      {loading ? (
+        [1, 2, 3, 4, 5].map((_, index) => (
+          <View className="p-2 mr-4 flex-row justify-between" key={index}>
+            <View className="w-full h-8 bg-gray-200 rounded" />
+            <View className="w-full h-8 bg-gray-200 rounded" />
+            <View className="w-full h-8 bg-gray-200 rounded" />
+            <View className="w-full h-8 bg-gray-200 rounded" />
+            <View className="w-full h-8 bg-gray-200 rounded" />
+            <View className="w-full h-8 bg-gray-200 rounded" />
+          </View>
+        ))
       ) : (
         <FlatList
           data={participants}
-          ListHeaderComponent={() => (
-            <View className="flex-row justify-between bg-gray-100 p-3 border-b border-gray-200">
-              <View className="w-12">
-                <Text className="font-bold text-sm">#</Text>
-              </View>
-              <View className="w-32">
-                <Text className="font-bold text-sm text-center">
-                  Breeder Name
-                </Text>
-              </View>
-              <View className="w-32">
-                <Text className="font-bold text-sm text-center">Loft Name</Text>
-              </View>
-              <View className="w-18">
-                <Text className="font-bold text-sm">Total Birds</Text>
-              </View>
-            </View>
-          )}
           renderItem={({ item, index }) => (
             <View className="flex-row justify-between p-4 border-b border-gray-200">
               <View className="w-12">
