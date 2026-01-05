@@ -25,14 +25,14 @@ const settingOption1: {
   //   ),
   //   link: "/races",
   // },
-    {
+  {
     title: "Events",
     icon: (
       <Image source={require("../../assets/journey.png")} className="w-8 h-8" />
     ),
     link: "/events",
   },
-    {
+  {
     title: "My Events",
     icon: <Ionicons name="calendar-outline" size={24} />,
     link: "my-events",
@@ -79,13 +79,10 @@ const settingOption2: {
   title: string;
   icon: React.ReactNode;
   link:
-    | "/onboarding"
-    | "/home"
-    | "/"
-    | "/login"
     | "/payments"
     | "/about-us"
     | "/privacy-policy"
+    | "/contact-us"
     | "/terms-condition";
 }[] = [
   {
@@ -102,6 +99,11 @@ const settingOption2: {
     title: "Privacy Policy",
     icon: <Ionicons name="shield-checkmark-outline" size={24} color="black" />,
     link: "/privacy-policy",
+  },
+  {
+    title: "Contact Us",
+    icon: <Ionicons name="call-outline" size={24} color="black" />,
+    link: "/contact-us",
   },
   {
     title: "Terms & Conditions",
@@ -180,7 +182,7 @@ const Settings = () => {
           renderItem={({ item, index }) => (
             <TouchableOpacity
               className={`flex-row items-center justify-between py-2 ${
-                index !== settingOption1.length - 1
+                index !== settingOption2.length - 1
                   ? "border-b border-gray-200"
                   : ""
               }`}

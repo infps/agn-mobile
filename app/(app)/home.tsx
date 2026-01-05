@@ -1,5 +1,5 @@
 import Carousel from "@/components/carousel";
-import { useAuth, useEvents } from "@/context";
+import { useEvents } from "@/context";
 import { EventType } from "@/context/EventContext";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -23,7 +23,6 @@ const pedigree = [
 ];
 
 export default function HomeScreen() {
-  const { user } = useAuth();
   const { events, loading, error } = useEvents();
   const router = useRouter();
 
