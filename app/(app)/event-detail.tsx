@@ -2,9 +2,9 @@ import Header from "@/components/header";
 import { useEvents } from "@/context";
 import { Ionicons } from "@expo/vector-icons";
 import { format } from "date-fns";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useEffect } from "react";
-import { FlatList, Text, View } from "react-native";
+import { FlatList, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const EventDetail = () => {
@@ -24,7 +24,7 @@ const EventDetail = () => {
   }, [id, getEvent, getEventParticipants]);
   return (
     <SafeAreaView className="flex-1">
-      <Header title={currentEvent ? currentEvent?.eventName : "Event Name"} />
+      <Header title={currentEvent ? currentEvent?.name : "Event Name"} />
       <View className="flex-row mx-4 py-4 justify-between border-b border-gray-400">
         <View>
           <Text className="text-sm font-bold text-black text-center">
@@ -39,20 +39,14 @@ const EventDetail = () => {
             Perch Fee
           </Text>
           <Text className="text-center text-sm">
-            ${currentEvent?.feeScheme.perchFeeItems[0].perchFee ?? "N/A"}
-          </Text>
-        </View>
-        <View>
-          <Text className="text-sm font-bold text-black">Final Race Fee</Text>
-          <Text className="text-center text-sm">
-            ${currentEvent?.feeScheme.hotSpotFinalFee ?? "N/A"}
+            ${currentEvent?.feeScheme.perchFeeItems[0]?.fee ?? "N/A"}
           </Text>
         </View>
         <View>
           <Text className="text-sm font-bold ml-4">Race Date</Text>
           <Text className="text-center text-sm">
             {currentEvent
-              ? format(new Date(currentEvent.eventDate), "MMM dd, yyyy")
+              ? format(new Date(currentEvent.startDate), "MMM dd, yyyy")
               : ""}
           </Text>
         </View>
@@ -63,6 +57,18 @@ const EventDetail = () => {
           </Text>
         </View>
       </View>
+      {currentEvent?.races?.some(r => r.isLive) && (
+        <TouchableOpacity
+          className="mx-4 mt-3 bg-red-500 py-3 rounded-lg flex-row items-center justify-center gap-2"
+          onPress={() => {
+            const liveRace = currentEvent.races?.find(r => r.isLive);
+            if (liveRace) router.push({ pathname: "/live-race", params: { raceId: liveRace.raceId } });
+          }}
+        >
+          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#fff" }} />
+          <Text className="text-white font-bold text-base">Watch Live Race</Text>
+        </TouchableOpacity>
+      )}
       <View className="flex-row p-4 justify-between">
         <View className="flex-row items-center">
           <Ionicons name="people-outline" size={24} />

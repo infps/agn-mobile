@@ -10,9 +10,9 @@ const MyEvent = () => {
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     const getUserEvent = async () => {
-      const res = await api.get("/event-inventory/my-events");
-      if (res.data.success) {
-        setEvents(res.data.data);
+      const res = await api.get("/breeder/my-events");
+      if (res.data.inventories) {
+        setEvents(res.data.inventories || []);
         setLoading(false);
       } else {
         setLoading(false);
@@ -65,13 +65,13 @@ const MyEvent = () => {
               </View>
               <View className="w-30">
                 <Text className="text-sm text-left">
-                  {format(new Date(item?.event?.eventDate), "MMM dd, yyyy") ||
+                  {format(new Date(item?.event?.startDate), "MMM dd, yyyy") ||
                     "Unknown Date"}
                 </Text>
               </View>
               <View className="w-32">
                 <Text className="text-sm text-center">
-                  {item?.event?.eventName || "Not specified"}
+                  {item?.event?.name || "Not specified"}
                 </Text>
               </View>
               <View className="w-[20%]">

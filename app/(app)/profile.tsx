@@ -14,8 +14,8 @@ const Profile = () => {
         <View className="items-center py-6 bg-white mb-4">
           <Image
             source={
-              user?.idPicture
-                ? { uri: user.idPicture }
+              user?.image
+                ? { uri: user.image }
                 : require("../../assets/profile.png")
             }
             className="w-32 h-32 rounded-full"
@@ -24,12 +24,12 @@ const Profile = () => {
             <Ionicons name="pencil" size={18} color={"#fff"} />
           </Pressable>
           <Text className="pt-4 text-2xl font-bold">
-            {user?.firstName} {user?.lastName}
+            {user?.name}
           </Text>
           <Text className="text-gray-500">
-            {user?.email || user?.loginName}
+            {user?.email}
           </Text>
-          <Text className="text-gray-500">Breeder ID: {user?.idBreeder}</Text>
+          <Text className="text-gray-500">ID: {user?.id}</Text>
         </View>
 
         {/* Contact Information */}
@@ -45,17 +45,17 @@ const Profile = () => {
 
           <View className="mb-3">
             <Text className="text-gray-500 text-sm">Secondary Email</Text>
-            <Text className="text-base">{user?.email2 || "Not provided"}</Text>
+            <Text className="text-base">{"Not provided"}</Text>
           </View>
 
           <View className="flex-row justify-between">
             <View className="flex-1 mr-2">
               <Text className="text-gray-500 text-sm">Phone</Text>
-              <Text className="text-base">{user?.phone || "Not provided"}</Text>
+              <Text className="text-base">{user?.phoneNumber || "Not provided"}</Text>
             </View>
             <View className="flex-1 ml-2">
               <Text className="text-gray-500 text-sm">Mobile</Text>
-              <Text className="text-base">{user?.cell || "Not provided"}</Text>
+              <Text className="text-base">{"Not provided"}</Text>
             </View>
           </View>
         </View>
@@ -67,26 +67,26 @@ const Profile = () => {
           <View className="mb-2">
             <Text className="text-gray-500 text-sm">Address Line 1</Text>
             <Text className="text-base">
-              {user?.address1 || "Not provided"}
+              {user?.address || "Not provided"}
             </Text>
           </View>
 
           <View className="mb-2">
             <Text className="text-gray-500 text-sm">Address Line 2</Text>
             <Text className="text-base">
-              {user?.address2 || "Not provided"}
+              {"Not provided"}
             </Text>
           </View>
 
           <View className="flex-row justify-between mb-2">
             <View className="flex-1 mr-2">
               <Text className="text-gray-500 text-sm">City</Text>
-              <Text className="text-base">{user?.city1 || "Not provided"}</Text>
+              <Text className="text-base">{user?.city || "Not provided"}</Text>
             </View>
             <View className="flex-1 ml-2">
               <Text className="text-gray-500 text-sm">State/Province</Text>
               <Text className="text-base">
-                {user?.state1 || "Not provided"}
+                {user?.state || "Not provided"}
               </Text>
             </View>
           </View>
@@ -94,7 +94,7 @@ const Profile = () => {
           <View className="flex-row justify-between">
             <View className="flex-1 mr-2">
               <Text className="text-gray-500 text-sm">Postal Code</Text>
-              <Text className="text-base">{user?.zip1 || "Not provided"}</Text>
+              <Text className="text-base">{user?.postalCode || "Not provided"}</Text>
             </View>
             <View className="flex-1 ml-2">
               <Text className="text-gray-500 text-sm">Country</Text>
@@ -115,13 +115,13 @@ const Profile = () => {
             <View className="flex-1 mr-2">
               <Text className="text-gray-500 text-sm">Tax Number</Text>
               <Text className="text-base">
-                {user?.taxNumber || "Not provided"}
+                {"Not provided"}
               </Text>
             </View>
             <View className="flex-1 ml-2">
               <Text className="text-gray-500 text-sm">SSN</Text>
               <Text className="text-base">
-                {user?.socialSecurityNumber ? "•••••••••" : "Not provided"}
+                {user?.ssn ? "•••••••••" : "Not provided"}
               </Text>
             </View>
           </View>
@@ -153,12 +153,10 @@ const Profile = () => {
           </Text>
           <View className="flex-row items-center">
             <View
-              className={`h-3 w-3 rounded-full mr-2 ${user?.statusDate ? "bg-green-500" : "bg-gray-400"}`}
+              className={`h-3 w-3 rounded-full mr-2 ${user?.status === "Active" ? "bg-green-500" : "bg-gray-400"}`}
             />
             <Text className="text-base">
-              {user?.statusDate ? "Active" : "Inactive"}
-              {user?.statusDate &&
-                ` since ${new Date(user.statusDate).toLocaleDateString()}`}
+              {user?.status || "Active"}
             </Text>
           </View>
         </View>

@@ -17,8 +17,9 @@ const Signup = () => {
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
-    loginName: "",
-    loginPassword: "",
+    email: "",
+    username: "",
+    password: "",
   });
 
   const handleSignUp = async () => {
@@ -26,18 +27,25 @@ const Signup = () => {
       if (
         !formData.firstName ||
         !formData.lastName ||
-        !formData.loginName ||
-        !formData.loginPassword
+        !formData.email ||
+        !formData.username ||
+        !formData.password
       ) {
         Alert.alert("Error", "Please fill in all fields");
+        return;
+      }
+
+      if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
+        Alert.alert("Error", "Username can only contain letters, numbers, and underscores");
         return;
       }
 
       await signUp({
         firstName: formData.firstName,
         lastName: formData.lastName,
-        loginName: formData.loginName,
-        loginPassword: formData.loginPassword,
+        email: formData.email,
+        username: formData.username,
+        password: formData.password,
       });
 
       // Navigation will be handled by the auth context after successful signup
@@ -91,9 +99,22 @@ const Signup = () => {
             className="text-base py-0 text-black"
             keyboardType="email-address"
             autoCapitalize="none"
-            value={formData.loginName}
+            value={formData.email}
             onChangeText={(text) => {
-              setFormData({ ...formData, loginName: text });
+              setFormData({ ...formData, email: text });
+            }}
+          />
+        </View>
+        {/* Username Input */}
+        <View className="border-2 border-cyan-600 rounded-xl px-4 py-4 bg-gray-50 mt-6">
+          <TextInput
+            placeholder="Username (letters, numbers, underscores)"
+            placeholderTextColor="#9CA3AF"
+            className="text-base py-0 text-black"
+            autoCapitalize="none"
+            value={formData.username}
+            onChangeText={(text) => {
+              setFormData({ ...formData, username: text });
             }}
           />
         </View>
@@ -105,9 +126,9 @@ const Signup = () => {
             placeholderTextColor="#9CA3AF"
             className="text-base py-0 text-black"
             secureTextEntry
-            value={formData.loginPassword}
+            value={formData.password}
             onChangeText={(text) => {
-              setFormData({ ...formData, loginPassword: text });
+              setFormData({ ...formData, password: text });
             }}
           />
         </View>

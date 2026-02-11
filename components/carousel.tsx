@@ -29,9 +29,9 @@ const Carousel = ({
 
   const transformEventData = (events: EventType[]) => {
     return events?.map((event) => ({
-      id: event.idEvent.toString(),
-      title: event.eventShortName,
-      date: new Date(event.eventDate).toLocaleDateString("en-US", {
+      id: event.eventId,
+      title: event.shortName,
+      date: new Date(event.startDate).toLocaleDateString("en-US", {
         year: "numeric",
         month: "short",
         day: "numeric",
@@ -44,6 +44,8 @@ const Carousel = ({
         "http://www.globaltimes.cn/Portals/0/attachment/2011/04d9b7ca-811d-4d5b-98cd-ece1fff81130.jpeg", // Default image
       eventType: event.eventType,
       isOpen: event.isOpen,
+      hasLiveRace: event.races?.some(r => r.isLive) || false,
+      liveRaceId: event.races?.find(r => r.isLive)?.raceId,
     }));
   };
 
@@ -108,7 +110,7 @@ const Carousel = ({
               <Pressable
                 className="relative"
                 onPress={() =>
-                  router.push(`/(app)/event-detail?id=${item.idEvent}`)
+                  router.push(`/(app)/event-detail?id=${item.id}`)
                 }
               >
                 <Image
@@ -121,18 +123,26 @@ const Carousel = ({
                     position: "absolute",
                     top: 8,
                     left: 8,
-                    backgroundColor: item.isOpen
-                      ? "rgba(76, 175, 80, 0.9)"
-                      : "rgba(244, 67, 54, 0.9)",
+                    backgroundColor: item.hasLiveRace
+                      ? "rgba(220, 38, 38, 0.95)"
+                      : item.isOpen
+                        ? "rgba(76, 175, 80, 0.9)"
+                        : "rgba(244, 67, 54, 0.9)",
                     paddingHorizontal: 8,
                     paddingVertical: 4,
                     borderRadius: 12,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
                   }}
                 >
+                  {item.hasLiveRace && (
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff" }} />
+                  )}
                   <Text
                     style={{ color: "white", fontWeight: "600", fontSize: 12 }}
                   >
-                    {item.isOpen ? "Registration Open" : "Closed"}
+                    {item.hasLiveRace ? "LIVE" : item.isOpen ? "Registration Open" : "Closed"}
                   </Text>
                 </View>
               </Pressable>
@@ -142,30 +152,44 @@ const Carousel = ({
                   {item.participants} Participants
                 </Text>
                 <Text className="text-lg font-semibold">{item.title}</Text>
-                <TouchableOpacity
-                  className={`mt-2 py-2 items-center border w-full ${
-                    item.isOpen
-                      ? "bg-white border-primary"
-                      : "bg-gray-200 border-gray-400"
-                  }`}
-                  onPress={() => {
-                    if (item.isOpen) {
+                {item.hasLiveRace ? (
+                  <TouchableOpacity
+                    className="mt-2 py-2 items-center border w-full border-red-500 bg-red-500"
+                    onPress={() => {
                       router.push({
-                        pathname: "/register-in-event",
-                        params: { eventId: item.id },
+                        pathname: "/live-race",
+                        params: { raceId: item.liveRaceId! },
                       });
-                    }
-                  }}
-                  disabled={!item.isOpen}
-                >
-                  <Text
-                    className={`text-sm font-medium ${
-                      item.isOpen ? "text-primary" : "text-gray-500"
-                    }`}
+                    }}
                   >
-                    {item.isOpen ? "Register" : "Registration Closed"}
-                  </Text>
-                </TouchableOpacity>
+                    <Text className="text-sm font-medium text-white">Watch Live</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    className={`mt-2 py-2 items-center border w-full ${
+                      item.isOpen
+                        ? "bg-white border-primary"
+                        : "bg-gray-200 border-gray-400"
+                    }`}
+                    onPress={() => {
+                      if (item.isOpen) {
+                        router.push({
+                          pathname: "/register-in-event",
+                          params: { eventId: item.id },
+                        });
+                      }
+                    }}
+                    disabled={!item.isOpen}
+                  >
+                    <Text
+                      className={`text-sm font-medium ${
+                        item.isOpen ? "text-primary" : "text-gray-500"
+                      }`}
+                    >
+                      {item.isOpen ? "Register" : "Registration Closed"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           );

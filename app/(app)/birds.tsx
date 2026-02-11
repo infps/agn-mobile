@@ -16,11 +16,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 const Birds = () => {
   const { birds, loading, addBird, fetchBirds } = useBirds();
   const [open, setOpen] = useState(false);
-  const [sexModalOpen, setSexModalOpen] = useState(false);
   const [birdData, setBirdData] = useState({
     birdName: "",
     color: "",
-    sex: 0,
+    sex: "UNKNOWN",
+    band1: "",
+    band2: "",
+    band3: "",
+    band4: "",
   });
   useEffect(() => {
     fetchBirds();
@@ -33,7 +36,11 @@ const Birds = () => {
         setBirdData({
           birdName: "",
           color: "",
-          sex: 0,
+          sex: "UNKNOWN",
+          band1: "",
+          band2: "",
+          band3: "",
+          band4: "",
         });
       }
     } catch (err) {
@@ -66,17 +73,17 @@ const Birds = () => {
           <FlatList
             data={birds}
             keyExtractor={(item: BirdType, index: number) =>
-              item?.idBird?.toString() || index.toString()
+              item?.birdId || index.toString()
             }
             renderItem={({ item }: { item: BirdType }) => (
               <View className="w-full p-2 flex-row justify-between border border-b border-t-[0px] border-gray-300">
-                <Text className="text-gray-400 text-[12px]">{item.idBird}</Text>
+                <Text className="text-gray-400 text-[12px]">{item.birdId}</Text>
                 <Text className="text-gray-400 text-[12px]">
                   {item.birdName}
                 </Text>
                 <Text className="text-gray-400 text-[12px]">{item.color}</Text>
                 <Text className="text-gray-400 text-[12px]">
-                  {item.sex === 0 ? "N/A" : item.sex === 1 ? "Male" : "Female"}
+                  {item.sex === "COCK" ? "Male" : item.sex === "HEN" ? "Female" : "N/A"}
                 </Text>
                 <Text className="text-gray-400 text-[12px]">Action</Text>
               </View>
@@ -110,18 +117,60 @@ const Birds = () => {
         </View>
         <View className="mt-2">
           <Text className="text-lg">Sex</Text>
-          <TouchableOpacity
-            className="border rounded-[8px] p-2"
-            onPress={() => setSexModalOpen(true)}
-          >
-            <Text className={birdData?.sex ? "text-black" : "text-gray-400"}>
-              {birdData?.sex === 0
-                ? "N/A"
-                : birdData?.sex === 1
-                  ? "Male"
-                  : "Female"}
-            </Text>
-          </TouchableOpacity>
+          <View className="flex-row gap-2 mt-1">
+            {([
+              { value: "UNKNOWN", label: "N/A" },
+              { value: "COCK", label: "Male" },
+              { value: "HEN", label: "Female" },
+            ] as const).map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                className={`flex-1 rounded-[8px] p-2 border ${
+                  birdData.sex === option.value
+                    ? "bg-primary border-primary"
+                    : "border-gray-300 bg-gray-50"
+                }`}
+                onPress={() => setBirdData({ ...birdData, sex: option.value })}
+              >
+                <Text
+                  className={`text-center ${
+                    birdData.sex === option.value ? "text-white font-semibold" : "text-black"
+                  }`}
+                >
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+        <Text className="text-lg mt-2 font-semibold">Band</Text>
+        <View className="flex-row gap-2 mt-1">
+          <TextInput
+            className="border rounded-[8px] p-2 text-black flex-1"
+            placeholder="Band 1"
+            value={birdData.band1}
+            onChangeText={(text) => setBirdData({ ...birdData, band1: text })}
+          />
+          <TextInput
+            className="border rounded-[8px] p-2 text-black flex-1"
+            placeholder="Band 2"
+            value={birdData.band2}
+            onChangeText={(text) => setBirdData({ ...birdData, band2: text })}
+          />
+        </View>
+        <View className="flex-row gap-2 mt-2">
+          <TextInput
+            className="border rounded-[8px] p-2 text-black flex-1"
+            placeholder="Band 3"
+            value={birdData.band3}
+            onChangeText={(text) => setBirdData({ ...birdData, band3: text })}
+          />
+          <TextInput
+            className="border rounded-[8px] p-2 text-black flex-1"
+            placeholder="Band 4"
+            value={birdData.band4}
+            onChangeText={(text) => setBirdData({ ...birdData, band4: text })}
+          />
         </View>
         <View className="flex-row justify-end mt-4">
           <TouchableOpacity
@@ -139,44 +188,6 @@ const Birds = () => {
         </View>
       </Modal>
 
-      <Modal open={sexModalOpen} setOpen={setSexModalOpen}>
-        <Text className="text-xl font-bold mb-4">Select Sex</Text>
-        <View className="space-y-3">
-          <TouchableOpacity
-            className="border border-primary rounded-lg px-3 py-1 bg-gray-50"
-            onPress={() => {
-              setBirdData({ ...birdData, sex: 0 });
-              setSexModalOpen(false);
-            }}
-          >
-            <Text className="text-lg text-primary">N/A</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className="border border-primary rounded-lg px-3 py-1 bg-gray-50 mt-2"
-            onPress={() => {
-              setBirdData({ ...birdData, sex: 1 });
-              setSexModalOpen(false);
-            }}
-          >
-            <Text className="text-lg text-primary">Male</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className="border border-primary rounded-lg px-3 py-1 bg-gray-50 mt-2"
-            onPress={() => {
-              setBirdData({ ...birdData, sex: 2 });
-              setSexModalOpen(false);
-            }}
-          >
-            <Text className="text-lg text-primary">Female</Text>
-          </TouchableOpacity>
-        </View>
-        <TouchableOpacity
-          className="bg-gray-300 mt-4 p-2 rounded-xl items-center"
-          onPress={() => setSexModalOpen(false)}
-        >
-          <Text className="text-black">Cancel</Text>
-        </TouchableOpacity>
-      </Modal>
       <View className="absolute bottom-0 left-0 right-0 p-4 pb-8 bg-white">
         <TouchableOpacity
           className="bg-primary py-3 px-6 rounded-full items-center"

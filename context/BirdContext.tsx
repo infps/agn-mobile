@@ -1,4 +1,3 @@
-// d:\agn-mobile\context\BirdContext.tsx
 import api from "@/service/api.service";
 import { router } from "expo-router";
 import {
@@ -6,15 +5,23 @@ import {
   ReactNode,
   useCallback,
   useContext,
-  useState
+  useState,
 } from "react";
 import { Alert } from "react-native";
 
 export type BirdType = {
-  idBird?: string;
+  birdId?: string;
   birdName: string;
   color: string;
-  sex: number;
+  sex: string; // "COCK" | "HEN" | "UNKNOWN"
+  band?: string;
+  band1?: string;
+  band2?: string;
+  band3?: string;
+  band4?: string;
+  rfid?: string;
+  isActive?: boolean;
+  isLost?: boolean;
 };
 
 interface BirdContextType {
@@ -22,12 +29,10 @@ interface BirdContextType {
   loading: boolean;
   error: string | null;
   fetchBirds: () => Promise<void>;
-  addBird: (
-    birdData: Omit<BirdType, "idBird" | "breederId">
-  ) => Promise<boolean>;
-  updateBird: (id: number, birdData: Partial<BirdType>) => Promise<void>;
+  addBird: (birdData: Omit<BirdType, "birdId">) => Promise<boolean>;
+  updateBird: (id: string, birdData: Partial<BirdType>) => Promise<void>;
   getBirdsByEvent: (
-    eventId: number,
+    eventId: string,
     searchParams?: { q?: string; searchField?: string }
   ) => Promise<BirdType[]>;
 }
@@ -43,11 +48,8 @@ export const BirdProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.get(`/birds`);
-      if (!response.data.success) {
-        throw new Error("Failed to fetch birds");
-      }
-      const data = await response.data.data;
+      const response = await api.get("/breeder/birds");
+      const data = response.data.birds || [];
       setBirds(data);
     } catch (err: any) {
       setError(err.message || "Failed to fetch birds");
@@ -58,24 +60,26 @@ export const BirdProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const addBird = useCallback(
-    async (
-      birdData: Omit<BirdType, "idBird" | "breederId">
-    ): Promise<boolean> => {
+    async (birdData: Omit<BirdType, "birdId">): Promise<boolean> => {
       setLoading(true);
       setError(null);
       try {
-        const response = await api.post(`/birds`, birdData);
-        if (!response.data.success) {
-          throw new Error("Failed to add bird");
-        }
-
-        const newBird = await response.data.data;
+        const response = await api.post("/breeder/birds", {
+          name: birdData.birdName,
+          color: birdData.color,
+          sex: birdData.sex,
+          band1: birdData.band1 || "",
+          band2: birdData.band2 || "",
+          band3: birdData.band3 || "",
+          band4: birdData.band4 || "",
+        });
+        const newBird = response.data.bird;
         setBirds((prev) => [...prev, newBird]);
         return true;
       } catch (err: any) {
         console.log(err);
         setError(err.message || "Failed to add bird");
-        Alert.alert("Error", "Failed to add bird");
+        Alert.alert("Error", err.response?.data?.message || "Failed to add bird");
         return false;
       } finally {
         setLoading(false);
@@ -85,23 +89,18 @@ export const BirdProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const updateBird = useCallback(
-    async (id: number, birdData: Partial<BirdType>): Promise<void> => {
+    async (id: string, birdData: Partial<BirdType>): Promise<void> => {
       setLoading(true);
       setError(null);
       try {
-        const response = await api.patch(`/api/birds/${id}`, birdData);
-
-        if (!response.data.success) {
-          throw new Error("Failed to update bird");
-        }
-
-        const updatedBird = await response.data.data;
+        const response = await api.patch(`/breeder/birds/${id}`, birdData);
+        const updatedBird = response.data.bird;
         setBirds((prev) =>
           prev.map((bird) =>
-            bird.idBird === String(id) ? { ...bird, ...updatedBird } : bird
+            bird.birdId === id ? { ...bird, ...updatedBird } : bird
           )
         );
-        router.back(); // Navigate back after successful update
+        router.back();
       } catch (err: any) {
         setError(err.message || "Failed to update bird");
         Alert.alert("Error", "Failed to update bird");
@@ -113,19 +112,18 @@ export const BirdProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const getBirdsByEvent = useCallback(
-    async (eventId: number, searchParams = {}) => {
+    async (eventId: string, searchParams = {}) => {
       setLoading(true);
       setError(null);
       try {
-        const query = new URLSearchParams(searchParams).toString();
-        const response = await api.get(`/api/events/${eventId}/birds?${query}`);
-
-        if (!response.data.success) {
-          throw new Error("Failed to fetch birds for event");
-        }
-
-        const data = await response.data.data;
-        return data;
+        const response = await api.get(
+          `/breeder/event/${eventId}/inventory-items`
+        );
+        const items = response.data.items || response.data.eventInventoryItems || [];
+        const birds = items
+          .filter((item: any) => item.bird)
+          .map((item: any) => item.bird);
+        return birds;
       } catch (err: any) {
         setError(err.message || "Failed to fetch birds for event");
         Alert.alert("Error", "Failed to fetch birds for event");

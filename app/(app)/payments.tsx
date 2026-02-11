@@ -143,7 +143,7 @@ const PaymentsList = () => {
         ) : payments.length > 0 ? (
           <FlatList
             data={payments}
-            keyExtractor={(item: PaymentType) => item.idPayment.toString()}
+            keyExtractor={(item: PaymentType) => item.paymentId}
             renderItem={({
               item,
               index,
@@ -155,27 +155,27 @@ const PaymentsList = () => {
                 <Text className="text-[10px]">{index + 1}</Text>
 
                 <Text className="text-[10px] text-left ml-4">
-                  {item?.eventInventory?.event?.eventName || "Not specified"}
+                  {item?.eventInventory?.event?.name || "Not specified"}
                 </Text>
 
                 <Text className="text-[10px] text-left ml-4">
-                  {item?.eventInventory?.event?.eventDate
+                  {item?.eventInventory?.event?.startDate
                     ? format(
-                        new Date(item.eventInventory.event.eventDate),
+                        new Date(item.eventInventory.event.startDate),
                         "MMM dd, yyyy"
                       )
                     : "Unknown Date"}
                 </Text>
                 <Text className="text-[10px] text-left mr-10">
-                  {format(new Date(item?.paymentDate), "MMM dd, yyyy") ||
+                  {format(new Date(item?.paidAt), "MMM dd, yyyy") ||
                     "Unknown Date"}
                 </Text>
 
                 <Text className="text-[10px] text-left mr-10">
-                  {item?.paymentValue || "0"}
+                  {item?.amountPaid || "0"}
                 </Text>
                 <Text className="text-[10px] text-center">
-                  {item?.status === 0 ? "Pending" : "Success"}
+                  {item?.status === "PENDING" ? "Pending" : "Success"}
                 </Text>
               </View>
             )}

@@ -2,9 +2,7 @@ import { useToast } from "@/context/ToastContext";
 import api from "@/service/api.service";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Text, TouchableOpacity } from "react-native";
-
-const API_BASE = "https://your-api.com/payment";
+import { Alert, ActivityIndicator, Text, TouchableOpacity } from "react-native";
 
 export default function PayPalButton({
   eventId,
@@ -19,30 +17,30 @@ export default function PayPalButton({
     try {
       setLoading(true);
 
-      const res = await api.post(`/event-inventory`, {
-        eventId,
-        birds: selectedBirds.map((b: any) => b.idBird),
-        loft: selectedTeam || undefined,
-      });
-      const result = await res.data.data;
-      const response = await api.post("/payments/capture", {
-        orderId: result.orderId,
-      });
-      console.log(response.data);
-      if (!result?.approvalUrl || !result?.orderId) {
-        throw new Error("Failed to create PayPal order");
-      }
+      // Register birds in the event
+      const birds = selectedBirds.map((b: any) => ({
+        name: b.birdName,
+        color: b.color,
+        sex: b.sex || "UNKNOWN",
+        band1: b.band1 || "",
+        band2: b.band2 || "",
+        band3: b.band3 || "",
+        band4: b.band4 || "",
+      }));
 
-      // ✅ Open PayPal in WebView
-      router.push({
-        pathname: "/paypal-checkout",
-        params: {
-          approvalUrl: result.approvalUrl,
-          orderId: result.orderId,
-        },
+      const res = await api.post(`/breeder/event/${eventId}/register`, {
+        loftName: selectedTeam || "Default",
+        reservedBirds: birds.length,
+        birds,
+        payments: [],
       });
+
+      Alert.alert("Success", "Registration successful!");
+      router.back();
     } catch (err: any) {
-      toast.error(err.message || "Payment failed");
+      const msg = err.response?.data?.message || err.message || "Registration failed";
+      toast.error(msg);
+    } finally {
       setLoading(false);
     }
   };

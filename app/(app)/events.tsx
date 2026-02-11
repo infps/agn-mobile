@@ -51,6 +51,8 @@ const EventsList = () => {
       return <SkeletonCard width="48%" marginBottom={16} />;
     }
       const eventItem = item as EventType;
+      const hasLiveRace = eventItem.races?.some(r => r.isLive);
+      const liveRaceId = eventItem.races?.find(r => r.isLive)?.raceId;
     return (
       <View
         style={{
@@ -63,7 +65,7 @@ const EventsList = () => {
         className="w-[48%] bg-white rounded-[8px] mb-[16px] overflow-hidden "
       >
         <Pressable
-          onPress={() => router.push(`/(app)/event-detail?id=${eventItem.idEvent}`)}
+          onPress={() => router.push(`/(app)/event-detail?id=${eventItem.eventId}`)}
           style={{ position: "relative" }}
         >
           <Image
@@ -78,51 +80,73 @@ const EventsList = () => {
               position: "absolute",
               top: 8,
               left: 8,
-              backgroundColor: eventItem.isOpen
-                ? "rgba(76, 175, 80, 0.9)"
-                : "rgba(244, 67, 54, 0.9)",
+              backgroundColor: hasLiveRace
+                ? "rgba(220, 38, 38, 0.95)"
+                : eventItem.isOpen
+                  ? "rgba(76, 175, 80, 0.9)"
+                  : "rgba(244, 67, 54, 0.9)",
               paddingHorizontal: 8,
               paddingVertical: 4,
               borderRadius: 12,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
             }}
           >
+            {hasLiveRace && (
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff" }} />
+            )}
             <Text style={{ color: "white", fontWeight: "600", fontSize: 12 }}>
-              {eventItem.isOpen ? "Registration Open" : "Closed"}
+              {hasLiveRace ? "LIVE" : eventItem.isOpen ? "Registration Open" : "Closed"}
             </Text>
           </View>
         </Pressable>
         <View className="px-2 py-2">
           <Text className="text-lg text-gray-600">
-            {format(new Date(eventItem.eventDate), "PPP")}
+            {format(new Date(eventItem.startDate), "PPP")}
           </Text>
           <Text className="text-lg text-gray-600">
             {eventItem?._count.eventInventories} Participants
           </Text>
-          <Text className="text-lg font-semibold">{eventItem.eventName}</Text>
-          <TouchableOpacity
-            className={`mt-2 py-2 items-center border w-full ${
-              eventItem.isOpen
-                ? "bg-white border-primary"
-                : "bg-gray-200 border-gray-400"
-            }`}
-            onPress={() => {
-              if (eventItem.isOpen) {
+          <Text className="text-lg font-semibold">{eventItem.name}</Text>
+          {hasLiveRace ? (
+            <TouchableOpacity
+              className="mt-2 py-2 items-center border w-full border-red-500 bg-red-500"
+              onPress={() => {
                 router.push({
-                  pathname: "/register-in-event",
-                  params: { eventId: eventItem.idEvent },
+                  pathname: "/live-race",
+                  params: { raceId: liveRaceId! },
                 });
-              }
-            }}
-            disabled={!eventItem.isOpen}
-          >
-            <Text
-              className={`text-sm font-medium ${
-                eventItem.isOpen ? "text-primary" : "text-gray-500"
-              }`}
+              }}
             >
-              {eventItem.isOpen ? "Register" : "Registration Closed"}
-            </Text>
-          </TouchableOpacity>
+              <Text className="text-sm font-medium text-white">Watch Live</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              className={`mt-2 py-2 items-center border w-full ${
+                eventItem.isOpen
+                  ? "bg-white border-primary"
+                  : "bg-gray-200 border-gray-400"
+              }`}
+              onPress={() => {
+                if (eventItem.isOpen) {
+                  router.push({
+                    pathname: "/register-in-event",
+                    params: { eventId: eventItem.eventId },
+                  });
+                }
+              }}
+              disabled={!eventItem.isOpen}
+            >
+              <Text
+                className={`text-sm font-medium ${
+                  eventItem.isOpen ? "text-primary" : "text-gray-500"
+                }`}
+              >
+                {eventItem.isOpen ? "Register" : "Registration Closed"}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -154,7 +178,7 @@ const EventsList = () => {
         data={displayData}
         renderItem={renderEventItem}
         keyExtractor={(item) =>
-          "isSkeleton" in item ? item.id : item.idEvent.toString()
+          "isSkeleton" in item ? item.id : item.eventId
         }
         numColumns={2}
         columnWrapperStyle={{ justifyContent: "space-between" }}

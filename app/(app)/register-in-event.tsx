@@ -5,7 +5,7 @@ import { BirdType } from "@/context/BirdContext";
 import { EventType, useEvents } from "@/context/EventContext";
 import api from "@/service/api.service";
 import { Picker } from "@react-native-picker/picker";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -19,16 +19,36 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const RegisterInEvent = () => {
   const { eventId } = useLocalSearchParams();
-  const { currentEvent, getEvent, loading } = useEvents();
+  const { currentEvent, getEvent, getMyEventInventories, loading } = useEvents();
   const [selectedTeam, setSelectedTeam] = useState("");
   const [selectedBirds, setSelectedBirds] = useState<BirdType[]>([]);
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false);
+  const [checkingRegistration, setCheckingRegistration] = useState(true);
   const { user } = useAuth();
   const toast = useToast();
 
   useEffect(() => {
     getEvent(eventId.toString());
   }, [eventId]);
-  if (loading) {
+
+  useEffect(() => {
+    const checkRegistration = async () => {
+      try {
+        const inventories = await getMyEventInventories();
+        const registered = inventories.some(
+          (inv: any) => inv.eventId === eventId.toString()
+        );
+        setAlreadyRegistered(registered);
+      } catch {
+        // ignore - allow registration attempt
+      } finally {
+        setCheckingRegistration(false);
+      }
+    };
+    if (user) checkRegistration();
+  }, [eventId, user]);
+
+  if (loading || checkingRegistration) {
     return (
       <View className="flex-1 items-center justify-center">
         <ActivityIndicator size="large" />
@@ -36,7 +56,40 @@ const RegisterInEvent = () => {
     );
   }
   if (!currentEvent) {
-    return <Text>No event selected</Text>; // or null
+    return <Text>No event selected</Text>;
+  }
+  const liveRace = currentEvent.races?.find(r => r.isLive);
+  if (liveRace) {
+    return (
+      <SafeAreaView className="flex-1 bg-[#f5f5f5]">
+        <Header title="Register In Event" />
+        <View className="flex-1 items-center justify-center p-6">
+          <Text className="text-2xl font-bold text-red-600 mb-4">Race is Live</Text>
+          <Text className="text-gray-600 text-center text-base mb-6">
+            Registration is closed because a race is currently live for this event.
+          </Text>
+          <TouchableOpacity
+            className="bg-red-500 px-6 py-3 rounded-lg"
+            onPress={() => router.push({ pathname: "/live-race", params: { raceId: liveRace.raceId } })}
+          >
+            <Text className="text-white font-semibold text-base">Watch Live</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+  if (alreadyRegistered) {
+    return (
+      <SafeAreaView className="flex-1 bg-[#f5f5f5]">
+        <Header title="Register In Event" />
+        <View className="flex-1 items-center justify-center p-6">
+          <Text className="text-2xl font-bold text-primary mb-4">Already Registered</Text>
+          <Text className="text-gray-600 text-center text-base">
+            You have already registered for this event. Check "My Events" to view your registration.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
   }
   return (
     <SafeAreaView className="flex-1 bg-[#f5f5f5]">
@@ -56,7 +109,7 @@ const RegisterInEvent = () => {
                   placeholderTextColor="#9CA3AF"
                   className="text-[12px] py-0 text-black"
                   autoCapitalize="none"
-                  value={`${user?.firstName} ${user?.lastName}`}
+                  value={user?.name}
                 />
               </View>
             </View>
@@ -68,7 +121,7 @@ const RegisterInEvent = () => {
                   placeholderTextColor="#9CA3AF"
                   className="text-[12px] py-0 text-black"
                   autoCapitalize="none"
-                  value={user?.loginName}
+                  value={user?.email}
                 />
               </View>
             </View>
@@ -80,7 +133,7 @@ const RegisterInEvent = () => {
           <TeamSelect
             selectedValue={selectedTeam}
             onValueChange={(itemValue: any) => setSelectedTeam(itemValue)}
-            breederId={user?.idBreeder.toString() || ""}
+            breederId={user?.id || ""}
           />
           <SelectBirds
             event={currentEvent}
@@ -110,11 +163,11 @@ const EventCount = ({ event }: { event: EventType }) => {
     seconds: 0,
   });
   useEffect(() => {
-    if (!event?.eventDate) return;
+    if (!event?.startDate) return;
 
     const updateCountdown = () => {
       const now = new Date().getTime();
-      const eventTime = new Date(event.eventDate).getTime();
+      const eventTime = new Date(event.startDate).getTime();
       const difference = eventTime - now;
 
       if (difference > 0) {
@@ -134,7 +187,7 @@ const EventCount = ({ event }: { event: EventType }) => {
     const interval = setInterval(updateCountdown, 1000);
 
     return () => clearInterval(interval);
-  }, [event?.eventDate]);
+  }, [event?.startDate]);
 
   return (
     <View className="flex-row justify-between mt-4">
@@ -172,10 +225,8 @@ const TeamSelect = ({ selectedValue, onValueChange, breederId }: any) => {
   useEffect(() => {
     const getTeams = async () => {
       try {
-        const res = await api.get(
-          `https://api.infps-demo.com/api/users/teams/${breederId}`
-        );
-        setTeams(res.data.data);
+        const res = await api.get("/breeder/teams", { params: { breederId } });
+        setTeams(res.data.teams);
       } catch (err: any) {
         console.log(err.message);
       }
@@ -193,9 +244,9 @@ const TeamSelect = ({ selectedValue, onValueChange, breederId }: any) => {
         <Picker.Item label="Main Loft (Default)" value="" />
         {teams?.map((team: any) => (
           <Picker.Item
-            key={team.teamId}
-            label={team.teamName}
-            value={team.teamId}
+            key={team.id}
+            label={team.name}
+            value={team.id}
           />
         ))}
       </Picker>
@@ -210,7 +261,7 @@ const SelectBirds = ({
   toast,
 }: any) => {
   const { birds, fetchBirds } = useBirds();
-  const maxBirdCount = event?.feeScheme?.maxBirdCount || 0;
+  const maxBirdCount = event?.feeScheme?.maxBirds || 0;
   useEffect(() => {
     fetchBirds();
   }, []);
@@ -220,7 +271,7 @@ const SelectBirds = ({
       return;
     }
 
-    if (!selectedBirds.find((b: BirdType) => b.idBird === bird.idBird)) {
+    if (!selectedBirds.find((b: BirdType) => b.birdId === bird.birdId)) {
       setSelectedBirds([...selectedBirds, bird]);
       toast.success(`${bird.birdName} added to registration`);
     } else {
@@ -229,9 +280,9 @@ const SelectBirds = ({
   };
 
   const handleRemoveBird = (birdId: string) => {
-    const bird = selectedBirds.find((b: BirdType) => b.idBird === birdId);
+    const bird = selectedBirds.find((b: BirdType) => b.birdId === birdId);
     setSelectedBirds(
-      selectedBirds.filter((bird: BirdType) => bird.idBird !== birdId)
+      selectedBirds.filter((bird: BirdType) => bird.birdId !== birdId)
     );
     if (bird) {
       toast.success(`${bird.birdName} removed from registration`);
@@ -273,14 +324,14 @@ const SelectBirds = ({
           <View className="flex-row flex-wrap gap-4 justify-between">
             {birds.map((bird) => {
               const isSelected = selectedBirds.find(
-                (b: BirdType) => b.idBird === bird.idBird
+                (b: BirdType) => b.birdId === bird.birdId
               );
               const isDisabled =
                 !isSelected && selectedBirds.length >= maxBirdCount;
 
               return (
                 <TouchableOpacity
-                  key={bird.idBird}
+                  key={bird.birdId}
                   className={`border w-[48%] rounded-lg p-4 transition-all ${
                     isSelected
                       ? "border-primary bg-primary/5 cursor-pointer"
@@ -338,7 +389,7 @@ const SelectBirds = ({
           <View className="space-y-3">
             {selectedBirds.map((bird: BirdType) => (
               <View
-                key={bird.idBird}
+                key={bird.birdId}
                 className="flex-row items-center justify-between p-4 bg-gray-50 rounded-lg border mb-2"
               >
                 <View className="flex-1">
@@ -351,7 +402,7 @@ const SelectBirds = ({
                   </View>
                 </View>
                 <TouchableOpacity
-                  onPress={() => bird.idBird && handleRemoveBird(bird.idBird)}
+                  onPress={() => bird.birdId && handleRemoveBird(bird.birdId)}
                   className="text-red-600 hover:text-red-800 text-sm font-medium px-3 py-1 border border-red-200 rounded hover:bg-red-50 transition-colors ml-4"
                 >
                   <Text>Remove</Text>
@@ -383,7 +434,7 @@ function PaymentInformation({
         (item) => item.birdNo === index + 1
       );
       if (perchFeeItem) {
-        total += perchFeeItem.perchFee;
+        total += perchFeeItem.fee;
       }
     });
     return total;
@@ -394,14 +445,14 @@ function PaymentInformation({
         return toast.error("No birds selected for registration");
       }
       const birds: string[] = selectedBirds.map((bird) => {
-        if (!bird.idBird) {
+        if (!bird.birdId) {
           toast.error("Bird ID is required for registration");
           return "";
         }
-        return bird.idBird;
+        return bird.birdId;
       });
       const res = await api.post("/event-inventory", {
-        eventId: event.idEvent,
+        eventId: event.eventId,
         birds,
         selectedTeam,
       });
@@ -448,7 +499,7 @@ function PaymentInformation({
               Number of Birds:
             </Text>
             <Text className="font-medium text-sm sm:text-base">
-              {selectedBirds.length} / {event.feeScheme.maxBirdCount}
+              {selectedBirds.length} / {event.feeScheme.maxBirds}
             </Text>
           </View>
         </View>
@@ -462,11 +513,11 @@ function PaymentInformation({
               const perchFeeItem = event.feeScheme.perchFeeItems.find(
                 (item) => item.birdNo === index + 1
               );
-              const perchFee = perchFeeItem?.perchFee || 0;
+              const perchFee = perchFeeItem?.fee || 0;
 
               return (
                 <View
-                  key={bird.idBird}
+                  key={bird.birdId}
                   className="flex-row justify-between items-center py-2 px-3 bg-gray-50 rounded text-sm"
                 >
                   <Text
@@ -495,7 +546,7 @@ function PaymentInformation({
         <View className="mt-8 flex w-full justify-center">
           <View className="w-full max-w-md">
             <PayPalButton
-              eventId={event.idEvent}
+              eventId={event.eventId}
               selectedBirds={selectedBirds}
               selectedTeam={selectedTeam}
               totalAmount={totalAmount}

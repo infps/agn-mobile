@@ -19,7 +19,7 @@ const ProfileUpdate = () => {
   const toast = useToast();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const [profileImage, setProfileImage] = useState(user?.idPicture || "");
+  const [profileImage, setProfileImage] = useState(user?.image || "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<Partial<User>>({});
 
@@ -27,27 +27,16 @@ const ProfileUpdate = () => {
   useEffect(() => {
     if (user) {
       setFormData({
-        firstName: user.firstName || "",
+        name: user.name || "",
         lastName: user.lastName || "",
         country: user.country || "",
-        address1: user.address1 || "",
-        city1: user.city1 || "",
-        state1: user.state1 || "",
-        zip1: user.zip1 || "",
-        address2: user.address2 || "",
-        city2: user.city2 || "",
-        state2: user.state2 || "",
-        zip2: user.zip2 || "",
-        phone: user.phone || "",
-        cell: user.cell || "",
-        fax: user.fax || "",
-        email2: user.email2 || "",
+        address: user.address || "",
+        city: user.city || "",
+        state: user.state || "",
+        postalCode: user.postalCode || "",
+        phoneNumber: user.phoneNumber || "",
         webAddress: user.webAddress || "",
         note: user.note || "",
-        sms: user.sms || "",
-        taxNumber: user.taxNumber || "",
-        defNameAgn: user.defNameAgn || "",
-        defNameAs: user.defNameAs || "",
       });
     }
   }, [user]);
@@ -65,11 +54,11 @@ const ProfileUpdate = () => {
 
       const requiredFields = [
         "country",
-        "address1",
-        "city1",
-        "state1",
-        "zip1",
-        "phone",
+        "address",
+        "city",
+        "state",
+        "postalCode",
+        "phoneNumber",
       ];
       const newErrors: Record<string, string> = {};
       requiredFields.forEach((field) => {
@@ -78,11 +67,11 @@ const ProfileUpdate = () => {
         if (!value || value?.toString()?.trim() === "") {
           const fieldNames: Record<string, string> = {
             country: "Country",
-            address1: "Address Line 1",
-            phone: "Phone Number",
-            city1: "City",
-            state1: "State",
-            zip1: "Zip Code",
+            address: "Address",
+            phoneNumber: "Phone Number",
+            city: "City",
+            state: "State",
+            postalCode: "Postal Code",
           };
           newErrors[field] = `${fieldNames[field]} is required`;
         }
@@ -99,7 +88,7 @@ const ProfileUpdate = () => {
       const userData: any = {
         ...user, // Keep existing user data
         ...definedFormData, // Add only defined form data
-        idPicture: profileImage, // Add profile image
+        image: profileImage, // Add profile image
       };
       const cleanedUserData = Object.fromEntries(
         Object.entries(userData).filter(
@@ -199,7 +188,7 @@ const ProfileUpdate = () => {
             </Text>
             <View className="flex-row">
               <View className="flex-1 mr-2">
-                {renderInput("firstName", "First Name", "Enter first name")}
+                {renderInput("name", "Name", "Enter name")}
               </View>
               <View className="flex-1 ml-2">
                 {renderInput("lastName", "Last Name", "Enter last name")}
@@ -216,25 +205,8 @@ const ProfileUpdate = () => {
             <Text className="text-lg font-bold mb-4 text-gray-800">
               Contact Information
             </Text>
-            <View className="flex-row">
-              <View className="flex-1 mr-2">
-                {renderInput("phone", "Phone", "Enter phone number", {
-                  keyboardType: "phone-pad",
-                })}
-              </View>
-              <View className="flex-1 ml-2">
-                {renderInput("cell", "Mobile", "Enter mobile number", {
-                  keyboardType: "phone-pad",
-                })}
-              </View>
-            </View>
-            {renderInput("loginName", "Primary Email", "Enter primary email", {
-              keyboardType: "email-address",
-              autoCapitalize: "none",
-            })}
-            {renderInput("email2", "Secondary Email", "Enter secondary email", {
-              keyboardType: "email-address",
-              autoCapitalize: "none",
+            {renderInput("phoneNumber", "Phone", "Enter phone number", {
+              keyboardType: "phone-pad",
             })}
           </View>
 
@@ -243,59 +215,31 @@ const ProfileUpdate = () => {
             <Text className="text-lg font-bold mb-4 text-gray-800">
               Address 1
             </Text>
-            {renderInput("address1", "Address Line 1", "Enter address line 1")}
+            {renderInput("address", "Address", "Enter address")}
             <View className="flex-row">
               <View className="flex-1 mr-2">
-                {renderInput("city1", "City", "Enter city")}
+                {renderInput("city", "City", "Enter city")}
               </View>
               <View className="flex-1 ml-2">
-                {renderInput("state1", "State/Province", "Enter state")}
+                {renderInput("state", "State/Province", "Enter state")}
               </View>
             </View>
             <View className="flex-row">
               <View className="flex-1 mr-2">
-                {renderInput("zip1", "Postal Code", "Enter postal code")}
+                {renderInput("postalCode", "Postal Code", "Enter postal code")}
               </View>
             </View>
           </View>
-          <View className="bg-white p-4 rounded-lg mb-4">
-            <Text className="text-lg font-bold mb-4 text-gray-800">
-              Address 2
-            </Text>
-            {renderInput(
-              "address2",
-              "Address Line 2",
-              "Enter address line 2 (optional)"
-            )}
-            <View className="flex-row">
-              <View className="flex-1 mr-2">
-                {renderInput("city2", "City", "Enter city")}
-              </View>
-              <View className="flex-1 ml-2">
-                {renderInput("state2", "State/Province", "Enter state")}
-              </View>
-            </View>
-            <View className="flex-row">
-              <View className="flex-1 mr-2">
-                {renderInput("zip2", "Postal Code", "Enter postal code")}
-              </View>
-            </View>
-          </View>
+
+
           {/* Additional Information */}
           <View className="bg-white p-4 rounded-lg mb-4">
             <Text className="text-lg font-bold mb-4 text-gray-800">
               Additional Information
             </Text>
-            <View className="flex-row">
-              <View className="flex-1 mr-2">
-                {renderInput("taxNumber", "Tax Number", "Enter tax number")}
-              </View>
-              <View className="flex-1 ml-2">
-                {renderInput("socialSecurityNumber", "SSN", "Enter SSN", {
-                  secureTextEntry: true,
-                })}
-              </View>
-            </View>
+            {renderInput("ssn", "SSN", "Enter SSN", {
+              secureTextEntry: true,
+            })}
             {renderInput("webAddress", "Website", "https://example.com", {
               keyboardType: "url",
               autoCapitalize: "none",

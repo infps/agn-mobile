@@ -15,9 +15,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 interface Team {
-  idBreeder: number | null;
-  idTeam: number | null;
-  teamName: string;
+  breederId: string | null;
+  id: string | null;
+  name: string;
 }
 
 const Teams = () => {
@@ -25,9 +25,9 @@ const Teams = () => {
   const toast = useToast();
   const [teamsData, setTeams] = useState<Team[]>([]);
   const [team, setTeam] = useState<Team>({
-    idBreeder: null,
-    idTeam: null,
-    teamName: "",
+    breederId: null,
+    id: null,
+    name: "",
   });
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -35,12 +35,12 @@ const Teams = () => {
 
   useEffect(() => {
     getBreederTeams();
-  }, [user?.idBreeder]);
+  }, [user?.id]);
   const getBreederTeams = async () => {
     try {
-      const res = await api.get(`/users/teams/${user?.idBreeder.toString()}`);
-      if (res?.data?.success) {
-        setTeams(res?.data?.data);
+      const res = await api.get("/breeder/teams", { params: { breederId: user?.id } });
+      if (res?.data) {
+        setTeams(res?.data?.teams);
         setLoading(false);
       }
     } catch (err) {
@@ -50,15 +50,15 @@ const Teams = () => {
   };
   const addTeam = async () => {
     try {
-      if (team.teamName === "") {
+      if (team.name === "") {
         toast.success("Team name is required");
         return;
       }
-      const res = await api.post(`/users/teams`, {
-        breederId: user?.idBreeder,
-        teamName: team.teamName,
+      const res = await api.post("/breeder/teams", {
+        breederId: user?.id,
+        name: team.name,
       });
-      if (res.data.success) {
+      if (res.data) {
         toast.success("Team added successfully");
         getBreederTeams();
       }
@@ -66,11 +66,11 @@ const Teams = () => {
       console.log(err);
     }
   };
-  const deleteTeam = async (teamId: number) => {
+  const deleteTeam = async (teamId: string) => {
     try {
       if (!teamId) return;
-      const res = await api.delete(`/users/teams/${teamId}`);
-      if (res.data.success) {
+      const res = await api.delete("/breeder/teams", { data: { teamId } });
+      if (res.data) {
         toast.success("Team deleted successfully");
         getBreederTeams();
       } else {
@@ -83,15 +83,16 @@ const Teams = () => {
   };
   const updateTeam = async () => {
     try {
-      if (!team.idTeam) return;
-      if (!team.teamName.trim()) {
+      if (!team.id) return;
+      if (!team.name.trim()) {
         toast.success("Team name is required");
         return;
       }
-      const res = await api.put(`/users/teams/${team.idTeam}`, {
-        teamName: team.teamName,
+      const res = await api.put("/breeder/teams", {
+        teamId: team.id,
+        name: team.name,
       });
-      if (res.data.success) {
+      if (res.data) {
         toast.success("Team updated successfully");
         getBreederTeams();
         setOpenEdit(false);
@@ -124,13 +125,13 @@ const Teams = () => {
             renderItem={({ item }) => (
               <View className="w-full flex-row bg-white rounded-xl shadow-sm border border-gray-100 mt-2">
                 <View className="px-2 py-2">
-                  <Text className="text-sm text-gray-600">{item.teamName}</Text>
+                  <Text className="text-sm text-gray-600">{item.name}</Text>
                 </View>
                 <View className="flex-1" />
                 <TouchableOpacity
                   className="px-2 py-2"
                   onPress={() => {
-                    item.idTeam && deleteTeam(item?.idTeam);
+                    item.id && deleteTeam(item?.id);
                   }}
                 >
                   <Ionicons name="trash" size={24} color="red" />
@@ -156,8 +157,8 @@ const Teams = () => {
           <Text className="text-lg">Team Name</Text>
           <TextInput
             className="border rounded-[8px] p-2 text-black"
-            value={team.teamName}
-            onChangeText={(text) => setTeam({ ...team, teamName: text })}
+            value={team.name}
+            onChangeText={(text) => setTeam({ ...team, name: text })}
           />
         </View>
         <View className="flex-row justify-end mt-4">
@@ -172,9 +173,9 @@ const Teams = () => {
             onPress={() => {
               setOpen(false);
               setTeam({
-                idBreeder: null,
-                idTeam: null,
-                teamName: "",
+                breederId: null,
+                id: null,
+                name: "",
               });
             }}
           >
@@ -188,8 +189,8 @@ const Teams = () => {
           <Text className="text-lg">Team Name</Text>
           <TextInput
             className="border rounded-[8px] p-2 text-black"
-            value={team.teamName}
-            onChangeText={(text) => setTeam({ ...team, teamName: text })}
+            value={team.name}
+            onChangeText={(text) => setTeam({ ...team, name: text })}
           />
         </View>
         <View className="flex-row justify-end mt-4">
@@ -204,9 +205,9 @@ const Teams = () => {
             onPress={() => {
               setOpenEdit(false);
               setTeam({
-                idBreeder: null,
-                idTeam: null,
-                teamName: "",
+                breederId: null,
+                id: null,
+                name: "",
               });
             }}
           >

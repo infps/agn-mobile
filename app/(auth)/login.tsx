@@ -15,12 +15,12 @@ import {
 const Login = () => {
   const { signIn, isLoading } = useAuth();
   const [user, setUser] = useState({
-    email: "",
+    username: "",
     password: "",
   });
   const handelLogin = async () => {
     try {
-      await signIn(user.email, user.password);
+      await signIn(user.username, user.password);
     } catch (error) {
       console.log(error);
     }
@@ -37,17 +37,16 @@ const Login = () => {
       </View>
 
       <View className="mt-16">
-        {/* Email Input */}
+        {/* Username Input */}
         <View className="border-2 border-cyan-600 rounded-xl px-4 py-4 bg-gray-50">
           <TextInput
-            placeholder="Email"
+            placeholder="Username"
             placeholderTextColor="#9CA3AF"
             className="text-base py-0 text-black"
-            keyboardType="email-address"
             autoCapitalize="none"
-            value={user.email}
+            value={user.username}
             onChangeText={(text) => {
-              setUser({ ...user, email: text });
+              setUser({ ...user, username: text });
             }}
           />
         </View>

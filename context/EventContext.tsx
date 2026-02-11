@@ -1,7 +1,4 @@
-// d:\agn-mobile\context\EventContext.tsx
 import api from "@/service/api.service";
-import { router } from "expo-router";
-import * as SecureStore from "expo-secure-store";
 import {
   createContext,
   ReactNode,
@@ -14,36 +11,38 @@ import { Alert } from "react-native";
 
 export interface EventType {
   _count: any;
-  idEvent: number;
-  eventName: string;
-  eventShortName: string;
-  eventDate: string;
-  eventType: string;
+  eventId: string;
+  name: string;
+  shortName: string;
+  startDate: string;
+  type: { eventTypeId: string; name: string };
   isOpen: boolean;
-  creatorId: number;
+  createdById: string;
   feeScheme: {
     entryFee: number;
-    hotSpot1Fee?: number;
-    hotSpot2Fee: number;
-    hotSpot3Fee: number;
-    hotSpotFinalFee: number;
-    maxBirdCount: number;
+    maxBirds: number;
     perchFeeItems: any[];
   };
-  // Add other event properties as needed
+  races?: {
+    raceId: string;
+    name: string;
+    isLive: boolean;
+    isClosed: boolean;
+    releaseDate: string;
+  }[];
 }
 
 interface Participant {
-  idEventInventory: number;
+  eventInventoryId: string;
   breederName: string;
   loft: string;
   city: string;
   state: string;
   country: string;
   reservedBirds: number;
-  signInDate: Date;
+  registrationDate: Date;
   birds: {
-    idEventInventoryItem: number;
+    eventInventoryItemId: string;
     birdNo: number;
     band: string;
     birdName: string;
@@ -53,9 +52,9 @@ interface Participant {
 }
 
 interface EventInventoryItem {
-  idEventInventoryItem: number;
-  idBird: number;
-  idEventInventory: number;
+  eventInventoryItemId: string;
+  birdId: string;
+  eventInventoryId: string;
   arrivalTime?: Date | null;
   departureDate?: Date | null;
   perchFeeValue?: number;
@@ -63,36 +62,12 @@ interface EventInventoryItem {
   entryFeePaid?: boolean;
   entryRefund?: boolean;
   betsRefund?: boolean;
-  hotSpotFeeValue?: number;
-  hotSpotRefund?: boolean;
   isBackup?: boolean;
   transferDue?: boolean;
-  // Belgian show bets
-  belgianShowBet1?: number;
-  belgianShowBet2?: number;
-  belgianShowBet3?: number;
-  belgianShowBet4?: number;
-  belgianShowBet5?: number;
-  belgianShowBet6?: number;
-  belgianShowBet7?: number;
-  // Standard show bets
-  standardShowBet1?: number;
-  standardShowBet2?: number;
-  standardShowBet3?: number;
-  standardShowBet4?: number;
-  standardShowBet5?: number;
-  standardShowBet6?: number;
-  // WTA bets
-  wtaBet1?: number;
-  wtaBet2?: number;
-  wtaBet3?: number;
-  wtaBet4?: number;
-  wtaBet5?: number;
-  isBetActive?: boolean;
   bird?: {
-    idBird: number;
+    birdId: string;
     birdName: string;
-    rfId?: string;
+    rfid?: string;
     band: string;
     color?: string;
     sex?: string;
@@ -102,67 +77,38 @@ interface EventInventoryItem {
     lostDate?: Date | null;
   };
 }
+
 interface EventInventory {
-  idEventInventory: number;
-  idEvent: number;
-  idBreeder: number;
+  eventInventoryId: string;
+  eventId: string;
+  breederId: string;
   reservedBirds: number;
   loft: string;
-  signInDate: Date;
+  registrationDate: Date;
   eventInventoryItems: EventInventoryItem[];
   breeder: {
-    firstName: string;
-    lastName: string;
+    name: string;
     email: string;
   };
   event: {
-    eventName: string;
-    eventDate: Date;
+    name: string;
+    startDate: Date;
   };
 }
-// Add these to your EventContextType interface
+
 interface EventContextType {
   events: EventType[];
   currentEvent: EventType | null;
   participants: Participant[];
   loading: boolean;
   error: string | null;
-  createEvent: (
-    eventData: Omit<Event, "idEvent" | "creatorId">
-  ) => Promise<void>;
-  updateEvent: (id: number, eventData: Partial<Event>) => Promise<void>;
-  listEvents: (
-    isOpen?: boolean,
-    page?: number,
-    limit?: number
-  ) => Promise<{ events: Event[]; totalCount: number }>;
-  listCreatorEvents: () => Promise<{ events: Event[]; totalCount: number }>;
-  getEvent: (id: string) => Promise<Event | null>;
-  getMoreEvents: (
-    currentEventId: number,
-    isOpen?: boolean,
-    page?: number,
-    limit?: number
-  ) => Promise<{ events: Event[]; totalCount: number }>;
-  getEventParticipants: (
-    eventId: string
-  ) => Promise<{ participants: Participant[]; totalParticipants: number }>;
-  createEventInventory: (
-    eventId: number,
-    birds: number[],
-    loft?: string
-  ) => Promise<{ orderId: string }>;
+  listEvents: (isOpen?: boolean) => Promise<{ events: EventType[]; totalCount: number }>;
+  getEvent: (id: string) => Promise<EventType | null>;
+  getEventParticipants: (eventId: string) => Promise<{ participants: Participant[]; totalParticipants: number }>;
+  createEventInventory: (eventId: string, birds: any[], loft?: string) => Promise<any>;
   getMyEventInventories: () => Promise<EventInventory[]>;
-  getEventInventory: (inventoryId: number) => Promise<EventInventory>;
-  updateEventInventoryItem: (
-    itemId: number,
-    updates: Partial<EventInventoryItem>
-  ) => Promise<EventInventoryItem>;
-  listEventInventories: (
-    eventId: number,
-    query?: string
-  ) => Promise<{ inventories: EventInventory[]; totalCount: number }>;
 }
+
 const EventContext = createContext<EventContextType | undefined>(undefined);
 
 export const EventProvider = ({ children }: { children: ReactNode }) => {
@@ -172,111 +118,28 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const API_URL = "YOUR_API_BASE_URL"; // Replace with your actual API base URL
-
   useEffect(() => {
     listEvents();
   }, []);
-  const createEvent = useCallback(
-    async (eventData: Omit<Event, "idEvent" | "creatorId">) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await fetch(`${API_URL}/api/events`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${await SecureStore.getItemAsync("auth_token")}`,
-          },
-          body: JSON.stringify(eventData),
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to create event");
-        }
-
-        const newEvent = await response.json();
-        setEvents((prev) => [...prev, newEvent]);
-        router.back();
-      } catch (err: any) {
-        setError(err.message || "Failed to create event");
-        Alert.alert("Error", "Failed to create event");
-        throw err;
-      } finally {
-        setLoading(false);
-      }
-    },
-    []
-  );
-
-  const updateEvent = useCallback(
-    async (id: number, eventData: Partial<Event>) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await fetch(`${API_URL}/api/events/${id}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${await SecureStore.getItemAsync("auth_token")}`,
-          },
-          body: JSON.stringify(eventData),
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to update event");
-        }
-
-        const updatedEvent = await response.json();
-        setEvents((prev) =>
-          prev.map((event) =>
-            event.idEvent === id ? { ...event, ...updatedEvent } : event
-          )
-        );
-        if (currentEvent?.idEvent === id) {
-          setCurrentEvent((prev) =>
-            prev ? { ...prev, ...updatedEvent } : null
-          );
-        }
-        router.back();
-      } catch (err: any) {
-        setError(err.message || "Failed to update event");
-        Alert.alert("Error", "Failed to update event");
-        throw err;
-      } finally {
-        setLoading(false);
-      }
-    },
-    [currentEvent]
-  );
 
   const listEvents = useCallback(
-    async (isOpen?: boolean, page = 1, limit = 10) => {
+    async (isOpen?: boolean) => {
       setLoading(true);
       setError(null);
       try {
-        const query = new URLSearchParams({
-          page: page.toString(),
-          limit: limit.toString(),
-          ...(isOpen !== undefined && { isOpen: isOpen.toString() }),
-        }).toString();
+        const params: any = {};
+        if (isOpen !== undefined) params.isOpen = isOpen.toString();
 
-        const response = await api.get(`https://api.infps-demo.com/api/events`);
-        // The events are in response.data.data.events
-        const events = response.data.data?.events || [];
-        const totalCount = response.data.data?.totalCount || events.length;
+        const response = await api.get("/breeder/events", { params });
+        const events = response.data.events || [];
+        const totalCount = response.data.count || events.length;
 
         setEvents(events);
-        return {
-          events,
-          totalCount,
-        };
+        return { events, totalCount };
       } catch (err: any) {
         console.error("Error fetching events:", err);
         const errorMessage =
-          err.response?.data?.message ||
-          err.message ||
-          "Failed to fetch events";
+          err.response?.data?.message || err.message || "Failed to fetch events";
         setError(errorMessage);
         throw new Error(errorMessage);
       } finally {
@@ -286,43 +149,15 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
     []
   );
 
-  const listCreatorEvents = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`${API_URL}/api/events/creator`, {
-        headers: {
-          Authorization: `Bearer ${await SecureStore.getItemAsync("auth_token")}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch creator events");
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (err: any) {
-      setError(err.message || "Failed to fetch creator events");
-      Alert.alert("Error", "Failed to fetch creator events");
-      return { events: [], totalCount: 0 };
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   const getEvent = useCallback(async (id: string) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.get(
-        `https://api.infps-demo.com/api/events/${id}`
-      );
-      if (!response.data.data) {
+      const response = await api.get(`/breeder/events/${id}`);
+      const event = response.data.event;
+      if (!event) {
         throw new Error("Event not found");
       }
-
-      const event = response.data.data;
       setCurrentEvent(event);
       return event;
     } catch (err: any) {
@@ -334,62 +169,51 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  const getMoreEvents = useCallback(
-    async (currentEventId: number, isOpen?: boolean, page = 1, limit = 10) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const query = new URLSearchParams({
-          page: page.toString(),
-          limit: limit.toString(),
-          ...(isOpen !== undefined && { isOpen: isOpen.toString() }),
-        }).toString();
-
-        const response = await fetch(
-          `${API_URL}/api/events/more/${currentEventId}?${query}`,
-          {
-            headers: {
-              Authorization: `Bearer ${await SecureStore.getItemAsync("auth_token")}`,
-            },
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch more events");
-        }
-
-        return await response.json();
-      } catch (err: any) {
-        setError(err.message || "Failed to fetch more events");
-        Alert.alert("Error", "Failed to fetch more events");
-        return { events: [], totalCount: 0 };
-      } finally {
-        setLoading(false);
-      }
-    },
-    []
-  );
-
   const getEventParticipants = useCallback(async (eventId: string) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.get(
-        `/events/${eventId}/participants`,
-        {
-          headers: {
-            Authorization: `Bearer ${await SecureStore.getItemAsync("auth_token")}`,
-          },
-        }
-      );
+      const response = await api.get(`/breeder/event/${eventId}/inventory-items`);
+      const items = response.data.eventInventoryItems || [];
 
-      if (!response.data.success) {
-        throw new Error("Failed to fetch event participants");
+      // Group by breeder into the Participant shape
+      const breederMap = new Map<string, Participant>();
+      for (const item of items) {
+        const inv = item.eventInventory;
+        const key = inv?.breederId;
+        if (!key) continue;
+        if (!breederMap.has(key)) {
+          breederMap.set(key, {
+            eventInventoryId: inv.eventInventoryId,
+            breederName: inv.breeder?.name || "Unknown",
+            loft: inv.loft || "N/A",
+            city: inv.breeder?.city || "",
+            state: inv.breeder?.state || "",
+            country: inv.breeder?.country || "",
+            reservedBirds: inv.reservedBirds || 0,
+            registrationDate: inv.registrationDate,
+            birds: [],
+          });
+        }
+        const breeder = breederMap.get(key)!;
+        if (item.bird) {
+          breeder.birds.push({
+            eventInventoryItemId: item.eventInventoryItemId,
+            birdNo: breeder.birds.length + 1,
+            band: item.bird.band || "",
+            birdName: item.bird.birdName || "",
+            color: item.bird.color || "",
+            sex: item.bird.sex || null,
+          });
+        }
       }
 
-      const data = await response.data.data;
-      setParticipants(data.participants);
-      return data;
+      const participants = Array.from(breederMap.values());
+      setParticipants(participants);
+      return {
+        participants,
+        totalParticipants: participants.length,
+      };
     } catch (err: any) {
       setError(err.message || "Failed to fetch event participants");
       Alert.alert("Error", "Failed to fetch event participants");
@@ -398,35 +222,30 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     }
   }, []);
+
   const createEventInventory = useCallback(
-    async (eventId: number, birds: number[], loft: string = "Main Loft") => {
+    async (eventId: string, birds: any[], loft: string = "Main Loft") => {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(
-          `${API_URL}/api/events/${eventId}/inventory`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${await SecureStore.getItemAsync("auth_token")}`,
-            },
-            body: JSON.stringify({
-              birds,
-              loft,
-            }),
-          }
-        );
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(
-            errorData.message || "Failed to create event inventory"
-          );
-        }
-        return await response.json();
+        const response = await api.post(`/breeder/event/${eventId}/register`, {
+          loftName: loft,
+          reservedBirds: birds.length,
+          birds: birds.map((b: any) => ({
+            name: b.birdName,
+            color: b.color,
+            sex: b.sex,
+            band1: b.band1 || "",
+            band2: b.band2 || "",
+            band3: b.band3 || "",
+            band4: b.band4 || "",
+          })),
+          payments: [],
+        });
+        return response.data;
       } catch (err: any) {
         setError(err.message || "Failed to create event inventory");
-        Alert.alert("Error", err.message || "Failed to create event inventory");
+        Alert.alert("Error", err.response?.data?.message || "Failed to create event inventory");
         throw err;
       } finally {
         setLoading(false);
@@ -434,19 +253,13 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
     },
     []
   );
+
   const getMyEventInventories = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/api/events/my-inventories`, {
-        headers: {
-          Authorization: `Bearer ${await SecureStore.getItemAsync("auth_token")}`,
-        },
-      });
-      if (!response.ok) {
-        throw new Error("Failed to fetch your event inventories");
-      }
-      return await response.json();
+      const response = await api.get("/breeder/my-events");
+      return response.data.inventories || [];
     } catch (err: any) {
       setError(err.message || "Failed to fetch your event inventories");
       Alert.alert("Error", "Failed to fetch your event inventories");
@@ -455,91 +268,7 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     }
   }, []);
-  const getEventInventory = useCallback(async (inventoryId: number) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(
-        `${API_URL}/api/event-inventories/${inventoryId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${await SecureStore.getItemAsync("auth_token")}`,
-          },
-        }
-      );
-      if (!response.ok) {
-        throw new Error("Failed to fetch event inventory");
-      }
-      return await response.json();
-    } catch (err: any) {
-      setError(err.message || "Failed to fetch event inventory");
-      Alert.alert("Error", "Failed to fetch event inventory");
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-  const updateEventInventoryItem = useCallback(
-    async (itemId: number, updates: Partial<EventInventoryItem>) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await fetch(
-          `${API_URL}/api/event-inventory-items/${itemId}`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${await SecureStore.getItemAsync("auth_token")}`,
-            },
-            body: JSON.stringify(updates),
-          }
-        );
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(
-            errorData.message || "Failed to update inventory item"
-          );
-        }
-        return await response.json();
-      } catch (err: any) {
-        setError(err.message || "Failed to update inventory item");
-        Alert.alert("Error", "Failed to update inventory item");
-        throw err;
-      } finally {
-        setLoading(false);
-      }
-    },
-    []
-  );
-  const listEventInventories = useCallback(
-    async (eventId: number, query: string = "") => {
-      setLoading(true);
-      setError(null);
-      try {
-        const url = new URL(`${API_URL}/api/events/${eventId}/inventories`);
-        if (query) {
-          url.searchParams.append("q", query);
-        }
-        const response = await fetch(url.toString(), {
-          headers: {
-            Authorization: `Bearer ${await SecureStore.getItemAsync("auth_token")}`,
-          },
-        });
-        if (!response.ok) {
-          throw new Error("Failed to fetch event inventories");
-        }
-        return await response.json();
-      } catch (err: any) {
-        setError(err.message || "Failed to fetch event inventories");
-        Alert.alert("Error", "Failed to fetch event inventories");
-        throw err;
-      } finally {
-        setLoading(false);
-      }
-    },
-    []
-  );
+
   return (
     <EventContext.Provider
       value={{
@@ -548,18 +277,11 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
         participants,
         loading,
         error,
-        createEvent,
-        updateEvent,
         listEvents,
-        listCreatorEvents,
         getEvent,
-        getMoreEvents,
         getEventParticipants,
         createEventInventory,
         getMyEventInventories,
-        getEventInventory,
-        updateEventInventoryItem,
-        listEventInventories,
       }}
     >
       {children}
