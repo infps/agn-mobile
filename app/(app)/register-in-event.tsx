@@ -350,7 +350,7 @@ const SelectBirds = ({
                         Color: {bird.color}
                       </Text>
                       <Text className="text-sm text-gray-600">
-                        Sex: {bird.sex}
+                        Sex: {bird.sex === "COCK" ? "Cock" : bird.sex === "HEN" ? "Hen" : "Unknown"}
                       </Text>
                     </View>
                     {!isSelected && <View className="w-14 h-4" />}
@@ -398,7 +398,7 @@ const SelectBirds = ({
                   </Text>
                   <View className="flex gap-4 text-sm text-gray-600">
                     <Text>Color: {bird.color}</Text>
-                    <Text>Sex: {bird.sex}</Text>
+                    <Text>Sex: {bird.sex === "COCK" ? "Cock" : bird.sex === "HEN" ? "Hen" : "Unknown"}</Text>
                   </View>
                 </View>
                 <TouchableOpacity

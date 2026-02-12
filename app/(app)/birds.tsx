@@ -83,7 +83,7 @@ const Birds = () => {
                 </Text>
                 <Text className="text-gray-400 text-[12px]">{item.color}</Text>
                 <Text className="text-gray-400 text-[12px]">
-                  {item.sex === "COCK" ? "Male" : item.sex === "HEN" ? "Female" : "N/A"}
+                  {item.sex === "COCK" ? "Cock" : item.sex === "HEN" ? "Hen" : "Unknown"}
                 </Text>
                 <Text className="text-gray-400 text-[12px]">Action</Text>
               </View>
@@ -119,9 +119,9 @@ const Birds = () => {
           <Text className="text-lg">Sex</Text>
           <View className="flex-row gap-2 mt-1">
             {([
-              { value: "UNKNOWN", label: "N/A" },
-              { value: "COCK", label: "Male" },
-              { value: "HEN", label: "Female" },
+              { value: "UNKNOWN", label: "Unknown" },
+              { value: "COCK", label: "Cock" },
+              { value: "HEN", label: "Hen" },
             ] as const).map((option) => (
               <TouchableOpacity
                 key={option.value}
