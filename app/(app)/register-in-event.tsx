@@ -430,11 +430,11 @@ function PaymentInformation({
   const calculateTotalAmount = () => {
     let total = 0;
     selectedBirds.forEach((_, index) => {
-      const perchFeeItem = event?.feeScheme?.perchFeeItems.find(
+      const birdFeeItem = event?.feeScheme?.birdFeeItems.find(
         (item) => item.birdNo === index + 1
       );
-      if (perchFeeItem) {
-        total += perchFeeItem.fee;
+      if (birdFeeItem) {
+        total += birdFeeItem.fee;
       }
     });
     return total;
@@ -510,10 +510,10 @@ function PaymentInformation({
           </Text>
           <View className="max-h-48 overflow-y-auto space-y-2">
             {selectedBirds.map((bird, index) => {
-              const perchFeeItem = event.feeScheme.perchFeeItems.find(
+              const birdFeeItem = event.feeScheme.birdFeeItems.find(
                 (item) => item.birdNo === index + 1
               );
-              const perchFee = perchFeeItem?.fee || 0;
+              const perchFee = birdFeeItem?.fee || 0;
 
               return (
                 <View

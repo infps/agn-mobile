@@ -19,9 +19,9 @@ export interface EventType {
   isOpen: boolean;
   createdById: string;
   feeScheme: {
-    entryFee: number;
+    perchFee: number;
     maxBirds: number;
-    perchFeeItems: any[];
+    birdFeeItems: any[];
   };
   races?: {
     raceId: string;
@@ -58,8 +58,8 @@ interface EventInventoryItem {
   arrivalTime?: Date | null;
   departureDate?: Date | null;
   perchFeeValue?: number;
-  entryFeeValue?: number;
-  entryFeePaid?: boolean;
+  perchFeeValue?: number;
+  perchFeePaid?: boolean;
   entryRefund?: boolean;
   betsRefund?: boolean;
   isBackup?: boolean;

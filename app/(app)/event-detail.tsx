@@ -28,18 +28,18 @@ const EventDetail = () => {
       <View className="flex-row mx-4 py-4 justify-between border-b border-gray-400">
         <View>
           <Text className="text-sm font-bold text-black text-center">
-            Entry Fee
+            Purge Fee
           </Text>
           <Text className="text-center text-sm">
-            ${currentEvent?.feeScheme?.entryFee ?? "N/A"}
+            ${currentEvent?.feeScheme?.perchFee ?? "N/A"}
           </Text>
         </View>
         <View>
           <Text className="text-sm font-bold text-black text-center">
-            Perch Fee
+            Bird Fee
           </Text>
           <Text className="text-center text-sm">
-            ${currentEvent?.feeScheme.perchFeeItems[0]?.fee ?? "N/A"}
+            ${currentEvent?.feeScheme.birdFeeItems[0]?.fee ?? "N/A"}
           </Text>
         </View>
         <View>
