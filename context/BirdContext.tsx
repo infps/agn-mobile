@@ -10,18 +10,18 @@ import {
 import { Alert } from "react-native";
 
 export type BirdType = {
-  birdId?: string;
+  id?: number;
   birdName: string;
   color: string;
-  sex: string; // "COCK" | "HEN" | "UNKNOWN"
+  sex: number; // 0=UNKNOWN, 1=COCK, 2=HEN
   band?: string;
   band1?: string;
   band2?: string;
   band3?: string;
   band4?: string;
   rfid?: string;
-  isActive?: boolean;
-  isLost?: boolean;
+  isActive?: number;
+  isLost?: number;
 };
 
 interface BirdContextType {
@@ -29,8 +29,8 @@ interface BirdContextType {
   loading: boolean;
   error: string | null;
   fetchBirds: () => Promise<void>;
-  addBird: (birdData: Omit<BirdType, "birdId">) => Promise<boolean>;
-  updateBird: (id: string, birdData: Partial<BirdType>) => Promise<void>;
+  addBird: (birdData: Omit<BirdType, "id">) => Promise<boolean>;
+  updateBird: (id: number, birdData: Partial<BirdType>) => Promise<void>;
   getBirdsByEvent: (
     eventId: string,
     searchParams?: { q?: string; searchField?: string }
@@ -60,7 +60,7 @@ export const BirdProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const addBird = useCallback(
-    async (birdData: Omit<BirdType, "birdId">): Promise<boolean> => {
+    async (birdData: Omit<BirdType, "id">): Promise<boolean> => {
       setLoading(true);
       setError(null);
       try {
@@ -89,7 +89,7 @@ export const BirdProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const updateBird = useCallback(
-    async (id: string, birdData: Partial<BirdType>): Promise<void> => {
+    async (id: number, birdData: Partial<BirdType>): Promise<void> => {
       setLoading(true);
       setError(null);
       try {
@@ -97,7 +97,7 @@ export const BirdProvider = ({ children }: { children: ReactNode }) => {
         const updatedBird = response.data.bird;
         setBirds((prev) =>
           prev.map((bird) =>
-            bird.birdId === id ? { ...bird, ...updatedBird } : bird
+            bird.id === id ? { ...bird, ...updatedBird } : bird
           )
         );
         router.back();

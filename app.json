@@ -52,8 +52,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "7adc8868-5b5f-435e-b9b7-2f44cdc622b4"
+        "projectId": "180693fc-7ab9-4aed-a5ed-aeee1672a7fb"
       }
-    }
+    },
+    "owner": "dragoon4002"
   }
 }

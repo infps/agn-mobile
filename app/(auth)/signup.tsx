@@ -14,12 +14,15 @@ import {
 
 const Signup = () => {
   const { signUp, isLoading } = useAuth();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
     email: "",
     username: "",
     password: "",
+    confirmPassword: "",
   });
 
   const handleSignUp = async () => {
@@ -37,6 +40,11 @@ const Signup = () => {
 
       if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
         Alert.alert("Error", "Username can only contain letters, numbers, and underscores");
+        return;
+      }
+
+      if (formData.password !== formData.confirmPassword) {
+        Alert.alert("Error", "Passwords do not match");
         return;
       }
 
@@ -120,18 +128,39 @@ const Signup = () => {
         </View>
 
         {/* Password Input */}
-        <View className="border-2 border-gray-200 rounded-xl px-4 py-4 bg-gray-50 mt-6">
+        <View className="border-2 border-gray-200 rounded-xl px-4 py-4 bg-gray-50 mt-6 flex-row items-center">
           <TextInput
             placeholder="Password"
             placeholderTextColor="#9CA3AF"
-            className="text-base py-0 text-black"
-            secureTextEntry
+            className="text-base py-0 text-black flex-1"
+            secureTextEntry={!showPassword}
             value={formData.password}
             onChangeText={(text) => {
               setFormData({ ...formData, password: text });
             }}
           />
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <Ionicons name={showPassword ? "eye-off" : "eye"} size={22} color="#9CA3AF" />
+          </TouchableOpacity>
         </View>
+
+        {/* Confirm Password Input */}
+        <View className="border-2 border-gray-200 rounded-xl px-4 py-4 bg-gray-50 mt-6 flex-row items-center">
+          <TextInput
+            placeholder="Confirm Password"
+            placeholderTextColor="#9CA3AF"
+            className="text-base py-0 text-black flex-1"
+            secureTextEntry={!showConfirmPassword}
+            value={formData.confirmPassword}
+            onChangeText={(text) => {
+              setFormData({ ...formData, confirmPassword: text });
+            }}
+          />
+          <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+            <Ionicons name={showConfirmPassword ? "eye-off" : "eye"} size={22} color="#9CA3AF" />
+          </TouchableOpacity>
+        </View>
+
         {/* Sign Up Button */}
         <TouchableOpacity className="bg-cyan-600 rounded-xl py-4 mt-8" onPress={handleSignUp}>
           <Text className="text-white text-center text-lg font-semibold">

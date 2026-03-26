@@ -15,8 +15,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 interface Team {
-  breederId: string | null;
-  id: string | null;
+  breederId: number | null;
+  id: number | null;
   name: string;
 }
 

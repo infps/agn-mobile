@@ -14,6 +14,7 @@ import {
 
 const Login = () => {
   const { signIn, isLoading } = useAuth();
+  const [showPassword, setShowPassword] = useState(false);
   const [user, setUser] = useState({
     username: "",
     password: "",
@@ -52,17 +53,20 @@ const Login = () => {
         </View>
 
         {/* Password Input */}
-        <View className="border-2 border-gray-200 rounded-xl px-4 py-4 bg-gray-50 mt-6">
+        <View className="border-2 border-gray-200 rounded-xl px-4 py-4 bg-gray-50 mt-6 flex-row items-center">
           <TextInput
             placeholder="Password"
             placeholderTextColor="#9CA3AF"
-            className="text-base py-0 text-black"
-            secureTextEntry
+            className="text-base py-0 text-black flex-1"
+            secureTextEntry={!showPassword}
             value={user.password}
             onChangeText={(text) => {
               setUser({ ...user, password: text });
             }}
           />
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <Ionicons name={showPassword ? "eye-off" : "eye"} size={22} color="#9CA3AF" />
+          </TouchableOpacity>
         </View>
 
         {/* Forgot Password Link */}

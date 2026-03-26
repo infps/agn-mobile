@@ -15,15 +15,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { SEX_OPTIONS, getSexLabel } from "@/constants/bird";
+
 const FEDERATIONS = ["AU", "IF", "NPA", "CU", "BB", "ARPU", "IPB"];
 const COLORS = [
   "BB", "BC", "BBWF", "BBPD", "BCWF", "BCPD", "SPLA", "CHOC", "RC", "SIL",
   "RCSP", "RR", "BLK", "OPAL", "SLAT", "PENC", "WHIT", "GRIZ", "DC", "DCWF",
-];
-const SEX_OPTIONS = [
-  { value: "UNKNOWN", label: "Unknown" },
-  { value: "COCK", label: "Cock" },
-  { value: "HEN", label: "Hen" },
 ];
 
 type DropdownProps = {
@@ -83,7 +80,7 @@ const Birds = () => {
   const [birdData, setBirdData] = useState({
     birdName: "",
     color: "",
-    sex: "UNKNOWN",
+    sex: "0",
     band1: "",
     band2: new Date().getFullYear().toString(),
     band3: "",
@@ -111,13 +108,13 @@ const Birds = () => {
     }
 
     try {
-      const success = await addBird(birdData);
+      const success = await addBird({ ...birdData, sex: parseInt(birdData.sex, 10) || 0 });
       if (success) {
         setOpen(false);
         setBirdData({
           birdName: "",
           color: "",
-          sex: "UNKNOWN",
+          sex: "0",
           band1: "",
           band2: new Date().getFullYear().toString(),
           band3: "",
@@ -154,17 +151,17 @@ const Birds = () => {
           <FlatList
             data={birds}
             keyExtractor={(item: BirdType, index: number) =>
-              item?.birdId || index.toString()
+              item?.id != null ? String(item.id) : index.toString()
             }
             renderItem={({ item }: { item: BirdType }) => (
               <View className="w-full p-2 flex-row justify-between border border-b border-t-[0px] border-gray-300">
-                <Text className="text-gray-400 text-[12px]">{item.birdId}</Text>
+                <Text className="text-gray-400 text-[12px]">{item.id}</Text>
                 <Text className="text-gray-400 text-[12px]">
                   {item.birdName}
                 </Text>
                 <Text className="text-gray-400 text-[12px]">{item.color}</Text>
                 <Text className="text-gray-400 text-[12px]">
-                  {item.sex === "COCK" ? "Cock" : item.sex === "HEN" ? "Hen" : "Unknown"}
+                  {getSexLabel(item.sex)}
                 </Text>
                 <Text className="text-gray-400 text-[12px]">Action</Text>
               </View>
@@ -252,7 +249,7 @@ const Birds = () => {
             label="Sex"
             value={birdData.sex}
             options={SEX_OPTIONS}
-            onChange={(val) => setBirdData({ ...birdData, sex: val as "UNKNOWN" | "COCK" | "HEN" })}
+            onChange={(val) => setBirdData({ ...birdData, sex: val })}
           />
         </View>
 

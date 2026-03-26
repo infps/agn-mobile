@@ -28,10 +28,10 @@ const EventDetail = () => {
       <View className="flex-row mx-4 py-4 justify-between border-b border-gray-400">
         <View>
           <Text className="text-sm font-bold text-black text-center">
-            Purge Fee
+            Perch Fee
           </Text>
           <Text className="text-center text-sm">
-            ${currentEvent?.feeScheme?.perchFee ?? "N/A"}
+            ${currentEvent?.feeScheme?.entryFee ?? "N/A"}
           </Text>
         </View>
         <View>
@@ -39,30 +39,30 @@ const EventDetail = () => {
             Bird Fee
           </Text>
           <Text className="text-center text-sm">
-            ${currentEvent?.feeScheme.birdFeeItems[0]?.fee ?? "N/A"}
+            ${currentEvent?.feeScheme.perchFeeItems[0]?.perchFee ?? "N/A"}
           </Text>
         </View>
         <View>
           <Text className="text-sm font-bold ml-4">Race Date</Text>
           <Text className="text-center text-sm">
             {currentEvent
-              ? format(new Date(currentEvent.startDate), "MMM dd, yyyy")
+              ? format(new Date(currentEvent.eventDate), "MMM dd, yyyy")
               : ""}
           </Text>
         </View>
         <View>
           <Text className="text-sm font-bold text-black">Participants</Text>
           <Text className="text-center text-sm">
-            {currentEvent?._count.eventInventories ?? "N/A"}
+            {currentEvent?._count?.eventInventories ?? currentEvent?.eventInventories?.length ?? "N/A"}
           </Text>
         </View>
       </View>
-      {currentEvent?.races?.some(r => r.isLive) && (
+      {currentEvent?.races?.some(r => !!r.startTime && r.isClosed !== 1) && (
         <TouchableOpacity
           className="mx-4 mt-3 bg-red-500 py-3 rounded-lg flex-row items-center justify-center gap-2"
           onPress={() => {
-            const liveRace = currentEvent.races?.find(r => r.isLive);
-            if (liveRace) router.push({ pathname: "/live-race", params: { raceId: liveRace.raceId } });
+            const liveRace = currentEvent.races?.find(r => !!r.startTime && r.isClosed !== 1);
+            if (liveRace) router.push({ pathname: "/live-race", params: { raceId: String(liveRace.id) } });
           }}
         >
           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#fff" }} />
@@ -76,7 +76,7 @@ const EventDetail = () => {
         </View>
         <View className="rounded-2xl bg-primary px-4 py-2">
           <Text className="text-white text-sm">
-            {currentEvent?._count.eventInventories ?? "0"} Breeders
+            {currentEvent?._count?.eventInventories ?? currentEvent?.eventInventories?.length ?? "0"} Breeders
           </Text>
         </View>
       </View>

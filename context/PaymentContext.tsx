@@ -9,20 +9,19 @@ import {
 import { Alert } from "react-native";
 
 export interface PaymentType {
-  paymentId: string;
-  paidAt: Date;
-  amountPaid: number;
-  amountToPay: number;
+  id: number;
+  paymentDate: Date;
+  paymentValue: number;
   currency: string;
   method: string;
-  status: string;
-  paymentType: string;
+  status: number; // numeric status
+  paymentType: number; // numeric type
   transactionId?: string;
   eventInventory?: {
     event: {
-      eventId: string;
+      id: number;
       name: string;
-      startDate: Date;
+      eventDate: string;
     };
   };
 }

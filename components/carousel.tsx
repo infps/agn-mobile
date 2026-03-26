@@ -29,23 +29,23 @@ const Carousel = ({
 
   const transformEventData = (events: EventType[]) => {
     return events?.map((event) => ({
-      id: event.eventId,
+      id: String(event.id),
       title: event.shortName,
-      date: new Date(event.startDate).toLocaleDateString("en-US", {
+      date: new Date(event.eventDate).toLocaleDateString("en-US", {
         year: "numeric",
         month: "short",
         day: "numeric",
         hour: "2-digit",
         minute: "2-digit",
       }),
-      participants: event._count?.eventInventories?.toString() || "0",
+      participants: (event._count?.eventInventories ?? event.eventInventories?.length ?? 0).toString(),
       distance: "289 KM", // You may need to add distance to EventType
       image:
         "http://www.globaltimes.cn/Portals/0/attachment/2011/04d9b7ca-811d-4d5b-98cd-ece1fff81130.jpeg", // Default image
       eventType: event.eventType,
       isOpen: event.isOpen,
-      hasLiveRace: event.races?.some(r => r.isLive) || false,
-      liveRaceId: event.races?.find(r => r.isLive)?.raceId,
+      hasLiveRace: event.races?.some(r => !!r.startTime && r.isClosed !== 1) || false,
+      liveRaceId: event.races?.find(r => !!r.startTime && r.isClosed !== 1)?.id,
     }));
   };
 
@@ -125,7 +125,7 @@ const Carousel = ({
                     left: 8,
                     backgroundColor: item.hasLiveRace
                       ? "rgba(220, 38, 38, 0.95)"
-                      : item.isOpen
+                      : item.isOpen === 1
                         ? "rgba(76, 175, 80, 0.9)"
                         : "rgba(244, 67, 54, 0.9)",
                     paddingHorizontal: 8,
@@ -142,7 +142,7 @@ const Carousel = ({
                   <Text
                     style={{ color: "white", fontWeight: "600", fontSize: 12 }}
                   >
-                    {item.hasLiveRace ? "LIVE" : item.isOpen ? "Registration Open" : "Closed"}
+                    {item.hasLiveRace ? "LIVE" : item.isOpen === 1 ? "Registration Open" : "Closed"}
                   </Text>
                 </View>
               </Pressable>
@@ -167,26 +167,26 @@ const Carousel = ({
                 ) : (
                   <TouchableOpacity
                     className={`mt-2 py-2 items-center border w-full ${
-                      item.isOpen
+                      item.isOpen === 1
                         ? "bg-white border-primary"
                         : "bg-gray-200 border-gray-400"
                     }`}
                     onPress={() => {
-                      if (item.isOpen) {
+                      if (item.isOpen === 1) {
                         router.push({
                           pathname: "/register-in-event",
                           params: { eventId: item.id },
                         });
                       }
                     }}
-                    disabled={!item.isOpen}
+                    disabled={item.isOpen !== 1}
                   >
                     <Text
                       className={`text-sm font-medium ${
-                        item.isOpen ? "text-primary" : "text-gray-500"
+                        item.isOpen === 1 ? "text-primary" : "text-gray-500"
                       }`}
                     >
-                      {item.isOpen ? "Register" : "Registration Closed"}
+                      {item.isOpen === 1 ? "Register" : "Registration Closed"}
                     </Text>
                   </TouchableOpacity>
                 )}

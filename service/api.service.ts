@@ -3,7 +3,7 @@ import Constants from "expo-constants";
 import SecureStorageService from './secureStorage.service';
 
 // Production API URL - update this with your actual Vercel backend URL after deployment
-const PRODUCTION_API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://your-production-domain.com/api';
+const PRODUCTION_API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://pigeon-pulse.vercel.app/api';
 
 const inProduction = process.env.EXPO_PUBLIC_NODE_ENV === "production";
 const inExpo = Constants.expoConfig && Constants.expoConfig.hostUri;

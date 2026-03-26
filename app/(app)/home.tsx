@@ -33,8 +33,8 @@ export default function HomeScreen() {
     const upcoming: EventType[] = [];
 
     events.forEach((event) => {
-      const hasLiveRace = event.races?.some(r => r.isLive);
-      const eventDate = new Date(event.startDate);
+      const hasLiveRace = event.races?.some(r => !!r.startTime && r.isClosed !== 1);
+      const eventDate = new Date(event.eventDate);
       if (hasLiveRace || eventDate < now) {
         ongoing.push(event);
       } else {

@@ -11,53 +11,59 @@ import { Alert } from "react-native";
 
 export interface EventType {
   _count: any;
-  eventId: string;
+  id: number;
   name: string;
   shortName: string;
-  startDate: string;
-  type: { eventTypeId: string; name: string };
-  isOpen: boolean;
-  createdById: string;
+  eventDate: string;
+  eventType: number;
+  isOpen: number; // 0 or 1
+  createdById: number;
   feeScheme: {
-    perchFee: number;
-    maxBirds: number;
-    birdFeeItems: any[];
+    entryFee: number;
+    maxBirdCount: number;
+    raceFeeMode?: "PER_BIRD_PER_RACE" | "FLAT_PER_RACE";
+    hotSpot1Fee?: number | null;
+    hotSpot2Fee?: number | null;
+    hotSpot3Fee?: number | null;
+    hotSpotFinalFee?: number | null;
+    perchFeeItems: any[];
+    birdFeeItems?: { birdNo: number; birdFee: number }[];
+    raceTypeFees?: { raceTypeId: number; fee: number }[];
   };
   races?: {
-    raceId: string;
-    name: string;
-    isLive: boolean;
-    isClosed: boolean;
-    releaseDate: string;
+    id: number;
+    description: string;
+    startTime: string | null;
+    isClosed: number; // 0 or 1
+    raceTypeId?: number | null;
   }[];
 }
 
 interface Participant {
-  eventInventoryId: string;
+  id: number;
   breederName: string;
   loft: string;
   city: string;
   state: string;
   country: string;
   reservedBirds: number;
-  registrationDate: Date;
+  signInDate: Date;
   birds: {
-    eventInventoryItemId: string;
+    id: number;
     birdNo: number;
     band: string;
     birdName: string;
     color: string;
-    sex: string | null;
+    sex: number | null;
   }[];
 }
 
 interface EventInventoryItem {
-  eventInventoryItemId: string;
-  birdId: string;
-  eventInventoryId: string;
+  id: number;
+  birdId: number;
+  eventInventoryId: number;
   arrivalTime?: Date | null;
   departureDate?: Date | null;
-  perchFeeValue?: number;
   perchFeeValue?: number;
   perchFeePaid?: boolean;
   entryRefund?: boolean;
@@ -65,34 +71,35 @@ interface EventInventoryItem {
   isBackup?: boolean;
   transferDue?: boolean;
   bird?: {
-    birdId: string;
+    id: number;
     birdName: string;
     rfid?: string;
     band: string;
     color?: string;
-    sex?: string;
+    sex?: number;
     note?: string;
-    isActive: boolean;
-    isLost?: boolean;
+    isActive: number;
+    isLost?: number;
     lostDate?: Date | null;
   };
 }
 
 interface EventInventory {
-  eventInventoryId: string;
-  eventId: string;
-  breederId: string;
+  id: number;
+  eventId: number;
+  breederId: number;
   reservedBirds: number;
   loft: string;
-  registrationDate: Date;
+  signInDate: Date;
   eventInventoryItems: EventInventoryItem[];
   breeder: {
-    name: string;
+    firstName: string;
+    lastName: string;
     email: string;
   };
   event: {
     name: string;
-    startDate: Date;
+    eventDate: Date;
   };
 }
 
@@ -177,28 +184,30 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
       const items = response.data.eventInventoryItems || [];
 
       // Group by breeder into the Participant shape
-      const breederMap = new Map<string, Participant>();
+      const breederMap = new Map<number, Participant>();
       for (const item of items) {
         const inv = item.eventInventory;
         const key = inv?.breederId;
         if (!key) continue;
         if (!breederMap.has(key)) {
+          const firstName = inv.breeder?.firstName || "";
+          const lastName = inv.breeder?.lastName || "";
           breederMap.set(key, {
-            eventInventoryId: inv.eventInventoryId,
-            breederName: inv.breeder?.name || "Unknown",
+            id: inv.id,
+            breederName: `${firstName} ${lastName}`.trim() || "Unknown",
             loft: inv.loft || "N/A",
             city: inv.breeder?.city || "",
             state: inv.breeder?.state || "",
             country: inv.breeder?.country || "",
             reservedBirds: inv.reservedBirds || 0,
-            registrationDate: inv.registrationDate,
+            signInDate: inv.signInDate,
             birds: [],
           });
         }
         const breeder = breederMap.get(key)!;
         if (item.bird) {
           breeder.birds.push({
-            eventInventoryItemId: item.eventInventoryItemId,
+            id: item.id,
             birdNo: breeder.birds.length + 1,
             band: item.bird.band || "",
             birdName: item.bird.birdName || "",

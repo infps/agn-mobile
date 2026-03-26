@@ -1,14 +1,17 @@
 import Header from "@/components/header";
 import PayPalButton from "@/components/PayPalButton";
+import { getSexLabel } from "@/constants/bird";
 import { useAuth, useBirds, useToast } from "@/context";
 import { BirdType } from "@/context/BirdContext";
 import { EventType, useEvents } from "@/context/EventContext";
 import api from "@/service/api.service";
+import { calculateFees } from "@/utils/fee-calculator";
 import { Picker } from "@react-native-picker/picker";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   Text,
   TextInput,
@@ -36,7 +39,7 @@ const RegisterInEvent = () => {
       try {
         const inventories = await getMyEventInventories();
         const registered = inventories.some(
-          (inv: any) => inv.eventId === eventId.toString()
+          (inv: any) => String(inv.eventId) === eventId.toString()
         );
         setAlreadyRegistered(registered);
       } catch {
@@ -58,7 +61,7 @@ const RegisterInEvent = () => {
   if (!currentEvent) {
     return <Text>No event selected</Text>;
   }
-  const liveRace = currentEvent.races?.find(r => r.isLive);
+  const liveRace = currentEvent.races?.find(r => !!r.startTime && r.isClosed !== 1);
   if (liveRace) {
     return (
       <SafeAreaView className="flex-1 bg-[#f5f5f5]">
@@ -70,7 +73,7 @@ const RegisterInEvent = () => {
           </Text>
           <TouchableOpacity
             className="bg-red-500 px-6 py-3 rounded-lg"
-            onPress={() => router.push({ pathname: "/live-race", params: { raceId: liveRace.raceId } })}
+            onPress={() => router.push({ pathname: "/live-race", params: { raceId: String(liveRace.id) } })}
           >
             <Text className="text-white font-semibold text-base">Watch Live</Text>
           </TouchableOpacity>
@@ -101,19 +104,33 @@ const RegisterInEvent = () => {
             Owner Information
           </Text>
           <View className="flex-row justify-between">
-            <View className="w-[48%]">
-              <Text className="mt-6">Name</Text>
+            <View className="w-[31%]">
+              <Text className="mt-6">First Name</Text>
+              <View className="border-2 border-cyan-600 rounded-xl px-2 py-2 bg-gray-50 mt-1">
+                <TextInput
+                  placeholder="First Name"
+                  placeholderTextColor="#9CA3AF"
+                  className="text-[12px] py-0 text-black"
+                  autoCapitalize="none"
+                  editable={false}
+                  value={user?.name?.split(" ")[0] ?? ""}
+                />
+              </View>
+            </View>
+            <View className="w-[31%]">
+              <Text className="mt-6">Last Name</Text>
               <View className="border-2 border-cyan-600 rounded-xl px-2 py-2 bg-gray-50 mt-1">
                 <TextInput
                   placeholder="Last Name"
                   placeholderTextColor="#9CA3AF"
                   className="text-[12px] py-0 text-black"
                   autoCapitalize="none"
-                  value={user?.name}
+                  editable={false}
+                  value={user?.lastName ?? user?.name?.split(" ").slice(1).join(" ") ?? ""}
                 />
               </View>
             </View>
-            <View className="w-[48%]">
+            <View className="w-[31%]">
               <Text className="mt-6">Email</Text>
               <View className="border-2 border-cyan-600 rounded-xl px-2 py-2 bg-gray-50 mt-1">
                 <TextInput
@@ -121,6 +138,7 @@ const RegisterInEvent = () => {
                   placeholderTextColor="#9CA3AF"
                   className="text-[12px] py-0 text-black"
                   autoCapitalize="none"
+                  editable={false}
                   value={user?.email}
                 />
               </View>
@@ -163,11 +181,11 @@ const EventCount = ({ event }: { event: EventType }) => {
     seconds: 0,
   });
   useEffect(() => {
-    if (!event?.startDate) return;
+    if (!event?.eventDate) return;
 
     const updateCountdown = () => {
       const now = new Date().getTime();
-      const eventTime = new Date(event.startDate).getTime();
+      const eventTime = new Date(event.eventDate).getTime();
       const difference = eventTime - now;
 
       if (difference > 0) {
@@ -187,13 +205,13 @@ const EventCount = ({ event }: { event: EventType }) => {
     const interval = setInterval(updateCountdown, 1000);
 
     return () => clearInterval(interval);
-  }, [event?.startDate]);
+  }, [event?.eventDate]);
 
   return (
     <View className="flex-row justify-between mt-4">
       <View className="border-r border-gray-400 px-2 w-[25%]">
         <Text className="text-lg font-bold mb-2 text-center">
-          {event._count.eventInventories}
+          {event._count?.eventInventories ?? event.eventInventories?.length ?? 0}
         </Text>
         <Text className="text-xs text-gray-600 text-center">
           Total Registrations
@@ -261,7 +279,7 @@ const SelectBirds = ({
   toast,
 }: any) => {
   const { birds, fetchBirds } = useBirds();
-  const maxBirdCount = event?.feeScheme?.maxBirds || 0;
+  const maxBirdCount = event?.feeScheme?.maxBirdCount || 0;
   useEffect(() => {
     fetchBirds();
   }, []);
@@ -271,7 +289,7 @@ const SelectBirds = ({
       return;
     }
 
-    if (!selectedBirds.find((b: BirdType) => b.birdId === bird.birdId)) {
+    if (!selectedBirds.find((b: BirdType) => b.id === bird.id)) {
       setSelectedBirds([...selectedBirds, bird]);
       toast.success(`${bird.birdName} added to registration`);
     } else {
@@ -279,10 +297,10 @@ const SelectBirds = ({
     }
   };
 
-  const handleRemoveBird = (birdId: string) => {
-    const bird = selectedBirds.find((b: BirdType) => b.birdId === birdId);
+  const handleRemoveBird = (birdId: number) => {
+    const bird = selectedBirds.find((b: BirdType) => b.id === birdId);
     setSelectedBirds(
-      selectedBirds.filter((bird: BirdType) => bird.birdId !== birdId)
+      selectedBirds.filter((bird: BirdType) => bird.id !== birdId)
     );
     if (bird) {
       toast.success(`${bird.birdName} removed from registration`);
@@ -324,14 +342,14 @@ const SelectBirds = ({
           <View className="flex-row flex-wrap gap-4 justify-between">
             {birds.map((bird) => {
               const isSelected = selectedBirds.find(
-                (b: BirdType) => b.birdId === bird.birdId
+                (b: BirdType) => b.id === bird.id
               );
               const isDisabled =
                 !isSelected && selectedBirds.length >= maxBirdCount;
 
               return (
                 <TouchableOpacity
-                  key={bird.birdId}
+                  key={bird.id}
                   className={`border w-[48%] rounded-lg p-4 transition-all ${
                     isSelected
                       ? "border-primary bg-primary/5 cursor-pointer"
@@ -350,7 +368,7 @@ const SelectBirds = ({
                         Color: {bird.color}
                       </Text>
                       <Text className="text-sm text-gray-600">
-                        Sex: {bird.sex === "COCK" ? "Cock" : bird.sex === "HEN" ? "Hen" : "Unknown"}
+                        Sex: {getSexLabel(bird.sex)}
                       </Text>
                     </View>
                     {!isSelected && <View className="w-14 h-4" />}
@@ -389,7 +407,7 @@ const SelectBirds = ({
           <View className="space-y-3">
             {selectedBirds.map((bird: BirdType) => (
               <View
-                key={bird.birdId}
+                key={bird.id}
                 className="flex-row items-center justify-between p-4 bg-gray-50 rounded-lg border mb-2"
               >
                 <View className="flex-1">
@@ -398,11 +416,11 @@ const SelectBirds = ({
                   </Text>
                   <View className="flex gap-4 text-sm text-gray-600">
                     <Text>Color: {bird.color}</Text>
-                    <Text>Sex: {bird.sex === "COCK" ? "Cock" : bird.sex === "HEN" ? "Hen" : "Unknown"}</Text>
+                    <Text>Sex: {getSexLabel(bird.sex)}</Text>
                   </View>
                 </View>
                 <TouchableOpacity
-                  onPress={() => bird.birdId && handleRemoveBird(bird.birdId)}
+                  onPress={() => bird.id != null && handleRemoveBird(bird.id)}
                   className="text-red-600 hover:text-red-800 text-sm font-medium px-3 py-1 border border-red-200 rounded hover:bg-red-50 transition-colors ml-4"
                 >
                   <Text>Remove</Text>
@@ -426,33 +444,47 @@ function PaymentInformation({
   selectedTeam: string;
 }) {
   const toast = useToast();
-  // Calculate total based on individual perch fees for each bird position
-  const calculateTotalAmount = () => {
-    let total = 0;
-    selectedBirds.forEach((_, index) => {
-      const birdFeeItem = event?.feeScheme?.birdFeeItems.find(
-        (item) => item.birdNo === index + 1
-      );
-      if (birdFeeItem) {
-        total += birdFeeItem.fee;
-      }
+  const [payLaterLoading, setPayLaterLoading] = useState(false);
+
+  const fees = useMemo(() => {
+    if (!event?.feeScheme || selectedBirds.length === 0) return null;
+    const fs = event.feeScheme;
+    // Use birdFeeItems if available, fall back to perchFeeItems (legacy)
+    const birdFeeItems = fs.birdFeeItems?.length
+      ? fs.birdFeeItems.map((b: any) => ({ birdNo: b.birdNo, birdFee: b.birdFee }))
+      : (fs.perchFeeItems || []).map((p: any) => ({ birdNo: p.birdNo, birdFee: p.perchFee }));
+    return calculateFees({
+      numBirds: selectedBirds.length,
+      feeScheme: {
+        entryFee: fs.entryFee ?? 0,
+        raceFeeMode: fs.raceFeeMode ?? "PER_BIRD_PER_RACE",
+        hotSpot1Fee: fs.hotSpot1Fee ?? null,
+        hotSpot2Fee: fs.hotSpot2Fee ?? null,
+        hotSpot3Fee: fs.hotSpot3Fee ?? null,
+        hotSpotFinalFee: fs.hotSpotFinalFee ?? null,
+        birdFeeItems,
+        raceTypeFees: (fs.raceTypeFees || []).map((rt: any) => ({
+          raceTypeId: rt.raceTypeId,
+          fee: rt.fee,
+        })),
+      },
+      races: (event.races || []).map((r: any) => ({ raceTypeId: r.raceTypeId })),
     });
-    return total;
-  };
+  }, [event?.feeScheme, event?.races, selectedBirds.length]);
   const onApprove = async () => {
     try {
       if (selectedBirds.length === 0) {
         return toast.error("No birds selected for registration");
       }
-      const birds: string[] = selectedBirds.map((bird) => {
-        if (!bird.birdId) {
+      const birds: number[] = selectedBirds.map((bird) => {
+        if (!bird.id) {
           toast.error("Bird ID is required for registration");
-          return "";
+          return 0;
         }
-        return bird.birdId;
+        return bird.id;
       });
       const res = await api.post("/event-inventory", {
-        eventId: event.eventId,
+        eventId: event.id,
         birds,
         selectedTeam,
       });
@@ -484,7 +516,42 @@ function PaymentInformation({
       toast.error("Failed to cancel registration");
     }
   };
-  const totalAmount = calculateTotalAmount();
+  const handlePayLater = async () => {
+    if (selectedBirds.length === 0) {
+      return toast.error("No birds selected for registration");
+    }
+    setPayLaterLoading(true);
+    try {
+      const birds = selectedBirds.map((b) => ({
+        name: b.birdName,
+        color: b.color,
+        sex: b.sex ?? 0,
+        band1: b.band1 || "",
+        band2: b.band2 || "",
+        band3: b.band3 || "",
+        band4: b.band4 || "",
+      }));
+      await api.post(`/breeder/event/${event.id}/register`, {
+        loftName: selectedTeam || "Default",
+        reservedBirds: birds.length,
+        birds,
+        payments: [],
+      });
+      Alert.alert(
+        "Registered",
+        "Registration successful! You can pay later from the Payments screen."
+      );
+      router.back();
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.message || err.message || "Registration failed";
+      toast.error(msg);
+    } finally {
+      setPayLaterLoading(false);
+    }
+  };
+
+  const totalAmount = fees?.total ?? 0;
 
   return (
     <View className="p-4 sm:p-6 lg:p-8 xl:p-10 w-full border-t bg-gray-50">
@@ -499,10 +566,32 @@ function PaymentInformation({
               Number of Birds:
             </Text>
             <Text className="font-medium text-sm sm:text-base">
-              {selectedBirds.length} / {event.feeScheme.maxBirds}
+              {selectedBirds.length} / {event.feeScheme.maxBirdCount}
             </Text>
           </View>
         </View>
+
+        {/* Fee Breakdown */}
+        {fees && (
+          <View className="space-y-2 mb-4">
+            <View className="flex-row justify-between items-center py-1">
+              <Text className="text-gray-600 text-sm">Purge Fee:</Text>
+              <Text className="font-medium text-sm">${fees.purgeFee.toFixed(2)}</Text>
+            </View>
+            <View className="flex-row justify-between items-center py-1">
+              <Text className="text-gray-600 text-sm">Perch Fees ({selectedBirds.length} birds):</Text>
+              <Text className="font-medium text-sm">${fees.perchFees.toFixed(2)}</Text>
+            </View>
+            <View className="flex-row justify-between items-center py-1">
+              <Text className="text-gray-600 text-sm">Race Fees:</Text>
+              <Text className="font-medium text-sm">${fees.raceFees.toFixed(2)}</Text>
+            </View>
+            <View className="flex-row justify-between items-center py-1">
+              <Text className="text-gray-600 text-sm">Hotspot Fees:</Text>
+              <Text className="font-medium text-sm">${fees.hotspotFees.toFixed(2)}</Text>
+            </View>
+          </View>
+        )}
 
         <View className="space-y-3">
           <Text className="font-medium text-gray-700 mb-3 text-sm sm:text-base">
@@ -510,14 +599,11 @@ function PaymentInformation({
           </Text>
           <View className="max-h-48 overflow-y-auto space-y-2">
             {selectedBirds.map((bird, index) => {
-              const birdFeeItem = event.feeScheme.birdFeeItems.find(
-                (item) => item.birdNo === index + 1
-              );
-              const perchFee = birdFeeItem?.fee || 0;
+              const perchFee = fees?.perBirdBreakdown[index]?.perchFee ?? 0;
 
               return (
                 <View
-                  key={bird.birdId}
+                  key={bird.id}
                   className="flex-row justify-between items-center py-2 px-3 bg-gray-50 rounded text-sm"
                 >
                   <Text
@@ -544,9 +630,9 @@ function PaymentInformation({
           </Text>
         </View>
         <View className="mt-8 flex w-full justify-center">
-          <View className="w-full max-w-md">
+          <View className="w-full max-w-md gap-3">
             <PayPalButton
-              eventId={event.eventId}
+              eventId={event.id}
               selectedBirds={selectedBirds}
               selectedTeam={selectedTeam}
               totalAmount={totalAmount}
@@ -557,12 +643,25 @@ function PaymentInformation({
                 toast.error(error);
               }}
             />
+            <TouchableOpacity
+              onPress={handlePayLater}
+              disabled={payLaterLoading}
+              className="border-2 border-primary py-4 rounded-lg items-center"
+            >
+              {payLaterLoading ? (
+                <ActivityIndicator color="#189AB4" />
+              ) : (
+                <Text className="text-primary font-bold text-lg">
+                  Register & Pay Later
+                </Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
 
         <View className="mt-4 text-center">
           <Text className="text-xs text-gray-500">
-            Secure payment processing • All payments are encrypted and secure
+            Pay later option available • View pending payments in Payments tab
           </Text>
         </View>
       </View>

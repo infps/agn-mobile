@@ -65,8 +65,7 @@ const MyEvent = () => {
               </View>
               <View className="w-30">
                 <Text className="text-sm text-left">
-                  {format(new Date(item?.event?.startDate), "MMM dd, yyyy") ||
-                    "Unknown Date"}
+                  {item?.event?.eventDate ? format(new Date(item.event.eventDate), "MMM dd, yyyy") : "Unknown Date"}
                 </Text>
               </View>
               <View className="w-32">

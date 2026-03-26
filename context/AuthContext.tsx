@@ -143,6 +143,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         router.replace("/home" as any);
       } catch (error: any) {
+        console.error("Signup response:", JSON.stringify(error.response?.data));
         const errorMessage =
           error.response?.data?.message ||
           "Registration failed. Please try again.";

@@ -12,25 +12,28 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 interface Race {
-  raceId: string;
-  name: string;
-  isLive: boolean;
-  isClosed: boolean;
+  id: number;
+  description: string;
+  startTime: string | null;
+  isClosed: number; // 0 or 1
   distance: number;
   releaseStation: string;
-  releaseDate: string;
   event?: { name: string };
   raceType?: { name: string };
 }
 
 interface RaceItem {
-  raceItemId: string;
-  birdPosition: number | null;
-  arrivalTime: string | null;
-  bird?: {
-    band: string;
-    birdName: string;
-    breeder?: { name: string };
+  id: number;
+  result?: {
+    birdPosition: number | null;
+    arrivalTime: string | null;
+  };
+  inventoryItem?: {
+    bird?: {
+      band: string;
+      birdName: string;
+      breeder?: { firstName: string; lastName: string };
+    };
   };
 }
 
@@ -99,10 +102,12 @@ const LiveRace = () => {
   }
 
   const sorted = [...raceItems].sort((a, b) => {
-    if (a.birdPosition == null && b.birdPosition == null) return 0;
-    if (a.birdPosition == null) return 1;
-    if (b.birdPosition == null) return -1;
-    return a.birdPosition - b.birdPosition;
+    const aPos = a.result?.birdPosition;
+    const bPos = b.result?.birdPosition;
+    if (aPos == null && bPos == null) return 0;
+    if (aPos == null) return 1;
+    if (bPos == null) return -1;
+    return aPos - bPos;
   });
 
   return (
@@ -112,7 +117,7 @@ const LiveRace = () => {
       {/* Race Header */}
       <View className="bg-white mx-4 mt-3 rounded-lg p-4" style={{ shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 }}>
         <View className="flex-row items-center gap-2 mb-1">
-          <Text className="text-xl font-bold">{race.name}</Text>
+          <Text className="text-xl font-bold">{race.description}</Text>
           <View className="bg-red-500 px-2 py-1 rounded-full flex-row items-center gap-1">
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff" }} />
             <Text className="text-white text-xs font-bold">LIVE</Text>
@@ -128,8 +133,8 @@ const LiveRace = () => {
         {/* Stats Row */}
         <View className="flex-row mt-3 gap-2">
           <View className="flex-1 border border-gray-200 rounded-lg p-2 items-center">
-            <Text className="font-bold text-base">{format(new Date(race.releaseDate), "MMM dd")}</Text>
-            <Text className="text-gray-500 text-xs">{format(new Date(race.releaseDate), "hh:mm a")}</Text>
+            <Text className="font-bold text-base">{race.startTime ? format(new Date(race.startTime), "MMM dd") : "-"}</Text>
+            <Text className="text-gray-500 text-xs">{race.startTime ? format(new Date(race.startTime), "hh:mm a") : "-"}</Text>
             <Text className="text-gray-400 text-[10px] mt-1">Release</Text>
           </View>
           <View className="flex-1 border border-gray-200 rounded-lg p-2 items-center">
@@ -163,43 +168,51 @@ const LiveRace = () => {
       <FlatList
         data={sorted}
         className="mx-4"
-        keyExtractor={(item) => item.raceItemId}
-        renderItem={({ item }) => (
-          <View className="flex-row px-3 py-3 border-b border-gray-200 bg-white items-center">
-            <View className="w-12">
-              {item.birdPosition ? (
-                <View
-                  style={{
-                    backgroundColor:
-                      item.birdPosition === 1 ? "#F59E0B" :
-                      item.birdPosition === 2 ? "#9CA3AF" :
-                      item.birdPosition === 3 ? "#CD7F32" : "#189AB4",
-                    width: 24, height: 24, borderRadius: 12,
-                    alignItems: "center", justifyContent: "center",
-                  }}
-                >
-                  <Text className="text-white text-xs font-bold">{item.birdPosition}</Text>
-                </View>
-              ) : (
-                <Text className="text-gray-400">-</Text>
-              )}
+        keyExtractor={(item) => String(item.id)}
+        renderItem={({ item }) => {
+          const pos = item.result?.birdPosition;
+          const arrival = item.result?.arrivalTime;
+          const bird = item.inventoryItem?.bird;
+          const breederName = bird?.breeder
+            ? `${bird.breeder.firstName || ""} ${bird.breeder.lastName || ""}`.trim() || "-"
+            : "-";
+          return (
+            <View className="flex-row px-3 py-3 border-b border-gray-200 bg-white items-center">
+              <View className="w-12">
+                {pos ? (
+                  <View
+                    style={{
+                      backgroundColor:
+                        pos === 1 ? "#F59E0B" :
+                        pos === 2 ? "#9CA3AF" :
+                        pos === 3 ? "#CD7F32" : "#189AB4",
+                      width: 24, height: 24, borderRadius: 12,
+                      alignItems: "center", justifyContent: "center",
+                    }}
+                  >
+                    <Text className="text-white text-xs font-bold">{pos}</Text>
+                  </View>
+                ) : (
+                  <Text className="text-gray-400">-</Text>
+                )}
+              </View>
+              <View className="flex-1">
+                <Text className="text-xs" numberOfLines={1}>{bird?.band || "-"}</Text>
+              </View>
+              <View className="flex-1">
+                <Text className="text-xs" numberOfLines={1}>{bird?.birdName || "-"}</Text>
+              </View>
+              <View className="flex-1">
+                <Text className="text-xs" numberOfLines={1}>{breederName}</Text>
+              </View>
+              <View className="w-20">
+                <Text className="text-xs text-right" numberOfLines={1}>
+                  {arrival ? format(new Date(arrival), "hh:mm:ss a") : "-"}
+                </Text>
+              </View>
             </View>
-            <View className="flex-1">
-              <Text className="text-xs" numberOfLines={1}>{item.bird?.band || "-"}</Text>
-            </View>
-            <View className="flex-1">
-              <Text className="text-xs" numberOfLines={1}>{item.bird?.birdName || "-"}</Text>
-            </View>
-            <View className="flex-1">
-              <Text className="text-xs" numberOfLines={1}>{item.bird?.breeder?.name || "-"}</Text>
-            </View>
-            <View className="w-20">
-              <Text className="text-xs text-right" numberOfLines={1}>
-                {item.arrivalTime ? format(new Date(item.arrivalTime), "hh:mm:ss a") : "-"}
-              </Text>
-            </View>
-          </View>
-        )}
+          );
+        }}
         ListEmptyComponent={
           <View className="py-8 items-center bg-white">
             <Text className="text-gray-500">No results yet</Text>
