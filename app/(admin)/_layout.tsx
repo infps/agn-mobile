@@ -32,6 +32,13 @@ const NAV: NavItem[] = [
     permissions: ["events.view", "races.view"],
   },
   {
+    label: "Events",
+    short: "Events",
+    href: "/(admin)/events",
+    icon: "calendar-outline",
+    permissions: ["events.view", "events.manage"],
+  },
+  {
     label: "Races",
     short: "Races",
     href: "/(admin)/races",
