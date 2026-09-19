@@ -136,7 +136,7 @@ const Settings = () => {
               <Ionicons name="arrow-back" size={24} color="white" />
             </TouchableOpacity>
             <Text className="text-white text-xl font-bold">
-              Hi {user?.firstName} {user?.lastName}
+              Hi {user?.name} {user?.lastName}
             </Text>
           </View>
           <Link href="/profile-update" className="text-white ml-8">

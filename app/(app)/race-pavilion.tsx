@@ -1,25 +1,41 @@
 import Carousel from "@/components/carousel";
 import Header from "@/components/header";
+import { useEvents } from "@/context";
+import { EventType } from "@/context/EventContext";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
-import {
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View
-} from "react-native";
+import { Image, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+/**
+ * Race Pavilion.
+ *
+ * The three carousels here were placeholders rendered with no data at all, so
+ * the screen showed its banner and then two empty bands. They now carry the
+ * events they were always standing in for — what is running, and what is open
+ * to enter — which is the only reason to arrive on this screen.
+ */
 const RacePavilion = () => {
+  const { events, loading, error } = useEvents();
+
+  const now = new Date();
+  const ongoing: EventType[] = [];
+  const upcoming: EventType[] = [];
+
+  (events ?? []).forEach((event) => {
+    const hasLiveRace = event.races?.some((r) => !!r.startTime && r.isClosed !== 1);
+    if (hasLiveRace || new Date(event.eventDate) < now) ongoing.push(event);
+    else upcoming.push(event);
+  });
+
   return (
-    <SafeAreaView>
+    <SafeAreaView className="flex-1 bg-white">
       <ScrollView>
         <Header title="Race Pavilion" />
         <LinearGradient
           colors={["#fff", "#dbeafe"]}
-          start={{ x: 0, y: 0.5 }} // Start from the left center
-          end={{ x: 1, y: 0.5 }} // End at the right center
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
           className="rounded-2xl pl-5 flex-row justify-between items-center"
         >
           <View>
@@ -39,7 +55,14 @@ const RacePavilion = () => {
             style={{ objectFit: "contain" }}
           />
         </LinearGradient>
-        <Carousel />
+
+        <Text className="text-xl font-bold px-4 mt-8 mb-3">Running now</Text>
+        {error ? (
+          <Text className="px-4 text-red-500">Error loading events: {error}</Text>
+        ) : (
+          <Carousel data={ongoing} loading={loading} />
+        )}
+
         <View className="mx-4 mt-8 bg-white flex-row shadow">
           <Image
             source={{
@@ -56,13 +79,14 @@ const RacePavilion = () => {
             </Text>
           </View>
         </View>
-        <Carousel />
-        <Carousel />
+
+        <Text className="text-xl font-bold px-4 mt-8 mb-3">Open to enter</Text>
+        {error ? null : <Carousel data={upcoming} loading={loading} />}
+
+        <View style={{ height: 32 }} />
       </ScrollView>
     </SafeAreaView>
   );
 };
 
 export default RacePavilion;
-
-const styles = StyleSheet.create({});

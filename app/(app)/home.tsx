@@ -1,5 +1,6 @@
 import Carousel from "@/components/carousel";
 import { useEvents } from "@/context";
+import { usePermissions } from "@/context/PermissionContext";
 import { EventType } from "@/context/EventContext";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -24,6 +25,7 @@ const pedigree = [
 
 export default function HomeScreen() {
   const { events, loading, error } = useEvents();
+  const { isAdminCapable } = usePermissions();
   const router = useRouter();
 
   // Split events into ongoing and upcoming
@@ -63,9 +65,22 @@ export default function HomeScreen() {
               <Text className=" text-white  text-center">AGN</Text>
             </View>
           </View>
-          <TouchableOpacity>
-            <Ionicons name="notifications-outline" size={24} color="#000" />
-          </TouchableOpacity>
+          <View className="flex-row items-center gap-3">
+            {/* Only an account with admin permissions sees this, and it is the
+                only way back to the operations side without signing out. */}
+            {isAdminCapable && (
+              <TouchableOpacity
+                onPress={() => router.replace("/(admin)/dashboard")}
+                className="flex-row items-center gap-1.5 rounded-full bg-black px-3 py-1.5"
+              >
+                <Ionicons name="grid-outline" size={14} color="#fff" />
+                <Text className="text-xs font-medium text-white">Admin</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity>
+              <Ionicons name="notifications-outline" size={24} color="#000" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* SEARCH BOX */}

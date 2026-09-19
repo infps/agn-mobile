@@ -30,6 +30,8 @@ export interface EventType {
     birdFeeItems?: { birdNo: number; birdFee: number }[];
     raceTypeFees?: { raceTypeId: number; fee: number }[];
   };
+  /** Present when the API embeds the registrations rather than just counting them. */
+  eventInventories?: { id: number }[];
   races?: {
     id: number;
     description: string;

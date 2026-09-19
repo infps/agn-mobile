@@ -66,7 +66,7 @@ const Teams = () => {
       console.log(err);
     }
   };
-  const deleteTeam = async (teamId: string) => {
+  const deleteTeam = async (teamId: string | number) => {
     try {
       if (!teamId) return;
       const res = await api.delete("/breeder/teams", { data: { teamId } });

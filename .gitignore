@@ -41,3 +41,7 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Real credentials never belong in the repo; .env.example documents the shape.
+.env
+!.env.example

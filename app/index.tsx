@@ -1,73 +1,51 @@
-// import { Link } from "expo-router";
-// import { Text, TouchableOpacity, View } from "react-native";
-
-// const Home = () => {
-//   return (
-//     <View className="flex-1 bg-white items-center justify-center px-6">
-//       <Text className="text-3xl font-bold text-gray-900 mb-8">
-//         Welcome to Pigeon Pulse
-//       </Text>
-//       <Text className="text-gray-600 mb-12 text-center">
-//         Choose a screen to navigate to:
-//       </Text>
-
-//       <View className="w-full gap-4">
-//         {/* Onboarding Button */}
-//         <Link href="/onboarding" asChild>
-//           <TouchableOpacity className="bg-cyan-600 rounded-xl py-4 px-6">
-//             <Text className="text-center text-lg font-semibold">
-//               Onboarding
-//             </Text>
-//           </TouchableOpacity>
-//         </Link>
-
-//         {/* Login Button */}
-//         <Link href="/login" asChild>
-//           <TouchableOpacity className="bg-gray-800 rounded-xl py-4 px-6">
-//             <Text className="text-center text-lg font-semibold text-white">Login</Text>
-//           </TouchableOpacity>
-//         </Link>
-
-//         {/* Signup Button */}
-//         <Link href="/signup" asChild>
-//           <TouchableOpacity className="bg-gray-800 rounded-xl py-4 px-6">
-//             <Text className="text-center text-lg font-semibold text-white">Sign Up</Text>
-//           </TouchableOpacity>
-//         </Link>
-//       </View>
-//     </View>
-//   );
-// };
-
-// export default Home;
-
 // app/index.tsx
 import { useAuth } from "@/context/AuthContext";
+import { usePermissions } from "@/context/PermissionContext";
 import { Redirect } from "expo-router";
 import { useEffect } from "react";
+import { ActivityIndicator, View } from "react-native";
 import "./global.css";
 
+/**
+ * Where the app opens.
+ *
+ * One binary decides it: does this account hold any admin permission? If it
+ * does, the admin shell is the useful landing place — somebody running an event
+ * opens the app to check a race, not to look at their own birds. Everyone else
+ * gets the breeder app, which is the whole experience for them.
+ *
+ * Both shells stay reachable either way, so an operator who also flies birds can
+ * cross over without signing out.
+ */
 export default function Index() {
   const { user, isLoading, checkSession } = useAuth();
-useEffect(() => {
-  const verifySession = async () => {
-    try {
-      await checkSession();
-    } catch (error) {
-      console.log("Session verification failed:", error);
-    }
-  };
-  
-  verifySession();
-}, []);
-  
-  if (isLoading) return null; // ⛔ wait until auth restored
+  const { isAdminCapable, isLoading: permsLoading } = usePermissions();
 
-  if (user) {
-    return <Redirect href="/(app)/home" />;
+  useEffect(() => {
+    const verifySession = async () => {
+      try {
+        await checkSession();
+      } catch (error) {
+        console.log("Session verification failed:", error);
+      }
+    };
+
+    verifySession();
+    // Once, on open: re-running this would re-check the session on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Deciding the destination before permissions land would send every admin to
+  // the breeder app for a moment and then yank them out of it.
+  if (isLoading || (user && permsLoading)) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white">
+        <ActivityIndicator size="large" />
+      </View>
+    );
   }
 
-  return <Redirect href="/(auth)/login" />;
+  if (!user) return <Redirect href="/(auth)/login" />;
+
+  return <Redirect href={isAdminCapable ? "/(admin)/dashboard" : "/(app)/home"} />;
 }
-
-
