@@ -14,9 +14,13 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useResponsive } from "@/hooks/useResponsive";
 
 const EventsList = () => {
   const { events, loading, error, listEvents, getEvent } = useEvents();
+  // Two columns is right for a phone and wrong for a tablet, where it produces
+  // two enormous cards on a row that holds four.
+  const { columns } = useResponsive();
   const [refreshing, setRefreshing] = useState(false);
 
   const loadEvents = async () => {
@@ -48,7 +52,7 @@ const EventsList = () => {
     item: EventType | { id: string; isSkeleton: boolean };
   }) => {
     if ("isSkeleton" in item && item.isSkeleton) {
-      return <SkeletonCard width="48%" marginBottom={16} />;
+      return <SkeletonCard width={columns > 1 ? "48%" : "100%"} marginBottom={16} />;
     }
       const eventItem = item as EventType;
       const hasLiveRace = eventItem.races?.some(r => !!r.startTime && r.isClosed !== 1);
@@ -63,7 +67,7 @@ const EventsList = () => {
           shadowRadius: 4,
           elevation: 3,
         }}
-        className="w-[48%] bg-white rounded-[8px] mb-[16px] overflow-hidden "
+        className="bg-white rounded-[8px] mb-[16px] overflow-hidden"
       >
         <Pressable
           onPress={() => router.push(`/(app)/event-detail?id=${eventItem.id}`)}
@@ -181,8 +185,11 @@ const EventsList = () => {
         keyExtractor={(item) =>
           "isSkeleton" in item ? item.id : String(item.id)
         }
-        numColumns={2}
-        columnWrapperStyle={{ justifyContent: "space-between" }}
+        // React Native refuses to change numColumns on an existing list, so the
+        // key forces a fresh one when the device is rotated.
+        key={`cols-${columns}`}
+        numColumns={columns}
+        columnWrapperStyle={columns > 1 ? { gap: 12 } : undefined}
         contentContainerStyle={styles.listContent}
         refreshing={refreshing}
         onRefresh={handleRefresh}
