@@ -15,15 +15,46 @@ import {
 const Login = () => {
   const { signIn, isLoading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
   const [user, setUser] = useState({
     username: "",
     password: "",
   });
+
+  /**
+   * A failed sign-in used to be swallowed into console.log, so the screen sat
+   * there looking like nothing had happened. Worse, the two reasons it fails
+   * need completely different responses: a wrong password is the person's to
+   * fix, an unreachable server is not, and telling them apart is the whole
+   * difference between retyping a password and checking whether the portal is
+   * running.
+   */
   const handelLogin = async () => {
+    setProblem(null);
+
+    if (!user.username.trim() || !user.password) {
+      setProblem("Enter your username and password.");
+      return;
+    }
+
     try {
-      await signIn(user.username, user.password);
-    } catch (error) {
-      console.log(error);
+      await signIn(user.username.trim(), user.password);
+    } catch (error: any) {
+      const status = error?.response?.status;
+
+      if (!error?.response) {
+        // No response at all: DNS, timeout, refused connection.
+        setProblem(
+          "Could not reach the server. Check you are on the same network as it, and that it is running."
+        );
+      } else if (status === 401 || status === 403) {
+        setProblem("That username and password do not match.");
+      } else {
+        setProblem(
+          error?.response?.data?.message ?? "Sign-in failed. Please try again."
+        );
+      }
+      console.log("[login] failed", status ?? error?.message, error?.config?.baseURL);
     }
   };
   return (
@@ -78,13 +109,20 @@ const Login = () => {
           </Pressable>
         </View>
 
+        {problem ? (
+          <View className="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-3">
+            <Text className="text-sm text-rose-800">{problem}</Text>
+          </View>
+        ) : null}
+
         {/* Sign In Button */}
         <TouchableOpacity
-          className="bg-cyan-600 rounded-xl py-4 mt-8"
+          className={`rounded-xl py-4 mt-8 ${isLoading ? "bg-cyan-400" : "bg-cyan-600"}`}
           onPress={handelLogin}
+          disabled={isLoading}
         >
           <Text className="text-white text-center text-lg font-semibold">
-            Sign in
+            {isLoading ? "Signing in…" : "Sign in"}
           </Text>
         </TouchableOpacity>
 

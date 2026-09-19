@@ -141,7 +141,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           console.warn("Failed to set lastName:", e);
         }
 
-        router.replace("/home" as any);
+        // Back to the index rather than straight to the breeder home: the index
+      // is where the admin-or-breeder decision is made, and jumping past it
+      // landed every operator in the breeder app after signing in.
+      router.replace("/" as any);
       } catch (error: any) {
         console.error("Signup response:", JSON.stringify(error.response?.data));
         const errorMessage =
@@ -180,7 +183,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setToken(token);
       setUser(userData);
 
-      router.replace("/home" as any);
+      // Back to the index rather than straight to the breeder home: the index
+      // is where the admin-or-breeder decision is made, and jumping past it
+      // landed every operator in the breeder app after signing in.
+      router.replace("/" as any);
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.message || "Login failed. Please try again.";
