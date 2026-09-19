@@ -1,4 +1,6 @@
 import Header from "@/components/header";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import Modal from "@/components/Modal";
 import { useBirds } from "@/context";
 import { BirdType } from "@/context/BirdContext";
@@ -76,6 +78,7 @@ const Dropdown = ({ label, value, options, onChange }: DropdownProps) => {
 
 const Birds = () => {
   const { birds, loading, addBird, fetchBirds } = useBirds();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [birdData, setBirdData] = useState({
     birdName: "",
@@ -154,7 +157,17 @@ const Birds = () => {
               item?.id != null ? String(item.id) : index.toString()
             }
             renderItem={({ item }: { item: BirdType }) => (
-              <View className="w-full p-2 flex-row justify-between border border-b border-t-[0px] border-gray-300">
+              // The last column used to read "Action" and do nothing. It opens
+              // the bird now, which is the only action the row ever implied.
+              <TouchableOpacity
+                onPress={() =>
+                  router.push({
+                    pathname: "/bird-detail",
+                    params: { birdId: String(item.id) },
+                  })
+                }
+                className="w-full p-2 flex-row justify-between border border-b border-t-[0px] border-gray-300"
+              >
                 <Text className="text-gray-400 text-[12px]">{item.id}</Text>
                 <Text className="text-gray-400 text-[12px]">
                   {item.birdName}
@@ -163,8 +176,8 @@ const Birds = () => {
                 <Text className="text-gray-400 text-[12px]">
                   {getSexLabel(item.sex)}
                 </Text>
-                <Text className="text-gray-400 text-[12px]">Action</Text>
-              </View>
+                <Ionicons name="chevron-forward" size={14} color="#9CA3AF" />
+              </TouchableOpacity>
             )}
           />
         ) : (
