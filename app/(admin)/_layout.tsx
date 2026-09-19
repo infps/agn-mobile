@@ -66,6 +66,15 @@ const NAV: NavItem[] = [
     icon: "cash-outline",
     permissions: ["accounting.view", "payments.view"],
   },
+  {
+    label: "More",
+    short: "More",
+    href: "/(admin)/more",
+    icon: "ellipsis-horizontal",
+    // Always reachable: it holds sign-out and the explanation of why a section
+    // is missing, which is exactly what somebody with little access needs.
+    permissions: [],
+  },
 ];
 
 export default function AdminLayout() {
@@ -89,7 +98,23 @@ export default function AdminLayout() {
   // an empty shell would look broken rather than intentional.
   if (!isAdminCapable) return <Redirect href="/(app)/home" />;
 
-  const visible = NAV.filter((item) => canAny(...item.permissions));
+  // An empty permission list means "always available" — canAny would say false
+  // for it, since nothing in an empty set can match.
+  const visible = NAV.filter(
+    (item) => item.permissions.length === 0 || canAny(...item.permissions)
+  );
+
+  // A rail has room for everything. A bottom bar does not: past five, the
+  // labels shrink to the point of being decoration, so the tail folds into
+  // More — which is where it would have been looked for anyway.
+  const BAR_SLOTS = 4;
+  const barItems =
+    visible.length <= BAR_SLOTS + 1
+      ? visible
+      : [
+          ...visible.filter((i) => i.href !== "/(admin)/more").slice(0, BAR_SLOTS),
+          ...visible.filter((i) => i.href === "/(admin)/more"),
+        ];
 
   const isActive = (href: string) => pathname?.startsWith(href.replace("/(admin)", ""));
 
@@ -154,7 +179,7 @@ export default function AdminLayout() {
 
       {!isWide && (
         <View className="flex-row border-t border-slate-200 bg-white pb-1">
-          {visible.map((item) => (
+          {barItems.map((item) => (
             <NavButton key={item.href} item={item} rail={false} />
           ))}
         </View>

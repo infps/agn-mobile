@@ -15,16 +15,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 const settingOption1: {
   title: string;
   icon: React.ReactNode;
-  link?: "/events" | "/teams" | "/birds" | "my-events";
-  //"/own-loft" | "/shared-loft" | "/result" |
+  link:
+    | "/events"
+    | "/my-events"
+    | "/races"
+    | "/race-calendar"
+    | "/teams"
+    | "/birds"
+    | "/result"
+    | "/notifications";
 }[] = [
-  // {
-  //   title: "Races",
-  //   icon: (
-  //     <Image source={require("../../assets/journey.png")} className="w-8 h-8" />
-  //   ),
-  //   link: "/races",
-  // },
   {
     title: "Events",
     icon: (
@@ -35,10 +35,27 @@ const settingOption1: {
   {
     title: "My Events",
     icon: <Ionicons name="calendar-outline" size={24} />,
-    link: "my-events",
+    link: "/my-events",
   },
   {
-    title: " Teams",
+    title: "Races",
+    icon: <Ionicons name="flag-outline" size={24} />,
+    link: "/races",
+  },
+  {
+    title: "Race Calendar",
+    icon: <Ionicons name="today-outline" size={24} />,
+    link: "/race-calendar",
+  },
+  {
+    title: "Results",
+    icon: (
+      <Image source={require("../../assets/quality.png")} className="w-8 h-8" />
+    ),
+    link: "/result",
+  },
+  {
+    title: "Teams",
     icon: <Ionicons name="people-outline" size={24} />,
     link: "/teams",
   },
@@ -52,27 +69,11 @@ const settingOption1: {
     ),
     link: "/birds",
   },
-  // {
-  //   title: "Own Loft",
-  //   icon: (
-  //     <Image source={require("../../assets/parcel.png")} className="w-8 h-8" />
-  //   ),
-  //   link: "/own-loft",
-  // },
-  // {
-  //   title: "Shared Loft",
-  //   icon: (
-  //     <Image source={require("../../assets/money-bag.png")} className="w-8 h-8" />
-  //   ),
-  //   link: "/shared-loft",
-  // },
-  // {
-  //   title: "Result",
-  //   icon: (
-  //     <Image source={require("../../assets/quality.png")} className="w-8 h-8" />
-  //   ),
-  //   link: "/result",
-  // },
+  {
+    title: "Notifications",
+    icon: <Ionicons name="notifications-outline" size={24} />,
+    link: "/notifications",
+  },
 ];
 
 const settingOption2: {

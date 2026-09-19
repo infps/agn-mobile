@@ -77,7 +77,7 @@ export default function HomeScreen() {
                 <Text className="text-xs font-medium text-white">Admin</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push("/notifications")}>
               <Ionicons name="notifications-outline" size={24} color="#000" />
             </TouchableOpacity>
           </View>
