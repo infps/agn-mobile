@@ -147,6 +147,10 @@ export function RaceTrackMap({
     );
   }
 
+  // Nothing to draw means no coordinates anywhere — not merely no pings. A
+  // race with a liberation point still has a map before it has ever moved, so
+  // the message names what is actually missing rather than blaming the
+  // tracker.
   if (!track || points.length === 0) {
     return (
       <View
@@ -154,7 +158,8 @@ export function RaceTrackMap({
         style={{ height }}
       >
         <Text className="text-center text-sm text-slate-500">
-          No position has been reported for this race yet.
+          There is nothing to map yet. Give the liberation point coordinates on the Stations
+          screen and it will show here.
         </Text>
       </View>
     );

@@ -346,12 +346,22 @@ export default function AdminRaceDetail() {
         </>
       )}
 
-      {race.transportStatus && race.transportStatus !== "IDLE" ? (
-        <>
-          <Text className="mb-2 mt-6 text-base font-semibold text-slate-900">Transport</Text>
-          <RaceTrackMap raceId={race.id} height={240} live={race.status !== "ENDED"} />
-        </>
-      ) : null}
+      {/* Shown from the moment the race exists, not only once the lorry moves.
+          Before transport starts the map is still the answer to "where are we
+          going and how far", which is a night-before question; the component
+          draws the loft and the liberation point on its own and fills in the
+          route as pings arrive. Polling, though, only runs while something is
+          actually moving. */}
+      <Text className="mb-2 mt-6 text-base font-semibold text-slate-900">Route</Text>
+      <RaceTrackMap
+        raceId={race.id}
+        height={240}
+        live={
+          race.status !== "ENDED" &&
+          race.transportStatus != null &&
+          race.transportStatus !== "IDLE"
+        }
+      />
 
       <Text className="mb-2 mt-6 text-base font-semibold text-slate-900">
         Arrivals {arrived.length > 0 ? `(${arrived.length})` : ""}
