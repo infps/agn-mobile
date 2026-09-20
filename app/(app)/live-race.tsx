@@ -1,4 +1,5 @@
 import Header from "@/components/header";
+import { RaceTrackMap } from "@/components/RaceTrackMap";
 import api from "@/service/api.service";
 import { format } from "date-fns";
 import { useLocalSearchParams } from "expo-router";
@@ -149,6 +150,14 @@ const LiveRace = () => {
           </View>
         </View>
       </View>
+
+      {/* Where the transport is. Only while the birds are still on the road —
+          once they are in the air the convoy stops being the question. */}
+      {race.isClosed !== 1 && (
+        <View className="mx-4 mt-3">
+          <RaceTrackMap raceId={Number(raceId)} height={220} live />
+        </View>
+      )}
 
       {/* Results Header */}
       <View className="mx-4 mt-4 mb-1">

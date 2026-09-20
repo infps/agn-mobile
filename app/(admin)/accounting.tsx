@@ -12,7 +12,10 @@ import { Ionicons } from "@expo/vector-icons";
 import api from "@/service/api.service";
 import { usePermissions } from "@/context/PermissionContext";
 import { useResponsive } from "@/hooks/useResponsive";
+import { useToast } from "@/context/ToastContext";
+import { useAdminAction } from "@/hooks/useAdminAction";
 import { EventPicker } from "@/components/admin/EventPicker";
+import { Button, ButtonRow, Field, Sheet } from "@/components/admin/ui";
 
 interface LedgerLine {
   eventInventoryId: number;
@@ -56,11 +59,49 @@ const money = (n: number) =>
   })}`;
 
 /**
- * The season ledger, read-only.
+ * One total in the ledger header.
  *
- * Money moves from the portal, never from here. What a phone is good for is the
- * question asked across a table at an event — "does this man owe anything?" —
- * so the two filtered views come first and the full ledger sits behind them.
+ * At module scope: declared inside the screen it was a new component type on
+ * every render, so React discarded and rebuilt all four figures each time the
+ * ledger reloaded or a character was typed into the search box.
+ */
+function Figure({
+  label,
+  value,
+  tone,
+  isWide,
+}: {
+  label: string;
+  value: number;
+  tone: string;
+  isWide: boolean;
+}) {
+  return (
+    <View
+      className="rounded-xl border border-slate-200 bg-white p-4"
+      style={{ flexGrow: 1, flexBasis: isWide ? "23%" : "47%" }}
+    >
+      <Text className={`text-lg font-bold ${tone}`} style={{ fontVariant: ["tabular-nums"] }}>
+        {money(value)}
+      </Text>
+      <Text className="mt-0.5 text-xs text-slate-500">{label}</Text>
+    </View>
+  );
+}
+
+/**
+ * The season ledger, and taking money against it.
+ *
+ * What a phone is good for is the question asked across a table at an event —
+ * "does this man owe anything?" — so the two filtered views come first and the
+ * full ledger sits behind them. Recording the payment belongs in the same
+ * place, because it is the same conversation: somebody is told a balance and
+ * hands over cash for it, and walking back to a desk to key it in later is how
+ * a payment gets forgotten.
+ *
+ * The amount is prefilled with what is owed rather than left blank. A part
+ * payment is typed over it; a full one is the common case and should not need
+ * somebody retyping a figure that is already on the screen.
  *
  * Both directions are shown because a breeder can owe entry fees and be owed
  * prize money in the same season, and netting them without saying so is how
@@ -69,6 +110,10 @@ const money = (n: number) =>
 export default function AdminAccounting() {
   const { can } = usePermissions();
   const { isWide, gutter } = useResponsive();
+  const toast = useToast();
+  const action = useAdminAction();
+  const [paying, setPaying] = useState<LedgerLine | null>(null);
+  const [payment, setPayment] = useState({ amount: "", method: "", reference: "", note: "" });
 
   const [eventId, setEventId] = useState<number | null>(null);
   const [view, setView] = useState<LedgerView>("unpaid");
@@ -109,6 +154,44 @@ export default function AdminAccounting() {
     load();
   }, [load]);
 
+  const mayTakeMoney = can("payments.manage");
+
+  const openPayment = (line: LedgerLine) => {
+    setPayment({
+      amount: line.balance > 0 ? line.balance.toFixed(2) : "",
+      method: "",
+      reference: "",
+      note: "",
+    });
+    setPaying(line);
+  };
+
+  const recordPayment = async () => {
+    if (!paying) return;
+    const amount = parseFloat(payment.amount.trim());
+    if (!payment.amount.trim() || isNaN(amount) || amount <= 0) {
+      toast.error("Give an amount above zero.");
+      return;
+    }
+    const { ok } = await action.run(
+      "post",
+      "/admin/payment",
+      {
+        eventInventoryId: paying.eventInventoryId,
+        breederId: paying.breederId,
+        amountPaid: amount,
+        method: payment.method.trim() || undefined,
+        referenceNumber: payment.reference.trim() || undefined,
+        description: payment.note.trim() || undefined,
+      },
+      { success: `${money(amount)} recorded.` }
+    );
+    if (ok) {
+      setPaying(null);
+      load();
+    }
+  };
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return lines;
@@ -135,29 +218,6 @@ export default function AdminAccounting() {
       </View>
     );
   }
-
-  const Figure = ({
-    label,
-    value,
-    tone,
-  }: {
-    label: string;
-    value: number;
-    tone: string;
-  }) => (
-    <View
-      className="rounded-xl border border-slate-200 bg-white p-4"
-      style={{ flexGrow: 1, flexBasis: isWide ? "23%" : "47%" }}
-    >
-      <Text
-        className={`text-lg font-bold ${tone}`}
-        style={{ fontVariant: ["tabular-nums"] }}
-      >
-        {money(value)}
-      </Text>
-      <Text className="mt-0.5 text-xs text-slate-500">{label}</Text>
-    </View>
-  );
 
   return (
     <View className="flex-1" style={{ paddingHorizontal: gutter, paddingTop: gutter }}>
@@ -216,10 +276,10 @@ export default function AdminAccounting() {
 
           {view === "ledger" && totals && (
             <View className="mb-3 flex-row flex-wrap" style={{ gap: 10 }}>
-              <Figure label="Charged" value={totals.charged} tone="text-slate-900" />
-              <Figure label="Collected" value={totals.paid} tone="text-emerald-600" />
-              <Figure label="Still owed to us" value={totals.balance} tone="text-rose-600" />
-              <Figure label="Owed out" value={totals.owedOut} tone="text-blue-600" />
+              <Figure label="Charged" value={totals.charged} tone="text-slate-900" isWide={isWide} />
+              <Figure label="Collected" value={totals.paid} tone="text-emerald-600" isWide={isWide} />
+              <Figure label="Still owed to us" value={totals.balance} tone="text-rose-600" isWide={isWide} />
+              <Figure label="Owed out" value={totals.owedOut} tone="text-blue-600" isWide={isWide} />
             </View>
           )}
 
@@ -271,8 +331,10 @@ export default function AdminAccounting() {
           ) : (
             <View className="overflow-hidden rounded-xl border border-slate-200 bg-white">
               {visible.slice(0, 200).map((line, index) => (
-                <View
+                <Pressable
                   key={line.eventInventoryId}
+                  onPress={mayTakeMoney ? () => openPayment(line) : undefined}
+                  disabled={!mayTakeMoney}
                   className={`flex-row items-center gap-3 px-4 py-3 ${
                     index > 0 ? "border-t border-slate-100" : ""
                   }`}
@@ -307,7 +369,10 @@ export default function AdminAccounting() {
                       <Text className="text-xs text-slate-400">settled</Text>
                     )}
                   </View>
-                </View>
+                  {mayTakeMoney ? (
+                    <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
+                  ) : null}
+                </Pressable>
               ))}
               {visible.length > 200 && (
                 <Text className="border-t border-slate-100 px-4 py-3 text-center text-xs text-slate-400">
@@ -320,6 +385,46 @@ export default function AdminAccounting() {
           <View style={{ height: 32 }} />
         </ScrollView>
       )}
+
+      <Sheet
+        open={paying != null}
+        onClose={() => setPaying(null)}
+        title={`Take payment from ${paying?.breederName || "this breeder"}`}
+        subtitle={
+          paying && paying.balance > 0
+            ? `They owe ${money(paying.balance)}`
+            : "Nothing is outstanding — this records a payment anyway"
+        }
+      >
+        <Field
+          label="Amount"
+          value={payment.amount}
+          onChange={(v) => setPayment({ ...payment, amount: v })}
+          keyboard="decimal-pad"
+          autoFocus
+        />
+        <Field
+          label="Method"
+          value={payment.method}
+          onChange={(v) => setPayment({ ...payment, method: v })}
+          placeholder="Cash, cheque, transfer"
+        />
+        <Field
+          label="Reference"
+          value={payment.reference}
+          onChange={(v) => setPayment({ ...payment, reference: v })}
+          placeholder="Cheque number, transaction id"
+        />
+        <Field
+          label="Note"
+          value={payment.note}
+          onChange={(v) => setPayment({ ...payment, note: v })}
+        />
+        <ButtonRow>
+          <Button label="Cancel" tone="secondary" onPress={() => setPaying(null)} full />
+          <Button label="Record it" onPress={recordPayment} pending={action.pending} full />
+        </ButtonRow>
+      </Sheet>
     </View>
   );
 }

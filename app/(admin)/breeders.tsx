@@ -12,6 +12,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import api from "@/service/api.service";
 import { usePermissions } from "@/context/PermissionContext";
+import { CsvImportSheet } from "@/components/admin/CsvImportSheet";
+import { downloadAndShare } from "@/service/download.service";
+import { useToast } from "@/context/ToastContext";
+import { Button, ButtonRow } from "@/components/admin/ui";
 import { useResponsive } from "@/hooks/useResponsive";
 
 interface Breeder {
@@ -54,6 +58,9 @@ export default function AdminBreeders() {
 
   const [breeders, setBreeders] = useState<Breeder[]>([]);
   const [query, setQuery] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const toast = useToast();
   const [open, setOpen] = useState<Breeder | null>(null);
   const [birds, setBirds] = useState<Bird[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -249,6 +256,35 @@ export default function AdminBreeders() {
         )}
       </View>
 
+      {can("breeders.manage") ? (
+        <ButtonRow>
+          <Button
+            label="Import CSV"
+            tone="secondary"
+            icon="cloud-upload-outline"
+            onPress={() => setImporting(true)}
+            full
+          />
+          <Button
+            label="Export"
+            tone="secondary"
+            icon="download-outline"
+            pending={exporting}
+            onPress={async () => {
+              setExporting(true);
+              const stamp = new Date().toISOString().slice(0, 10);
+              const res = await downloadAndShare(
+                "/admin/breeders/export",
+                `breeders-${stamp}.csv`
+              );
+              setExporting(false);
+              if (!res.ok && res.problem) toast.error(res.problem);
+            }}
+            full
+          />
+        </ButtonRow>
+      ) : null}
+
       {loading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" />
@@ -336,6 +372,22 @@ export default function AdminBreeders() {
           <View style={{ height: 32 }} />
         </ScrollView>
       )}
+
+      <CsvImportSheet
+        open={importing}
+        onClose={() => setImporting(false)}
+        onImported={load}
+        title="Import breeders"
+        previewPath="/admin/breeders/import/preview"
+        commitPath="/admin/breeders/import/commit"
+        describe={(row) => ({
+          title:
+            `${(row.firstName as string) ?? ""} ${(row.lastName as string) ?? ""}`.trim() ||
+            "Unnamed",
+          subtitle:
+            [row.email as string, row.city1 as string].filter(Boolean).join(" · ") || undefined,
+        })}
+      />
     </View>
   );
 }

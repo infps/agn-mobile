@@ -2,7 +2,12 @@ import React, { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useAdminData } from "@/hooks/useAdminData";
+import { useAdminAction } from "@/hooks/useAdminAction";
+import { usePermissions } from "@/context/PermissionContext";
 import {
+
+  type Choice,
+  ChoiceList,
   Empty,
   Figure,
   FigureRow,
@@ -11,7 +16,9 @@ import {
   Notice,
   Row,
   Rows,
+  SearchBar,
   Screen,
+  Sheet,
   money,
 } from "@/components/admin/ui";
 
@@ -25,6 +32,13 @@ interface Listing {
   items?: { id: number; inventoryItem?: { bird?: { band: string | null } | null } | null }[];
 }
 
+interface Breeder {
+  id: number;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+}
+
 type Filter = "available" | "sold" | "all";
 
 /**
@@ -36,13 +50,25 @@ type Filter = "available" | "sold" | "all";
  */
 export default function EventStore() {
   const { eventId, name } = useLocalSearchParams<{ eventId?: string; name?: string }>();
+  const { can } = usePermissions();
+  const action = useAdminAction();
   const [filter, setFilter] = useState<Filter>("available");
+  const [selling, setSelling] = useState<Listing | null>(null);
+  const [buyerQuery, setBuyerQuery] = useState("");
 
-  const { data, loading, refreshing, forbidden, error, refresh } = useAdminData<{
+  const { data, loading, refreshing, forbidden, error, refresh, reload } = useAdminData<{
     listings?: Listing[];
   }>(eventId ? `/admin/event/${eventId}/store` : null, [eventId]);
 
-  const listings = data?.listings ?? [];
+  // Only once a sale is actually being recorded: the breeder list is long and
+  // nobody browsing the store needs it loaded.
+  const breedersReq = useAdminData<{ breeders?: Breeder[] }>(
+    selling ? "/admin/breeders" : null,
+    [selling?.id]
+  );
+
+  const listings = useMemo(() => data?.listings ?? [], [data]);
+  const mayManage = can("store.manage");
 
   const isSold = (l: Listing) =>
     Boolean(l.purchasedBy) || (l.status ?? "").toUpperCase() === "SOLD";
@@ -55,12 +81,42 @@ export default function EventStore() {
     [listings, filter]
   );
 
+  const buyers: Choice[] = useMemo(() => {
+    const all = breedersReq.data?.breeders ?? [];
+    const q = buyerQuery.trim().toLowerCase();
+    const matched = q
+      ? all.filter((b) =>
+          `${b.firstName ?? ""} ${b.lastName ?? ""} ${b.email ?? ""}`.toLowerCase().includes(q)
+        )
+      : all;
+    return matched.slice(0, 40).map((b) => ({
+      key: b.id,
+      label: `${b.firstName ?? ""} ${b.lastName ?? ""}`.trim() || b.email || `Breeder ${b.id}`,
+      hint: b.email,
+    }));
+  }, [breedersReq.data, buyerQuery]);
+
+  const sell = async (buyerBreederId: string | number) => {
+    if (!selling) return;
+    const { ok } = await action.run(
+      "post",
+      `/admin/event/${eventId}/store/${selling.id}/purchase`,
+      { buyerBreederId },
+      { success: "Sale recorded." }
+    );
+    if (ok) {
+      setSelling(null);
+      setBuyerQuery("");
+      reload();
+    }
+  };
+
   if (forbidden) return <NoAccess what="The event store" />;
 
   const sold = listings.filter(isSold);
   const takings = sold.reduce((s, l) => s + (l.price ?? 0), 0);
 
-  const FILTERS: Array<{ key: Filter; label: string }> = [
+  const FILTERS: { key: Filter; label: string }[] = [
     { key: "available", label: `For sale (${listings.length - sold.length})` },
     { key: "sold", label: `Sold (${sold.length})` },
     { key: "all", label: "All" },
@@ -140,6 +196,14 @@ export default function EventStore() {
                       right={money(l.price)}
                       rightSub={isSold(l) ? "sold" : "for sale"}
                       rightTone={isSold(l) ? "text-emerald-600" : "text-slate-900"}
+                      onPress={
+                        mayManage && !isSold(l)
+                          ? () => {
+                              setBuyerQuery("");
+                              setSelling(l);
+                            }
+                          : undefined
+                      }
                     />
                   );
                 })}
@@ -148,6 +212,29 @@ export default function EventStore() {
           </View>
         </>
       )}
+
+      <Sheet
+        open={selling != null}
+        onClose={() => setSelling(null)}
+        title="Record the sale"
+        subtitle={`${money(selling?.price)} — pick the buyer`}
+      >
+        <View className="mt-2">
+          <SearchBar value={buyerQuery} onChange={setBuyerQuery} placeholder="Search breeders" />
+        </View>
+        {breedersReq.loading ? (
+          <Loading />
+        ) : (
+          <ChoiceList
+            choices={buyers}
+            onPick={sell}
+            empty={buyerQuery ? "Nobody matches that." : "No breeders on this event."}
+          />
+        )}
+        {action.pending ? (
+          <Text className="mt-3 text-center text-xs text-slate-400">Recording…</Text>
+        ) : null}
+      </Sheet>
     </Screen>
   );
 }

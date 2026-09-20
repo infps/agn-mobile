@@ -1,17 +1,27 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAdminData } from "@/hooks/useAdminData";
+import { useAdminAction } from "@/hooks/useAdminAction";
+import { usePermissions } from "@/context/PermissionContext";
+import { useToast } from "@/context/ToastContext";
 import {
+  Button,
+  ButtonRow,
+  type Choice,
+  ChoiceList,
   Empty,
+  Field,
   Loading,
   NoAccess,
   Notice,
   Row,
   Rows,
   Screen,
+  SearchBar,
   SectionTitle,
+  Sheet,
   money,
 } from "@/components/admin/ui";
 
@@ -55,17 +65,112 @@ const SEX = (n: number | null) => (n === 1 ? "Cock" : n === 2 ? "Hen" : n === 0 
  * racing record is the page, because that is what the bird is *for* — the
  * identifying details are a short block above it rather than the main event.
  *
- * Read only. Editing a bird from a phone, in a loft, next to a basket, is how
- * the wrong band number gets saved.
+ * What can be changed here is what somebody actually learns while holding the
+ * bird: its condition, and whose it is. Health is the common one — a bird comes
+ * back injured and that has to be on the record before it is basketed again.
+ *
+ * The band number is deliberately not editable. It is the bird's identity, it
+ * is already printed on its leg, and a typo made one-handed at a loft would
+ * quietly detach every result the bird has ever earned. That stays in the
+ * portal, where there is room to see what it is attached to.
  */
+const HEALTH: { key: string; label: string; hint: string }[] = [
+  { key: "HEALTHY", label: "Healthy", hint: "Fit to fly" },
+  { key: "INJURED", label: "Injured", hint: "Back, but hurt" },
+  { key: "HOSPITALIZED", label: "Hospitalised", hint: "Being treated, out of racing" },
+  { key: "DEAD", label: "Dead", hint: "Recorded and taken out of the loft" },
+];
+
 export default function AdminBirdDetail() {
   const { birdId } = useLocalSearchParams<{ birdId?: string }>();
   const router = useRouter();
+  const { can } = usePermissions();
+  const toast = useToast();
+  const action = useAdminAction();
 
-  const { data, loading, refreshing, forbidden, error, refresh } = useAdminData<{ bird?: Bird }>(
-    birdId ? `/admin/bird/${birdId}` : null,
-    [birdId]
-  );
+  const [healthOpen, setHealthOpen] = useState(false);
+  const [healthStatus, setHealthStatus] = useState<string | null>(null);
+  const [healthNote, setHealthNote] = useState("");
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [breederQuery, setBreederQuery] = useState("");
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [details, setDetails] = useState({ birdName: "", color: "", rfid: "", note: "" });
+
+  const { data, loading, refreshing, forbidden, error, refresh, reload } = useAdminData<{
+    bird?: Bird;
+  }>(birdId ? `/admin/bird/${birdId}` : null, [birdId]);
+
+  // Only while a transfer is being chosen — the breeder list is long.
+  const breedersReq = useAdminData<{
+    breeders?: { id: number; firstName: string | null; lastName: string | null; email: string | null }[];
+  }>(transferOpen ? "/admin/breeders" : null, [transferOpen]);
+
+  const mayManage = can("birds.manage");
+
+  const breederChoices: Choice[] = useMemo(() => {
+    const q = breederQuery.trim().toLowerCase();
+    const all = breedersReq.data?.breeders ?? [];
+    const matched = q
+      ? all.filter((b) =>
+          `${b.firstName ?? ""} ${b.lastName ?? ""} ${b.email ?? ""}`.toLowerCase().includes(q)
+        )
+      : all;
+    return matched.slice(0, 40).map((b) => ({
+      key: b.id,
+      label: `${b.firstName ?? ""} ${b.lastName ?? ""}`.trim() || b.email || `Breeder ${b.id}`,
+      hint: b.email,
+    }));
+  }, [breedersReq.data, breederQuery]);
+
+  const saveHealth = async () => {
+    if (!healthStatus) {
+      toast.error("Pick a condition.");
+      return;
+    }
+    const { ok } = await action.run(
+      "post",
+      `/admin/bird/${birdId}/health`,
+      { healthStatus, healthNote: healthNote.trim() || null },
+      { success: "Condition recorded." }
+    );
+    if (ok) {
+      setHealthOpen(false);
+      setHealthNote("");
+      reload();
+    }
+  };
+
+  const transfer = async (newBreederId: string | number) => {
+    const { ok } = await action.run(
+      "post",
+      `/admin/bird/${birdId}/transfer-breeder`,
+      { newBreederId: Number(newBreederId) },
+      { success: "Bird transferred." }
+    );
+    if (ok) {
+      setTransferOpen(false);
+      setBreederQuery("");
+      reload();
+    }
+  };
+
+  const saveDetails = async () => {
+    const { ok } = await action.run(
+      "patch",
+      `/admin/bird/${birdId}`,
+      {
+        birdName: details.birdName.trim() || null,
+        color: details.color.trim() || null,
+        rfid: details.rfid.trim() || null,
+        note: details.note.trim() || null,
+      },
+      { success: "Bird updated." }
+    );
+    if (ok) {
+      setDetailsOpen(false);
+      reload();
+    }
+  };
 
   const bird = data?.bird ?? null;
 
@@ -129,6 +234,43 @@ export default function AdminBirdDetail() {
       {bird.isLost === 1 && <Notice tone="rose">This bird is recorded as lost.</Notice>}
       {bird.attention ? <Notice>{bird.attention}</Notice> : null}
 
+      {mayManage ? (
+        <View className="mt-3 flex-row flex-wrap" style={{ gap: 8 }}>
+          <Button
+            label="Condition"
+            icon="medkit-outline"
+            onPress={() => {
+              setHealthStatus(bird.healthStatus ?? "HEALTHY");
+              setHealthNote(bird.healthNote ?? "");
+              setHealthOpen(true);
+            }}
+          />
+          <Button
+            label="Edit"
+            tone="secondary"
+            icon="create-outline"
+            onPress={() => {
+              setDetails({
+                birdName: bird.birdName ?? "",
+                color: bird.color ?? "",
+                rfid: bird.rfid ?? "",
+                note: bird.note ?? "",
+              });
+              setDetailsOpen(true);
+            }}
+          />
+          <Button
+            label="Transfer"
+            tone="secondary"
+            icon="swap-horizontal-outline"
+            onPress={() => {
+              setBreederQuery("");
+              setTransferOpen(true);
+            }}
+          />
+        </View>
+      ) : null}
+
       <SectionTitle>Bird</SectionTitle>
       <Rows>
         <Row title="Colour" right={bird.color ?? "—"} />
@@ -186,6 +328,88 @@ export default function AdminBirdDetail() {
           ))}
         </Rows>
       )}
+
+      <Sheet
+        open={healthOpen}
+        onClose={() => setHealthOpen(false)}
+        title="Condition"
+        subtitle="What state the bird came back in"
+      >
+        <ChoiceList
+          choices={HEALTH.map((h) => ({ key: h.key, label: h.label, hint: h.hint }))}
+          selected={healthStatus}
+          onPick={(k) => setHealthStatus(String(k))}
+        />
+        <Field
+          label="Note"
+          value={healthNote}
+          onChange={setHealthNote}
+          multiline
+          hint="What happened, and anything the next person needs to know."
+        />
+        <ButtonRow>
+          <Button label="Cancel" tone="secondary" onPress={() => setHealthOpen(false)} full />
+          <Button label="Record" onPress={saveHealth} pending={action.pending} full />
+        </ButtonRow>
+      </Sheet>
+
+      <Sheet
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+        title="Edit bird"
+        subtitle="The band number is not changed here"
+      >
+        <Field
+          label="Name"
+          value={details.birdName}
+          onChange={(v) => setDetails({ ...details, birdName: v })}
+        />
+        <Field
+          label="Colour"
+          value={details.color}
+          onChange={(v) => setDetails({ ...details, color: v })}
+        />
+        <Field
+          label="RFID tag"
+          value={details.rfid}
+          onChange={(v) => setDetails({ ...details, rfid: v })}
+          hint="Usually set by scanning at check-in. Type it only to correct one."
+        />
+        <Field
+          label="Note"
+          value={details.note}
+          onChange={(v) => setDetails({ ...details, note: v })}
+          multiline
+        />
+        <ButtonRow>
+          <Button label="Cancel" tone="secondary" onPress={() => setDetailsOpen(false)} full />
+          <Button label="Save" onPress={saveDetails} pending={action.pending} full />
+        </ButtonRow>
+      </Sheet>
+
+      <Sheet
+        open={transferOpen}
+        onClose={() => setTransferOpen(false)}
+        title="Transfer this bird"
+        subtitle={`Currently ${who || "unassigned"} — results already flown stay with the bird`}
+      >
+        <View className="mt-2">
+          <SearchBar
+            value={breederQuery}
+            onChange={setBreederQuery}
+            placeholder="Search breeders"
+          />
+        </View>
+        {breedersReq.loading ? (
+          <Loading />
+        ) : (
+          <ChoiceList
+            choices={breederChoices}
+            onPick={transfer}
+            empty={breederQuery ? "Nobody matches that." : "No breeders on record."}
+          />
+        )}
+      </Sheet>
     </Screen>
   );
 }

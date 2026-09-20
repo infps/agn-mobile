@@ -2,10 +2,21 @@ import axios from 'axios';
 import Constants from "expo-constants";
 import SecureStorageService from './secureStorage.service';
 
-// Production API URL - update this with your actual Vercel backend URL after deployment
+// Where the deployed portal lives. Overridable per build profile so a staging
+// APK can be pointed somewhere else without touching code.
 const PRODUCTION_API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://pigeon-pulse.vercel.app/api';
 
-const inProduction = process.env.EXPO_PUBLIC_NODE_ENV === "production";
+/**
+ * Whether this build should talk to the deployed portal.
+ *
+ * `__DEV__` is the authority, not the env var. A release build has no Metro to
+ * discover a laptop from, so a shipped app that fell back to hunting for one on
+ * the local network would simply never reach a server — and that is exactly
+ * what happened whenever EXPO_PUBLIC_NODE_ENV was left at "development", which
+ * is its committed value. The env var is kept as an override in the other
+ * direction: it lets a development build be pointed at production deliberately.
+ */
+const inProduction = !__DEV__ || process.env.EXPO_PUBLIC_NODE_ENV === "production";
 const inBrowser = typeof document !== "undefined";
 
 /**
@@ -61,9 +72,18 @@ const apiUrl = getApiUrl();
 if (!inProduction) {
   console.log(`[api] talking to ${apiUrl}`);
 }
+// 10s was not enough in development. The portal is a Next dev server that
+// compiles each API route the first time it is asked for, and behind it sits a
+// Postgres that suspends when idle and takes a moment to wake. Neither is slow
+// in steady state, but the first request after a quiet spell pays for both at
+// once, and the old budget ran out while the server was still working — which
+// surfaced as "could not reach the server" when the server was reachable the
+// whole time.
+const REQUEST_TIMEOUT_MS = inProduction ? 15000 : 30000;
+
 const api = axios.create({
   baseURL: apiUrl,
-  timeout: 10000,
+  timeout: REQUEST_TIMEOUT_MS,
   headers: {
     'Content-Type': 'application/json',
   },

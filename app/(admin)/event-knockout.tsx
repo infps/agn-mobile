@@ -1,8 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import { View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useAdminData } from "@/hooks/useAdminData";
+import { useAdminAction } from "@/hooks/useAdminAction";
+import { usePermissions } from "@/context/PermissionContext";
+import { useToast } from "@/context/ToastContext";
 import {
+  Confirm,
   Empty,
   Figure,
   FigureRow,
@@ -34,23 +38,29 @@ const STATUS: Record<string, { bg: string; text: string }> = {
  * Knockouts, and how many birds are still in them.
  *
  * The one number that matters is survivors against starters — a knockout is
- * defined by what it has eliminated. Advancing a round is left to the portal:
- * a cut is irreversible and decided against a full results table, which is not
- * a thing to do from a phone between baskets.
+ * defined by what it has eliminated.
+ *
+ * Advancing a round is here, but it is the most irreversible button in the app:
+ * it reads the last race's finishing order, applies the cut, and eliminates
+ * everything below the line. There is no undo on either side, portal or phone.
+ * So the confirmation spells out the cut in the tournament's own terms —
+ * "top 20%, 47 birds in" — because that is the sentence somebody can check
+ * against what they meant to do.
  */
 export default function EventKnockout() {
   const { eventId, name } = useLocalSearchParams<{ eventId?: string; name?: string }>();
+  const { can } = usePermissions();
+  const toast = useToast();
+  const action = useAdminAction();
 
-  const { data, loading, refreshing, forbidden, error, refresh } = useAdminData<{
+  const { data, loading, refreshing, forbidden, error, refresh, reload } = useAdminData<{
     tournaments?: Tournament[];
   }>(eventId ? `/admin/event/${eventId}/tournaments` : null, [eventId]);
 
+  const [advancing, setAdvancing] = useState<Tournament | null>(null);
+
   const rows = data?.tournaments ?? [];
-
-  if (forbidden) return <NoAccess what="Knockout" />;
-
-  const alive = rows.reduce((s, t) => s + t.aliveCount, 0);
-  const entered = rows.reduce((s, t) => s + t.entryCount, 0);
+  const mayManage = can("tournaments.manage");
 
   const cut = (t: Tournament) =>
     t.cutMode === "TOP_PERCENT"
@@ -58,6 +68,26 @@ export default function EventKnockout() {
       : t.cutMode === "TOP_N"
         ? `top ${t.cutValue}`
         : t.cutMode.toLowerCase().replace(/_/g, " ");
+
+  const advance = async () => {
+    if (!advancing) return;
+    // No body: the server applies the tournament's own cut rule rather than a
+    // hand-picked survivor list, which is the only form that makes sense here.
+    const { ok, data: said } = await action.run<{ message?: string }>(
+      "post",
+      `/admin/tournament/${advancing.id}/advance`
+    );
+    if (ok) {
+      toast.success(said?.message ?? "Round advanced.");
+      setAdvancing(null);
+      reload();
+    }
+  };
+
+  if (forbidden) return <NoAccess what="Knockout" />;
+
+  const alive = rows.reduce((s, t) => s + t.aliveCount, 0);
+  const entered = rows.reduce((s, t) => s + t.entryCount, 0);
 
   return (
     <Screen
@@ -83,25 +113,51 @@ export default function EventKnockout() {
               <Empty>No knockouts have been set up for this season.</Empty>
             ) : (
               <Rows>
-                {rows.map((t) => (
-                  <Row
-                    key={t.id}
-                    title={t.name}
-                    subtitle={`Cut to ${cut(t)}`}
-                    right={`${t.aliveCount} of ${t.entryCount}`}
-                    rightSub="still in"
-                    rightTone={t.aliveCount > 0 ? "text-emerald-600" : "text-slate-400"}
-                    badge={{
-                      label: t.status.toLowerCase(),
-                      ...(STATUS[t.status] ?? STATUS.SETUP),
-                    }}
-                  />
-                ))}
+                {rows.map((t) => {
+                  const runnable = mayManage && t.status !== "FINISHED" && t.aliveCount > 0;
+                  return (
+                    <Row
+                      key={t.id}
+                      title={t.name}
+                      subtitle={`Cut to ${cut(t)}`}
+                      right={runnable ? "Cut" : `${t.aliveCount} of ${t.entryCount}`}
+                      rightSub={runnable ? `${t.aliveCount} in` : "still in"}
+                      rightTone={
+                        runnable
+                          ? "text-rose-600"
+                          : t.aliveCount > 0
+                            ? "text-emerald-600"
+                            : "text-slate-400"
+                      }
+                      badge={{
+                        label: t.status.toLowerCase(),
+                        ...(STATUS[t.status] ?? STATUS.SETUP),
+                      }}
+                      onPress={runnable ? () => setAdvancing(t) : undefined}
+                    />
+                  );
+                })}
               </Rows>
             )}
           </View>
         </>
       )}
+
+      <Confirm
+        open={advancing != null}
+        title={`Cut ${advancing?.name ?? "this knockout"}?`}
+        body={
+          advancing
+            ? `${advancing.aliveCount} birds are still in. The cut keeps ${cut(
+                advancing
+              )} from the last race's finishing order and eliminates the rest. This cannot be undone, here or in the portal.`
+            : ""
+        }
+        confirmLabel="Make the cut"
+        pending={action.pending}
+        onConfirm={advance}
+        onCancel={() => setAdvancing(null)}
+      />
     </Screen>
   );
 }

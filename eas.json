@@ -6,7 +6,10 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_NODE_ENV": "development"
+      }
     },
     "preview": {
       "distribution": "internal",
@@ -15,10 +18,20 @@
       },
       "ios": {
         "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_NODE_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "https://pigeon-pulse.vercel.app/api",
+        "GOOGLE_MAPS_API_KEY": ""
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_NODE_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "https://pigeon-pulse.vercel.app/api",
+        "GOOGLE_MAPS_API_KEY": ""
+      }
     }
   },
   "submit": {

@@ -44,6 +44,7 @@ const GROUPS: Group[] = [
       { key: "groups", label: "Groups", hint: "Sections and vaccinations", icon: "albums-outline", permission: "groups.view", route: "/(admin)/event-groups" },
       { key: "baskets", label: "Baskets", hint: "Loft and race baskets", icon: "cube-outline", permission: "baskets.view", route: "/(admin)/event-baskets" },
       { key: "stations", label: "Stations", hint: "Liberation points", icon: "location-outline", permission: "stations.view", route: "/(admin)/event-stations" },
+      { key: "scanners", label: "Scanners", hint: "Which reader feeds which section", icon: "radio-outline", permission: "scanners.view", route: "/(admin)/event-scanners" },
     ],
   },
   {

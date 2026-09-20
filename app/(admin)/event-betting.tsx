@@ -3,7 +3,13 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import api from "@/service/api.service";
 import { useAdminData } from "@/hooks/useAdminData";
+import { useAdminAction } from "@/hooks/useAdminAction";
+import { usePermissions } from "@/context/PermissionContext";
+import { CashBetSheet } from "@/components/admin/CashBetSheet";
 import {
+  Button,
+  ButtonRow,
+  Confirm,
   Empty,
   Figure,
   FigureRow,
@@ -57,12 +63,25 @@ interface PoolData {
  * out on the row: a bet whose stake never cleared is the one that causes an
  * argument at payout time, and it looks identical to a good bet otherwise.
  *
- * Opening and closing pools stays in the portal. Both move money.
+ * Opening a pool is reversible and lives here. Settling it is not: calculating
+ * payouts writes what everyone is owed, so it asks first and says what it is
+ * about to do. That confirmation is the only thing standing between a mistap
+ * and a payout run, which is why it names the race rather than asking "are you
+ * sure".
+ *
+ * Cash bets are taken here too. They need a bettor, a bird and a tier chosen
+ * together, so they get their own stepped sheet rather than a button — and the
+ * whole slip is sent at once, because a person backing four birds should not
+ * end up with two of them placed.
  */
 export default function EventBetting() {
   const { eventId, name } = useLocalSearchParams<{ eventId?: string; name?: string }>();
 
+  const { can } = usePermissions();
+  const action = useAdminAction();
   const [raceId, setRaceId] = useState<number | null>(null);
+  const [settling, setSettling] = useState(false);
+  const [betting, setBetting] = useState(false);
   const [pool, setPool] = useState<PoolData | null>(null);
   const [loadingPool, setLoadingPool] = useState(false);
   const [poolError, setPoolError] = useState<string | null>(null);
@@ -107,6 +126,45 @@ export default function EventBetting() {
       cancelled = true;
     };
   }, [raceId]);
+
+  const race = races.find((r) => r.id === raceId) ?? null;
+  const mayManage = can("betting.manage");
+  const maySettle = can("betting.payouts");
+
+  const loadPool = () => {
+    if (raceId == null) return;
+    setLoadingPool(true);
+    api
+      .get(`/admin/race/${raceId}/betting/pool`)
+      .then(({ data }) => setPool(data ?? null))
+      .catch(() => undefined)
+      .finally(() => setLoadingPool(false));
+  };
+
+  const toggle = async () => {
+    if (race == null) return;
+    const { ok } = await action.run("post", `/admin/race/${race.id}/betting/toggle`, {}, {
+      success: race.bettingOpen ? "Pool closed." : "Pool opened.",
+    });
+    if (ok) {
+      racesReq.reload();
+      loadPool();
+    }
+  };
+
+  const settle = async () => {
+    if (race == null) return;
+    const { ok } = await action.run(
+      "post",
+      `/admin/race/${race.id}/betting/calculate-payouts`,
+      {},
+      { success: "Payouts calculated." }
+    );
+    if (ok) {
+      setSettling(false);
+      loadPool();
+    }
+  };
 
   if (racesReq.forbidden) return <NoAccess what="Betting" />;
 
@@ -180,6 +238,45 @@ export default function EventBetting() {
             />
           </FigureRow>
 
+          {mayManage || maySettle ? (
+            <ButtonRow>
+              {mayManage ? (
+                <Button
+                  label={race?.bettingOpen ? "Close the pool" : "Open the pool"}
+                  tone={race?.bettingOpen ? "secondary" : "primary"}
+                  icon={race?.bettingOpen ? "lock-closed-outline" : "lock-open-outline"}
+                  onPress={toggle}
+                  pending={action.pending}
+                  full
+                />
+              ) : null}
+              {mayManage && race?.bettingOpen ? (
+                <Button
+                  label="Take a bet"
+                  icon="cash-outline"
+                  onPress={() => setBetting(true)}
+                  full
+                />
+              ) : null}
+              {maySettle ? (
+                <Button
+                  label="Settle payouts"
+                  tone="danger"
+                  icon="cash-outline"
+                  onPress={() => setSettling(true)}
+                  disabled={race?.bettingOpen === true}
+                  full
+                />
+              ) : null}
+            </ButtonRow>
+          ) : null}
+
+          {race?.bettingOpen && maySettle ? (
+            <Text className="mt-2 text-xs text-slate-400">
+              Close the pool before settling it.
+            </Text>
+          ) : null}
+
           {pool?.bettingOpen ? (
             <Notice>Betting is open on this race, so these figures are still moving.</Notice>
           ) : null}
@@ -236,6 +333,24 @@ export default function EventBetting() {
           </View>
         </>
       )}
+
+      <CashBetSheet
+        open={betting}
+        onClose={() => setBetting(false)}
+        raceId={race?.id ?? 0}
+        raceName={race?.name || `race ${race?.raceNumber ?? ""}`}
+        onPlaced={loadPool}
+      />
+
+      <Confirm
+        open={settling}
+        title="Settle this pool?"
+        body={`Payouts for ${race?.name || `race ${race?.raceNumber ?? ""}`} will be calculated from the finishing positions and written against every bet. Run it again only if the result changes.`}
+        confirmLabel="Settle"
+        pending={action.pending}
+        onConfirm={settle}
+        onCancel={() => setSettling(false)}
+      />
     </Screen>
   );
 }

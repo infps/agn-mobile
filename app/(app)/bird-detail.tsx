@@ -53,6 +53,60 @@ const SEX = (n: number | null) => (n === 1 ? "Cock" : n === 2 ? "Hen" : "Unknown
  * Editing stays in the portal. A row of text inputs that quietly discard what
  * you type is worse than no inputs.
  */
+/**
+ * Two pieces the bird page repeats.
+ *
+ * At module scope rather than inside the screen: components declared during
+ * render are a new type each time, so every fact and every relative row was
+ * discarded and rebuilt on each render of the page.
+ */
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="w-1/2 py-2 pr-3">
+      <Text className="text-xs text-gray-500">{label}</Text>
+      <Text className="text-sm font-medium text-gray-900">{value}</Text>
+    </View>
+  );
+}
+
+function Relatives({
+  title,
+  list,
+  router,
+}: {
+  title: string;
+  list: Relative[];
+  router: ReturnType<typeof useRouter>;
+}) {
+  if (list.length === 0) return null;
+  return (
+    <View className="mt-4">
+      <Text className="mb-2 text-sm font-semibold text-gray-900">{title}</Text>
+      <View className="overflow-hidden rounded-xl border border-gray-200">
+        {list.map((r, index) => (
+          <Pressable
+            key={r.id}
+            onPress={() =>
+              router.push({ pathname: "/bird-detail", params: { birdId: String(r.id) } })
+            }
+            className={`flex-row items-center gap-3 px-4 py-3 ${
+              index > 0 ? "border-t border-gray-100" : ""
+            }`}
+          >
+            <View className="flex-1">
+              <Text className="text-sm font-medium text-gray-900">
+                {r.band ?? "No band"}
+                {r.birdName ? ` · ${r.birdName}` : ""}
+              </Text>
+              {r.color ? <Text className="text-xs text-gray-500">{r.color}</Text> : null}
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
 export default function BirdDetail() {
   const { birdId, id } = useLocalSearchParams<{ birdId?: string; id?: string }>();
   const { gutter } = useResponsive();
@@ -99,44 +153,6 @@ export default function BirdDetail() {
     ...(bird?.childrenAsFather ?? []),
     ...(bird?.childrenAsMother ?? []),
   ];
-
-  const Fact = ({ label, value }: { label: string; value: string }) => (
-    <View className="w-1/2 py-2 pr-3">
-      <Text className="text-xs text-gray-500">{label}</Text>
-      <Text className="text-sm font-medium text-gray-900">{value}</Text>
-    </View>
-  );
-
-  const Relatives = ({ title, list }: { title: string; list: Relative[] }) => {
-    if (list.length === 0) return null;
-    return (
-      <View className="mt-4">
-        <Text className="mb-2 text-sm font-semibold text-gray-900">{title}</Text>
-        <View className="overflow-hidden rounded-xl border border-gray-200">
-          {list.map((r, index) => (
-            <Pressable
-              key={r.id}
-              onPress={() =>
-                router.push({ pathname: "/bird-detail", params: { birdId: String(r.id) } })
-              }
-              className={`flex-row items-center gap-3 px-4 py-3 ${
-                index > 0 ? "border-t border-gray-100" : ""
-              }`}
-            >
-              <View className="flex-1">
-                <Text className="text-sm font-medium text-gray-900">
-                  {r.band ?? "No band"}
-                  {r.birdName ? ` · ${r.birdName}` : ""}
-                </Text>
-                {r.color ? <Text className="text-xs text-gray-500">{r.color}</Text> : null}
-              </View>
-              <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
-            </Pressable>
-          ))}
-        </View>
-      </View>
-    );
-  };
 
   if (loading) {
     return (
@@ -217,12 +233,12 @@ export default function BirdDetail() {
           </View>
         ) : null}
 
-        <Relatives
+        <Relatives router={router}
           title="Parents"
           list={[bird.father, bird.mother].filter(Boolean) as Relative[]}
         />
-        <Relatives title="Siblings" list={bird.siblings ?? []} />
-        <Relatives title="Offspring" list={children} />
+        <Relatives router={router} title="Siblings" list={bird.siblings ?? []} />
+        <Relatives router={router} title="Offspring" list={children} />
 
         {isOwner && (
           <Text className="mt-6 text-center text-xs text-gray-400">

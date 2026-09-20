@@ -4,9 +4,10 @@ import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import api from "@/service/api.service";
 import { usePermissions } from "@/context/PermissionContext";
+import { useAdminAction } from "@/hooks/useAdminAction";
 import { useToast } from "@/context/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
-import { Empty, Loading, NoAccess, Notice, Screen } from "@/components/admin/ui";
+import { Confirm, Empty, Loading, NoAccess, Notice, Screen } from "@/components/admin/ui";
 
 interface Message {
   id: number;
@@ -34,6 +35,8 @@ export default function EventMessages() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
+  const [removing, setRemoving] = useState<Message | null>(null);
+  const action = useAdminAction();
 
   const { data, loading, refreshing, forbidden, error, refresh, reload } = useAdminData<{
     messages?: Message[];
@@ -71,6 +74,20 @@ export default function EventMessages() {
         },
       ]
     );
+  };
+
+  const remove = async () => {
+    if (!removing) return;
+    const { ok } = await action.run(
+      "delete",
+      `/admin/event/${eventId}/messages/${removing.id}`,
+      undefined,
+      { success: "Message removed." }
+    );
+    if (ok) {
+      setRemoving(null);
+      reload();
+    }
   };
 
   if (forbidden) return <NoAccess what="Messages" />;
@@ -156,9 +173,16 @@ export default function EventMessages() {
                       </View>
                     )}
 
-                    <Text className="mt-2 text-xs text-slate-400">
-                      {who || "Staff"} · {new Date(m.createdAt).toLocaleString()}
-                    </Text>
+                    <View className="mt-2 flex-row items-center justify-between">
+                      <Text className="text-xs text-slate-400">
+                        {who || "Staff"} · {new Date(m.createdAt).toLocaleString()}
+                      </Text>
+                      {canPost ? (
+                        <Pressable onPress={() => setRemoving(m)} hitSlop={8}>
+                          <Ionicons name="trash-outline" size={15} color="#94a3b8" />
+                        </Pressable>
+                      ) : null}
+                    </View>
                   </View>
                 );
               })
@@ -166,6 +190,16 @@ export default function EventMessages() {
           </View>
         </>
       )}
+
+      <Confirm
+        open={removing != null}
+        title="Take this message down?"
+        body="It stops showing to breeders. People who have already read it keep what they read."
+        confirmLabel="Take it down"
+        pending={action.pending}
+        onConfirm={remove}
+        onCancel={() => setRemoving(null)}
+      />
     </Screen>
   );
 }

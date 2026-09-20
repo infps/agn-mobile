@@ -42,8 +42,14 @@ const Login = () => {
     } catch (error: any) {
       const status = error?.response?.status;
 
-      if (!error?.response) {
-        // No response at all: DNS, timeout, refused connection.
+      if (error?.code === "ECONNABORTED") {
+        // The server took the request and never finished in time. Usually the
+        // first sign-in after the portal has been sitting idle, where it is
+        // still warming up rather than missing — so "try again" is the right
+        // advice, and hunting for a network fault is not.
+        setProblem("The server took too long to answer. Try again.");
+      } else if (!error?.response) {
+        // No response at all: DNS, refused connection, wrong address.
         setProblem(
           "Could not reach the server. Check you are on the same network as it, and that it is running."
         );

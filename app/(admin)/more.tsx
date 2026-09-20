@@ -39,6 +39,13 @@ const ITEMS: Item[] = [
     permissions: ["users.view", "users.manage", "users.approve"],
   },
   {
+    label: "Schemes",
+    hint: "What an entry costs and what a place pays",
+    icon: "pricetags-outline",
+    route: "/(admin)/schemes",
+    permissions: ["schemes.view", "schemes.manage"],
+  },
+  {
     label: "Reports",
     hint: "What the portal can produce",
     icon: "document-text-outline",

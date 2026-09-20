@@ -41,6 +41,35 @@ const STATUS_TONE: Record<string, { bg: string; text: string }> = {
  * Leads with what is happening right now — a race in the air is the thing an
  * operator opens the app for — and only then the season's events.
  */
+/**
+ * One headline number.
+ *
+ * At module scope: declared inside the screen it was a fresh component type
+ * on every render, so the whole row was torn down and rebuilt each time the
+ * dashboard polled.
+ */
+function Stat({
+  label,
+  value,
+  tone,
+  isWide,
+}: {
+  label: string;
+  value: string | number;
+  tone: string;
+  isWide: boolean;
+}) {
+  return (
+    <View
+      className="rounded-xl border border-slate-200 bg-white p-4"
+      style={{ flex: 1, minWidth: isWide ? 180 : 140 }}
+    >
+      <Text className={`text-2xl font-bold ${tone}`}>{value}</Text>
+      <Text className="mt-0.5 text-xs text-slate-500">{label}</Text>
+    </View>
+  );
+}
+
 export default function AdminDashboard() {
   const { can } = usePermissions();
   const { isWide, isMedium, gutter } = useResponsive();
@@ -88,15 +117,6 @@ export default function AdminDashboard() {
     );
   }
 
-  const Stat = ({ label, value, tone }: { label: string; value: string | number; tone: string }) => (
-    <View
-      className="rounded-xl border border-slate-200 bg-white p-4"
-      style={{ flex: 1, minWidth: isWide ? 180 : 140 }}
-    >
-      <Text className={`text-2xl font-bold ${tone}`}>{value}</Text>
-      <Text className="mt-0.5 text-xs text-slate-500">{label}</Text>
-    </View>
-  );
 
   return (
     <ScrollView
@@ -119,13 +139,13 @@ export default function AdminDashboard() {
       </Text>
 
       <View className="mt-4 flex-row flex-wrap" style={{ gap: 12 }}>
-        <Stat label="Races live" value={live.length} tone="text-emerald-600" />
-        <Stat
+        <Stat isWide={isWide} label="Races live" value={live.length} tone="text-emerald-600" />
+        <Stat isWide={isWide}
           label="Taking entries"
           value={races.filter((r) => r.status === "REGISTERING").length}
           tone="text-blue-600"
         />
-        <Stat label="Open events" value={events.filter((e) => e.isOpen === 1).length} tone="text-slate-900" />
+        <Stat isWide={isWide} label="Open events" value={events.filter((e) => e.isOpen === 1).length} tone="text-slate-900" />
       </View>
 
       {can("checkin.manage") && (

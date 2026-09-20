@@ -1,9 +1,11 @@
 // app/index.tsx
 import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionContext";
+import { Button } from "@/components/admin/ui";
+import { Ionicons } from "@expo/vector-icons";
 import { Redirect } from "expo-router";
 import { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import "./global.css";
 
 /**
@@ -16,10 +18,15 @@ import "./global.css";
  *
  * Both shells stay reachable either way, so an operator who also flies birds can
  * cross over without signing out.
+ *
+ * The one case that is not a redirect: the server could not be asked and there
+ * is no cached answer for this account. Guessing there means either stranding a
+ * breeder in an admin shell or, far more likely, telling an organiser their
+ * access is gone. Neither is worth guessing, so it asks to try again instead.
  */
 export default function Index() {
   const { user, isLoading, checkSession } = useAuth();
-  const { isAdminCapable, isLoading: permsLoading } = usePermissions();
+  const { isAdminCapable, isLoading: permsLoading, isUnknown, refresh } = usePermissions();
 
   useEffect(() => {
     const verifySession = async () => {
@@ -46,6 +53,24 @@ export default function Index() {
   }
 
   if (!user) return <Redirect href="/(auth)/login" />;
+
+  if (isUnknown) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white px-8">
+        <Ionicons name="cloud-offline-outline" size={32} color="#94a3b8" />
+        <Text className="mt-4 text-center text-base font-medium text-slate-900">
+          Could not check your access
+        </Text>
+        <Text className="mt-2 text-center text-sm text-slate-500">
+          The portal did not answer, and this device has not seen your access before. Check you are
+          on the same network as it, then try again.
+        </Text>
+        <View className="mt-5 w-48">
+          <Button label="Try again" onPress={refresh} full />
+        </View>
+      </View>
+    );
+  }
 
   return <Redirect href={isAdminCapable ? "/(admin)/dashboard" : "/(app)/home"} />;
 }

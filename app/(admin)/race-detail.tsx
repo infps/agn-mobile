@@ -13,6 +13,8 @@ import { Ionicons } from "@expo/vector-icons";
 import api from "@/service/api.service";
 import { usePermissions } from "@/context/PermissionContext";
 import { useResponsive } from "@/hooks/useResponsive";
+import { PhantomSheet } from "@/components/admin/PhantomSheet";
+import { RaceTrackMap } from "@/components/RaceTrackMap";
 
 interface Race {
   id: number;
@@ -40,11 +42,61 @@ interface RaceItem {
   prizeValue: number | null;
   arrivalTime: string | null;
   bird?: {
+    // Needed to match an unmatched tag back to a bird; the route returns the
+    // whole Bird row, so it is there even though the list itself never shows it.
+    id?: number;
     band?: string | null;
     birdName?: string | null;
     breeder?: { firstName?: string | null; lastName?: string | null } | null;
   };
   eventInventoryItem?: { eventInventory?: { loft?: string | null } | null };
+}
+
+/**
+ * One control on the race.
+ *
+ * At module scope rather than inside the screen: a component declared during
+ * render is a fresh type every time, so React tears the buttons down and
+ * rebuilds them on each poll of the arrivals list — which on a live race is
+ * every twenty seconds, under somebody's thumb.
+ */
+function Action({
+  label,
+  icon,
+  onPress,
+  tone = "neutral",
+  busy,
+  isWide,
+}: {
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+  tone?: "neutral" | "primary" | "danger";
+  /** The label of whichever action is currently running, or null. */
+  busy: string | null;
+  isWide: boolean;
+}) {
+  const running = busy === label;
+  const bg = tone === "primary" ? "bg-blue-600" : tone === "danger" ? "bg-rose-600" : "bg-white";
+  const border = tone === "neutral" ? "border border-slate-200" : "";
+  const fg = tone === "neutral" ? "text-slate-700" : "text-white";
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={busy != null}
+      className={`flex-row items-center justify-center gap-2 rounded-xl px-4 py-3 ${bg} ${border} ${
+        busy != null && !running ? "opacity-40" : ""
+      }`}
+      style={{ flexGrow: 1, flexBasis: isWide ? "23%" : "47%" }}
+    >
+      {running ? (
+        <ActivityIndicator size="small" color={tone === "neutral" ? "#334155" : "#fff"} />
+      ) : (
+        <Ionicons name={icon} size={16} color={tone === "neutral" ? "#334155" : "#ffffff"} />
+      )}
+      <Text className={`text-sm font-medium ${fg}`}>{label}</Text>
+    </Pressable>
+  );
 }
 
 /**
@@ -67,6 +119,7 @@ export default function AdminRaceDetail() {
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [phantomsOpen, setPhantomsOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!raceId) return;
@@ -144,41 +197,6 @@ export default function AdminRaceDetail() {
   const arrived = items.filter((i) => i.arrivalTime != null);
   const canManage = can("races.manage");
 
-  const Action = ({
-    label,
-    icon,
-    onPress,
-    tone = "neutral",
-  }: {
-    label: string;
-    icon: keyof typeof Ionicons.glyphMap;
-    onPress: () => void;
-    tone?: "neutral" | "primary" | "danger";
-  }) => {
-    const running = busy === label;
-    const bg =
-      tone === "primary" ? "bg-blue-600" : tone === "danger" ? "bg-rose-600" : "bg-white";
-    const border = tone === "neutral" ? "border border-slate-200" : "";
-    const fg = tone === "neutral" ? "text-slate-700" : "text-white";
-    return (
-      <Pressable
-        onPress={onPress}
-        disabled={busy != null}
-        className={`flex-row items-center justify-center gap-2 rounded-xl px-4 py-3 ${bg} ${border} ${
-          busy != null && !running ? "opacity-40" : ""
-        }`}
-        style={{ flexGrow: 1, flexBasis: isWide ? "23%" : "47%" }}
-      >
-        {running ? (
-          <ActivityIndicator size="small" color={tone === "neutral" ? "#334155" : "#fff"} />
-        ) : (
-          <Ionicons name={icon} size={16} color={tone === "neutral" ? "#334155" : "#ffffff"} />
-        )}
-        <Text className={`text-sm font-medium ${fg}`}>{label}</Text>
-      </Pressable>
-    );
-  };
-
   return (
     <ScrollView
       style={{ padding: gutter }}
@@ -246,6 +264,8 @@ export default function AdminRaceDetail() {
           <View className="flex-row flex-wrap" style={{ gap: 10 }}>
             {race.status === "REGISTERING" && (
               <Action
+                busy={busy}
+                isWide={isWide}
                 label="Liberate"
                 icon="paper-plane-outline"
                 tone="primary"
@@ -260,6 +280,8 @@ export default function AdminRaceDetail() {
             )}
             {race.status === "STARTED" && (
               <Action
+                busy={busy}
+                isWide={isWide}
                 label="End race"
                 icon="flag-outline"
                 tone="danger"
@@ -274,12 +296,16 @@ export default function AdminRaceDetail() {
             )}
             {race.transportStatus == null || race.transportStatus === "IDLE" ? (
               <Action
+                busy={busy}
+                isWide={isWide}
                 label="Start transport"
                 icon="bus-outline"
                 onPress={() => act("Start transport", `/admin/race/${race.id}/transport/start`)}
               />
             ) : (
               <Action
+                busy={busy}
+                isWide={isWide}
                 label="Stop transport"
                 icon="bus-outline"
                 onPress={() => act("Stop transport", `/admin/race/${race.id}/transport/stop`)}
@@ -287,6 +313,8 @@ export default function AdminRaceDetail() {
             )}
             {can("races.recalculate") && (
               <Action
+                busy={busy}
+                isWide={isWide}
                 label="Recalculate"
                 icon="refresh-outline"
                 onPress={() =>
@@ -300,14 +328,30 @@ export default function AdminRaceDetail() {
             )}
             {can("checkin.manage") && (
               <Action
+                busy={busy}
+                isWide={isWide}
                 label="Scan arrivals"
                 icon="scan-outline"
                 onPress={() => router.push(`/(admin)/checkin?raceId=${race.id}` as never)}
               />
             )}
+            <Action
+              busy={busy}
+              isWide={isWide}
+              label="Unmatched tags"
+              icon="help-circle-outline"
+              onPress={() => setPhantomsOpen(true)}
+            />
           </View>
         </>
       )}
+
+      {race.transportStatus && race.transportStatus !== "IDLE" ? (
+        <>
+          <Text className="mb-2 mt-6 text-base font-semibold text-slate-900">Transport</Text>
+          <RaceTrackMap raceId={race.id} height={240} live={race.status !== "ENDED"} />
+        </>
+      ) : null}
 
       <Text className="mb-2 mt-6 text-base font-semibold text-slate-900">
         Arrivals {arrived.length > 0 ? `(${arrived.length})` : ""}
@@ -373,6 +417,14 @@ export default function AdminRaceDetail() {
           )}
         </View>
       )}
+
+      <PhantomSheet
+        open={phantomsOpen}
+        onClose={() => setPhantomsOpen(false)}
+        raceId={race.id}
+        items={items}
+        onResolved={load}
+      />
 
       <View style={{ height: 32 }} />
     </ScrollView>

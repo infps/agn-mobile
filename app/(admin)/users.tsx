@@ -4,7 +4,11 @@ import api from "@/service/api.service";
 import { usePermissions } from "@/context/PermissionContext";
 import { useToast } from "@/context/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
+import { UserAccessSheet } from "@/components/admin/UserAccessSheet";
+import { UserEditSheet } from "@/components/admin/UserEditSheet";
 import {
+  Button,
+  ButtonRow,
   Empty,
   Loading,
   NoAccess,
@@ -36,8 +40,13 @@ type Tab = "pending" | "all";
  * Approving a sign-up is a yes-or-no with no configuration behind it, which is
  * exactly the kind of thing that should not wait for somebody to get back to a
  * desk — a breeder who cannot get in on the morning of an event is a phone call
- * either way. Everything else about an account, roles and permissions included,
- * stays in the portal where there is room to see the consequences.
+ * either way.
+ *
+ * Roles and permissions are reachable from the full list rather than the
+ * pending one, because they are a different job: approving decides whether
+ * somebody gets in at all, assigning decides what they can do once they are.
+ * Mixing the two into one screen is how an approval turns into an accidental
+ * promotion.
  *
  * Pending comes first because that is the list with work in it.
  */
@@ -48,6 +57,11 @@ export default function AdminUsers() {
   const [tab, setTab] = useState<Tab>("pending");
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [accessFor, setAccessFor] = useState<User | null>(null);
+  const [editing, setEditing] = useState<User | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const canAssign = can("users.permissions");
+  const canEdit = can("users.manage");
 
   const pending = useAdminData<{ users?: User[]; counts?: Record<string, number> }>(
     "/admin/users/approval?status=PENDING"
@@ -148,6 +162,18 @@ export default function AdminUsers() {
           <View className="mt-2">
             <SearchBar value={query} onChange={setQuery} placeholder="Name or email" />
           </View>
+          {canEdit ? (
+            <ButtonRow>
+              <Button
+                label="Add a breeder"
+                icon="person-add-outline"
+                onPress={() => {
+                  setEditing(null);
+                  setEditorOpen(true);
+                }}
+              />
+            </ButtonRow>
+          ) : null}
         </>
       }
     >
@@ -224,6 +250,15 @@ export default function AdminUsers() {
                     rightTone={
                       u.approvalStatus === "PENDING" ? "text-amber-600" : "text-slate-600"
                     }
+                    onPress={canAssign ? () => setAccessFor(u) : undefined}
+                    onLongPress={
+                      canEdit
+                        ? () => {
+                            setEditing(u);
+                            setEditorOpen(true);
+                          }
+                        : undefined
+                    }
                   />
                 ))}
               </Rows>
@@ -232,6 +267,25 @@ export default function AdminUsers() {
           </View>
         </>
       )}
+
+      <UserEditSheet
+        open={editorOpen}
+        editing={editing}
+        onClose={() => setEditorOpen(false)}
+        onSaved={() => {
+          all.reload();
+          pending.reload();
+        }}
+      />
+
+      <UserAccessSheet
+        user={accessFor}
+        onClose={() => setAccessFor(null)}
+        onChanged={() => {
+          all.reload();
+          pending.reload();
+        }}
+      />
     </Screen>
   );
 }

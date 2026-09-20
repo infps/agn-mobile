@@ -23,7 +23,21 @@ import { useResponsive } from "@/hooks/useResponsive";
  * every list has (loading, empty, refused).
  *
  * Sections are then mostly a fetch and a row renderer.
+ *
+ * The pieces for *acting* on what is rendered — buttons, fields, sheets, the
+ * confirm step — live in `actions.tsx` and are re-exported below, so a section
+ * still imports from one place.
  */
+
+export {
+  Button,
+  ButtonRow,
+  Field,
+  Sheet,
+  ChoiceList,
+  Confirm,
+  type Choice,
+} from "./actions";
 
 /** Uniform money, with digits that line up in a column. */
 export const money = (n: number | null | undefined) =>
@@ -155,6 +169,7 @@ export function Row({
   rightSub,
   rightTone = "text-slate-600",
   onPress,
+  onLongPress,
   leading,
   badge,
 }: {
@@ -164,6 +179,8 @@ export function Row({
   rightSub?: string | null;
   rightTone?: string;
   onPress?: () => void;
+  /** The second, rarer thing a row can do — editing, usually. */
+  onLongPress?: () => void;
   leading?: ReactNode;
   badge?: { label: string; bg: string; text: string } | null;
 }) {
@@ -199,7 +216,12 @@ export function Row({
     </View>
   );
 
-  return onPress ? <Pressable onPress={onPress}>{body}</Pressable> : body;
+  if (!onPress && !onLongPress) return body;
+  return (
+    <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={400}>
+      {body}
+    </Pressable>
+  );
 }
 
 export function SearchBar({

@@ -3,7 +3,13 @@ import { Pressable, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAdminData } from "@/hooks/useAdminData";
+import { usePermissions } from "@/context/PermissionContext";
+import { useToast } from "@/context/ToastContext";
+import { CsvImportSheet } from "@/components/admin/CsvImportSheet";
+import { downloadAndShare } from "@/service/download.service";
 import {
+  Button,
+  ButtonRow,
   Empty,
   Figure,
   FigureRow,
@@ -59,7 +65,12 @@ export default function EventBirds() {
   const [filter, setFilter] = useState<Filter>("all");
   const router = useRouter();
 
-  const { data, loading, refreshing, forbidden, error, refresh } = useAdminData<{
+  const { can } = usePermissions();
+  const toast = useToast();
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const { data, loading, refreshing, forbidden, error, refresh, reload } = useAdminData<{
     eventInventoryItems?: Item[];
   }>(eventId ? `/admin/event/${eventId}/event-inventory-items` : null, [eventId]);
 
@@ -98,6 +109,34 @@ export default function EventBirds() {
       header={
         <>
           <SearchBar value={query} onChange={setQuery} placeholder="Band, name, loft or breeder" />
+          {can("birds.manage") ? (
+            <ButtonRow>
+              <Button
+                label="Import CSV"
+                tone="secondary"
+                icon="cloud-upload-outline"
+                onPress={() => setImporting(true)}
+                full
+              />
+              <Button
+                label="Export"
+                tone="secondary"
+                icon="download-outline"
+                pending={exporting}
+                onPress={async () => {
+                  setExporting(true);
+                  const stamp = new Date().toISOString().slice(0, 10);
+                  const res = await downloadAndShare(
+                    `/admin/event/${eventId}/export-birds`,
+                    `birds-${eventId}-${stamp}.csv`
+                  );
+                  setExporting(false);
+                  if (!res.ok && res.problem) toast.error(res.problem);
+                }}
+                full
+              />
+            </ButtonRow>
+          ) : null}
           <View className="mt-2 flex-row rounded-xl border border-slate-200 bg-white p-1">
             {FILTERS.map((f) => {
               const active = f.key === filter;
@@ -182,6 +221,21 @@ export default function EventBirds() {
           </View>
         </>
       )}
+
+      <CsvImportSheet
+        open={importing}
+        onClose={() => setImporting(false)}
+        onImported={reload}
+        title="Import birds"
+        previewPath={`/admin/event/${eventId}/import-birds/preview`}
+        commitPath={`/admin/event/${eventId}/import-birds/commit`}
+        describe={(row) => ({
+          title: (row.band as string) || (row.birdName as string) || "No band",
+          subtitle:
+            [row.color as string, row.breederName as string].filter(Boolean).join(" · ") ||
+            undefined,
+        })}
+      />
     </Screen>
   );
 }
