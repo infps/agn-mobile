@@ -12,6 +12,7 @@ import {
 } from "react";
 import { Alert } from "react-native";
 import api from "../service/api.service";
+import { registerForPush, unregisterPush } from "../service/push.service";
 
 export interface User {
   id: string;
@@ -79,6 +80,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (userData) {
         setToken(storedToken);
         setUser(userData);
+        // A reinstall or a restore issues a new push token, so a restored
+        // session re-registers rather than assuming the old one still works.
+        registerForPush();
       }
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -183,6 +187,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setToken(token);
       setUser(userData);
 
+      // Now that the account is known and the bearer header is set, tell the
+      // portal where to reach this phone. Deliberately not awaited: the sign-in
+      // is finished, and a permission prompt must not hold up the redirect.
+      registerForPush();
+
       // Back to the index rather than straight to the breeder home: the index
       // is where the admin-or-breeder decision is made, and jumping past it
       // landed every operator in the breeder app after signing in.
@@ -225,6 +234,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Sign out function
   const signOut = useCallback(async () => {
     try {
+      // Before the bearer token is cleared, or this cannot authenticate. On a
+      // shared handset the next person would otherwise keep receiving the
+      // previous one's announcements.
+      await unregisterPush();
+
       // Notify server
       try {
         await api.post("/auth/sign-out");

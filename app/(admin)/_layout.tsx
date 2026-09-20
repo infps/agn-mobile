@@ -162,13 +162,6 @@ export default function AdminLayout() {
               ))}
             </ScrollView>
 
-            <Pressable
-              onPress={() => router.replace("/(app)/home")}
-              className="mb-4 mt-2 flex-row items-center gap-2 rounded-lg px-3 py-2.5"
-            >
-              <Ionicons name="swap-horizontal-outline" size={18} color="#64748b" />
-              <Text className="text-sm text-slate-500">Breeder view</Text>
-            </Pressable>
           </View>
         )}
 

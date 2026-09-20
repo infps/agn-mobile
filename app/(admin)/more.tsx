@@ -94,19 +94,6 @@ export default function AdminMore() {
         ))}
       </View>
 
-      <Pressable
-        onPress={() => router.replace("/(app)/home")}
-        className="mt-4 flex-row items-center gap-3 rounded-xl border border-slate-200 bg-white p-4"
-      >
-        <View className="h-9 w-9 items-center justify-center rounded-lg bg-slate-100">
-          <Ionicons name="swap-horizontal-outline" size={18} color="#475569" />
-        </View>
-        <View className="flex-1">
-          <Text className="font-medium text-slate-900">Breeder view</Text>
-          <Text className="text-xs text-slate-500">Your own birds and events</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
-      </Pressable>
 
       {/* Stated plainly, because "why can I not see X" is the most common
           question an operator has and the answer is usually here. */}
