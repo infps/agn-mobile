@@ -1,11 +1,14 @@
 import Header from "@/components/header";
 import api from "@/service/api.service";
+import { Ionicons } from "@expo/vector-icons";
 import { format } from "date-fns";
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { FlatList, Text, View } from "react-native";
+import { FlatList, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const MyEvent = () => {
+  const router = useRouter();
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -59,7 +62,13 @@ const MyEvent = () => {
         <FlatList
           data={events}
           renderItem={({ item, index }) => (
-            <View className="flex-row justify-between p-4 border-b mx-2 border-gray-200">
+            <TouchableOpacity
+              className="flex-row justify-between p-4 border-b mx-2 border-gray-200 items-center"
+              onPress={() => router.push({
+                pathname: "/my-registration",
+                params: { eventId: item.event?.eventId ?? item.event?.id, eventName: item.event?.name },
+              })}
+            >
               <View className="w-16">
                 <Text className="text-sm">{index + 1}</Text>
               </View>
@@ -78,10 +87,11 @@ const MyEvent = () => {
                   {item?.reservedBirds || "0"}
                 </Text>
               </View>
-              <View className="w-[20%]">
+              <View className="w-[15%]">
                 <Text className="text-sm text-center">{item?.loft || "0"}</Text>
               </View>
-            </View>
+              <Ionicons name="chevron-forward" size={14} color="#9CA3AF" />
+            </TouchableOpacity>
           )}
           keyExtractor={(_, index) => index.toString()}
           ListEmptyComponent={() => (

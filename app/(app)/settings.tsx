@@ -23,7 +23,8 @@ const settingOption1: {
     | "/teams"
     | "/birds"
     | "/result"
-    | "/notifications";
+    | "/notifications"
+    | "/messages";
 }[] = [
   {
     title: "Events",
@@ -73,6 +74,11 @@ const settingOption1: {
     title: "Notifications",
     icon: <Ionicons name="notifications-outline" size={24} />,
     link: "/notifications",
+  },
+  {
+    title: "Messages",
+    icon: <Ionicons name="chatbubble-ellipses-outline" size={24} />,
+    link: "/messages",
   },
 ];
 

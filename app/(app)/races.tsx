@@ -122,10 +122,9 @@ const Race = () => {
             return (
               <Pressable
                 onPress={() =>
-                  router.push({
-                    pathname: "/live-race",
-                    params: { raceId: String(item.id) },
-                  })
+                  item.status === "ENDED"
+                    ? router.push({ pathname: "/result-detail", params: { raceId: String(item.id), name: item.name ?? `Race ${item.raceNumber ?? item.id}` } })
+                    : router.push({ pathname: "/live-race", params: { raceId: String(item.id) } })
                 }
                 className="rounded-xl border border-gray-200 bg-white p-4"
                 style={{ flex: 1 }}

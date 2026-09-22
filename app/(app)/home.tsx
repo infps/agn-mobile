@@ -1,9 +1,11 @@
 import Carousel from "@/components/carousel";
 import { useEvents } from "@/context";
 import { EventType } from "@/context/EventContext";
+import api from "@/service/api.service";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Link, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   FlatList,
   Image,
@@ -22,9 +24,24 @@ const pedigree = [
   { id: "5", name: "XYZ" },
 ];
 
+const QUICK_ACTIONS = [
+  { label: "My Events", icon: "calendar-outline" as const, href: "/my-events" },
+  { label: "My Birds", icon: "paw-outline" as const, href: "/birds" },
+  { label: "Payments", icon: "card-outline" as const, href: "/payments" },
+];
+
 export default function HomeScreen() {
   const { events, loading, error } = useEvents();
   const router = useRouter();
+
+  const [messages, setMessages] = useState<any[]>([]);
+  const [msgsLoading, setMsgsLoading] = useState(true);
+  useEffect(() => {
+    api.get("/breeder/messages?limit=3")
+      .then((r) => setMessages(r.data?.messages ?? []))
+      .catch(() => {})
+      .finally(() => setMsgsLoading(false));
+  }, []);
 
   // Split events into ongoing and upcoming
   const categorizeEvents = (events: EventType[]) => {
@@ -78,6 +95,20 @@ export default function HomeScreen() {
               className="flex-1 text-gray-700 p-0 my-0 mx-0"
             />
           </View>
+        </View>
+
+        {/* QUICK ACTIONS */}
+        <View className="px-4 mt-4 flex-row gap-3">
+          {QUICK_ACTIONS.map((a) => (
+            <TouchableOpacity
+              key={a.href}
+              onPress={() => router.push(a.href as any)}
+              className="flex-1 bg-white border border-gray-200 rounded-xl items-center py-3 gap-1"
+            >
+              <Ionicons name={a.icon} size={22} color="#189AB4" />
+              <Text className="text-[10px] text-gray-700 font-medium text-center">{a.label}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         {/* BANNER */}
@@ -197,6 +228,33 @@ export default function HomeScreen() {
           ) : (
             <Carousel data={upcoming?.slice(0, 5)} />
           )}
+          </View>
+        )}
+
+        {/* ANNOUNCEMENTS */}
+        {(msgsLoading || messages.length > 0) && (
+          <View className="mt-8 mb-4">
+            <View className="flex-row justify-between items-center px-4 mb-3">
+              <Text className="text-xl font-bold">Announcements</Text>
+              <TouchableOpacity onPress={() => router.push("/messages" as any)}>
+                <Text className="text-blue-500">See All</Text>
+              </TouchableOpacity>
+            </View>
+            {msgsLoading ? (
+              [0, 1, 2].map((i) => (
+                <View key={i} className="mx-4 mb-2 h-16 bg-gray-200 rounded-xl" />
+              ))
+            ) : (
+              messages.map((m) => (
+                <View key={m.id} className="mx-4 mb-2 bg-white border border-gray-100 rounded-xl p-3">
+                  <Text className="font-semibold text-gray-900" numberOfLines={1}>{m.title ?? m.event?.name ?? "Announcement"}</Text>
+                  <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={2}>{m.body ?? m.content ?? ""}</Text>
+                  <Text className="text-[10px] text-gray-400 mt-1">
+                    {m.createdAt ? new Date(m.createdAt).toLocaleDateString() : ""}
+                  </Text>
+                </View>
+              ))
+            )}
           </View>
         )}
       </ScrollView>
