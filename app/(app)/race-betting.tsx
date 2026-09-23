@@ -94,7 +94,11 @@ const RaceBetting = () => {
     }
   };
 
-  const bettingOpen = data?.raceStatus === "REGISTERING";
+  // Race must be REGISTERING to bet at all. Within that: own birds always
+  // bettable; other birds only once admin opens the pool (data.bettingOpen).
+  const registering = data?.raceStatus === "REGISTERING";
+  const canBet = (bird: BirdEntry) =>
+    registering && (bird.isOwnBird || !!data?.bettingOpen);
 
   if (loading) {
     return (
@@ -108,9 +112,16 @@ const RaceBetting = () => {
     <SafeAreaView className="flex-1 bg-[#f5f5f5]">
       <Header title="Race Betting" />
 
-      {!bettingOpen && (
+      {!registering && (
         <View className="mx-4 mt-3 bg-red-500 rounded-lg px-4 py-3">
           <Text className="text-white font-bold text-center">Betting Closed</Text>
+        </View>
+      )}
+      {registering && !data?.bettingOpen && (
+        <View className="mx-4 mt-3 bg-amber-500 rounded-lg px-4 py-3">
+          <Text className="text-white font-bold text-center">
+            Open betting not started — you can only bet your own birds
+          </Text>
         </View>
       )}
 
@@ -158,7 +169,7 @@ const RaceBetting = () => {
                 </View>
               )}
 
-              {bettingOpen && pools.length > 0 && (
+              {canBet(item) && pools.length > 0 && (
                 <TouchableOpacity
                   className="bg-primary rounded px-3 py-1.5 self-start"
                   onPress={() => setPickerBird(item)}
