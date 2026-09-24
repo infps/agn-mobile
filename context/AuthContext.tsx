@@ -174,12 +174,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         username,
         password,
       });
-      const { token } = loginResponse.data;
+      const { token, user: loginUser } = loginResponse.data;
 
       (api as any).defaults.headers.common["Authorization"] = `Bearer ${token}`;
 
-      const profileResponse = await api.get("/user/profile");
-      const userData = profileResponse.data.user;
+      // Fetch full profile (role, approvalStatus, custom fields) — sign-in
+      // returns a stripped user object, so we need the profile endpoint.
+      // If the fetch fails (cold DB), fall back to what sign-in gave us.
+      let userData = loginUser;
+      try {
+        const profileResponse = await api.get("/user/profile");
+        if (profileResponse.data.user) userData = profileResponse.data.user;
+      } catch {
+        // profile fetch failed — proceed with sign-in user data
+      }
 
       await SecureStorageService.setTokens(token, "ACCESS_TOKEN");
       await SecureStorageService.setUserData(userData);

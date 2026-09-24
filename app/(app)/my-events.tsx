@@ -44,7 +44,7 @@ const MyEvent = () => {
           <Text className="font-bold text-sm text-white">Reserved Birds</Text>
         </View>
         <View className="w-18">
-          <Text className="font-bold text-sm text-white">Loft</Text>
+          <Text className="font-bold text-sm text-white">Basket</Text>
         </View>
       </View>
       {loading ? (
@@ -88,7 +88,12 @@ const MyEvent = () => {
                 </Text>
               </View>
               <View className="w-[15%]">
-                <Text className="text-sm text-center">{item?.loft || "0"}</Text>
+                <Text className="text-sm text-center font-mono">
+                  {item?.items
+                    ?.flatMap((i: any) => i.basketAssignments ?? [])
+                    ?.find((a: any) => a.eventBasket?.phase === "LOFT")
+                    ?.eventBasket?.label ?? item?.loft ?? "—"}
+                </Text>
               </View>
               <Ionicons name="chevron-forward" size={14} color="#9CA3AF" />
             </TouchableOpacity>
