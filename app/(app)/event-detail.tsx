@@ -1,5 +1,4 @@
 import Header from "@/components/header";
-import { useEvents } from "@/context";
 import api from "@/service/api.service";
 import { Ionicons } from "@expo/vector-icons";
 import { format } from "date-fns";
@@ -20,14 +19,38 @@ type Tab = (typeof TABS)[number];
 
 const EventDetail = () => {
   const { id } = useLocalSearchParams();
-  const { getEvent, currentEvent, getEventParticipants, participants, loading } = useEvents();
+  const [currentEvent, setCurrentEvent] = useState<any>(null);
+  const [participants, setParticipants] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("Overview");
 
   useEffect(() => {
-    if (id) {
-      getEvent(id as string);
-      getEventParticipants(id as string);
-    }
+    if (!id) return;
+    setLoading(true);
+    setCurrentEvent(null);
+    setParticipants([]);
+    Promise.all([
+      api.get(`/breeder/events/${id}`).then((r) => setCurrentEvent(r.data.event)),
+      api.get(`/breeder/event/${id}/inventory-items`).then((r) => {
+        const items = r.data.eventInventoryItems ?? [];
+        const map = new Map<number, any>();
+        for (const item of items) {
+          const inv = item.eventInventory;
+          const key = inv?.breederId;
+          if (!key) continue;
+          if (!map.has(key)) {
+            map.set(key, {
+              id: inv.id,
+              breederName: `${inv.breeder?.firstName ?? ""} ${inv.breeder?.lastName ?? ""}`.trim() || "Unknown",
+              loft: inv.loft || "N/A",
+              birds: [],
+            });
+          }
+          if (item.bird) map.get(key)!.birds.push(item.bird);
+        }
+        setParticipants(Array.from(map.values()));
+      }).catch(() => {}),
+    ]).finally(() => setLoading(false));
   }, [id]);
 
   return (
@@ -60,19 +83,29 @@ const EventDetail = () => {
         </View>
       </View>
 
-      {/* Live race button */}
-      {currentEvent?.races?.some((r) => !!r.startTime && r.isClosed !== 1) && (
-        <TouchableOpacity
-          className="mx-4 mt-3 bg-red-500 py-3 rounded-lg flex-row items-center justify-center gap-2"
-          onPress={() => {
-            const liveRace = currentEvent.races?.find((r) => !!r.startTime && r.isClosed !== 1);
-            if (liveRace) router.push({ pathname: "/live-race", params: { raceId: String(liveRace.id) } });
-          }}
-        >
-          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#fff" }} />
-          <Text className="text-white font-bold text-base">Watch Live Race</Text>
-        </TouchableOpacity>
-      )}
+      {/* Action buttons */}
+      <View style={{ flexDirection: "row", marginHorizontal: 16, marginTop: 12, gap: 8 }}>
+        {currentEvent?.isOpen === 1 && (
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: "#189AB4", paddingVertical: 12, borderRadius: 8, alignItems: "center" }}
+            onPress={() => router.push({ pathname: "/register-in-event", params: { eventId: String(id) } } as any)}
+          >
+            <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Register</Text>
+          </TouchableOpacity>
+        )}
+        {currentEvent?.races?.some((r: any) => !!r.startTime && r.isClosed !== 1) && (
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: "#ef4444", paddingVertical: 12, borderRadius: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}
+            onPress={() => {
+              const liveRace = currentEvent.races?.find((r: any) => !!r.startTime && r.isClosed !== 1);
+              if (liveRace) router.push({ pathname: "/live-race", params: { raceId: String(liveRace.id) } });
+            }}
+          >
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#fff" }} />
+            <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Watch Live</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       {/* Tab bar */}
       <ScrollView

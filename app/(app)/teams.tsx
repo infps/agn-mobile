@@ -32,13 +32,14 @@ const Teams = () => {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
+  const [showConstraints, setShowConstraints] = useState(false);
 
   useEffect(() => {
     getBreederTeams();
   }, [user?.id]);
   const getBreederTeams = async () => {
     try {
-      const res = await api.get("/breeder/teams", { params: { breederId: user?.id } });
+      const res = await api.get("/breeder/teams");
       if (res?.data) {
         setTeams(res?.data?.teams);
         setLoading(false);
@@ -49,21 +50,25 @@ const Teams = () => {
     }
   };
   const addTeam = async () => {
+    if (team.name === "") {
+      toast.error("Team name is required");
+      return;
+    }
     try {
-      if (team.name === "") {
-        toast.success("Team name is required");
-        return;
-      }
       const res = await api.post("/breeder/teams", {
-        breederId: user?.id,
         name: team.name,
       });
       if (res.data) {
         toast.success("Team added successfully");
+        setOpen(false);
+        setTeam({ breederId: null, id: null, name: "" });
+        setShowConstraints(false);
         getBreederTeams();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.log(err);
+      const serverMsg = err.response?.data?.message;
+      toast.error(serverMsg || "Network issue. Try again later or contact the event admin directly.");
     }
   };
   const deleteTeam = async (teamId: string | number) => {
@@ -152,7 +157,22 @@ const Teams = () => {
         )}
       </View>
       <Modal open={open} setOpen={setOpen}>
-        <Text className="text-2xl font-bold">Add Bird</Text>
+        <View className="flex-row items-center">
+          <Text className="text-2xl font-bold">Add Team</Text>
+          <TouchableOpacity
+            className="ml-2 w-5 h-5 rounded-full bg-gray-300 items-center justify-center"
+            onPress={() => setShowConstraints((v) => !v)}
+          >
+            <Text className="text-xs text-gray-700 font-bold">?</Text>
+          </TouchableOpacity>
+        </View>
+        {showConstraints && (
+          <View className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <Text className="text-sm text-blue-800 font-semibold mb-1">Team name rules:</Text>
+            <Text className="text-sm text-blue-700">• Must not be empty</Text>
+            <Text className="text-sm text-blue-700">• Must be unique — you cannot have two teams with the same name</Text>
+          </View>
+        )}
         <View className="mt-2">
           <Text className="text-lg">Team Name</Text>
           <TextInput
@@ -172,11 +192,8 @@ const Teams = () => {
             className="bg-primary p-2 rounded-xl items-center"
             onPress={() => {
               setOpen(false);
-              setTeam({
-                breederId: null,
-                id: null,
-                name: "",
-              });
+              setShowConstraints(false);
+              setTeam({ breederId: null, id: null, name: "" });
             }}
           >
             <Text className="text-white">Cancel</Text>

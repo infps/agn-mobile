@@ -1,6 +1,7 @@
 import Header from "@/components/header";
+import Modal from "@/components/Modal";
 import PayPalButton from "@/components/PayPalButton";
-import { getSexLabel } from "@/constants/bird";
+import { SEX_OPTIONS, getSexLabel } from "@/constants/bird";
 import { useAuth, useBirds, useToast } from "@/context";
 import { BirdType } from "@/context/BirdContext";
 import { EventType, useEvents } from "@/context/EventContext";
@@ -19,6 +20,41 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+const FEDERATIONS = ["AU", "IF", "NPA", "CU", "BB", "ARPU", "IPB"];
+const COLORS = ["BB","BC","BBWF","BBPD","BCWF","BCPD","SPLA","CHOC","RC","SIL","RCSP","RR","BLK","OPAL","SLAT","PENC","WHIT","GRIZ","DC","DCWF"];
+
+function InlineDropdown({ label, value, options, onChange }: { label: string; value: string; options: { value: string; label: string }[] | string[]; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const normalized = options.map((o) => typeof o === "string" ? { value: o, label: o } : o);
+  const selected = normalized.find((o) => o.value === value)?.label || "Select";
+  return (
+    <View style={{ flex: 1 }}>
+      <Text style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>{label}</Text>
+      <TouchableOpacity
+        style={{ borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, padding: 10, backgroundColor: "#fff" }}
+        onPress={() => setOpen(!open)}
+      >
+        <Text style={{ color: value ? "#000" : "#9ca3af" }}>{selected}</Text>
+      </TouchableOpacity>
+      {open && (
+        <View style={{ position: "absolute", top: 60, left: 0, right: 0, backgroundColor: "#fff", borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, zIndex: 100, maxHeight: 200 }}>
+          <ScrollView>
+            {normalized.map((opt) => (
+              <TouchableOpacity
+                key={opt.value}
+                style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: "#f3f4f6", backgroundColor: value === opt.value ? "#e0f2fe" : "#fff" }}
+                onPress={() => { onChange(opt.value); setOpen(false); }}
+              >
+                <Text style={{ color: value === opt.value ? "#189AB4" : "#000" }}>{opt.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+    </View>
+  );
+}
 
 const RegisterInEvent = () => {
   const { eventId } = useLocalSearchParams();
@@ -105,43 +141,16 @@ const RegisterInEvent = () => {
           </Text>
           <View className="flex-row justify-between">
             <View className="w-[31%]">
-              <Text className="mt-6">First Name</Text>
-              <View className="border-2 border-cyan-600 rounded-xl px-2 py-2 bg-gray-50 mt-1">
-                <TextInput
-                  placeholder="First Name"
-                  placeholderTextColor="#9CA3AF"
-                  className="text-[12px] py-0 text-black"
-                  autoCapitalize="none"
-                  editable={false}
-                  value={user?.name?.split(" ")[0] ?? ""}
-                />
-              </View>
+              <Text className="mt-6 text-gray-500 text-xs">First Name</Text>
+              <Text className="text-sm text-black mt-1">{user?.name?.split(" ")[0] ?? "—"}</Text>
             </View>
             <View className="w-[31%]">
-              <Text className="mt-6">Last Name</Text>
-              <View className="border-2 border-cyan-600 rounded-xl px-2 py-2 bg-gray-50 mt-1">
-                <TextInput
-                  placeholder="Last Name"
-                  placeholderTextColor="#9CA3AF"
-                  className="text-[12px] py-0 text-black"
-                  autoCapitalize="none"
-                  editable={false}
-                  value={user?.lastName ?? user?.name?.split(" ").slice(1).join(" ") ?? ""}
-                />
-              </View>
+              <Text className="mt-6 text-gray-500 text-xs">Last Name</Text>
+              <Text className="text-sm text-black mt-1">{user?.lastName ?? user?.name?.split(" ").slice(1).join(" ") ?? "—"}</Text>
             </View>
             <View className="w-[31%]">
-              <Text className="mt-6">Email</Text>
-              <View className="border-2 border-cyan-600 rounded-xl px-2 py-2 bg-gray-50 mt-1">
-                <TextInput
-                  placeholder="Email"
-                  placeholderTextColor="#9CA3AF"
-                  className="text-[12px] py-0 text-black"
-                  autoCapitalize="none"
-                  editable={false}
-                  value={user?.email}
-                />
-              </View>
+              <Text className="mt-6 text-gray-500 text-xs">Email</Text>
+              <Text className="text-sm text-black mt-1">{user?.email ?? "—"}</Text>
             </View>
           </View>
           <Text className="font-bold text-xl mt-6 text-primary">
@@ -151,7 +160,6 @@ const RegisterInEvent = () => {
           <TeamSelect
             selectedValue={selectedTeam}
             onValueChange={(itemValue: any) => setSelectedTeam(itemValue)}
-            breederId={user?.id || ""}
           />
           <SelectBirds
             event={currentEvent}
@@ -238,19 +246,19 @@ const EventCount = ({ event }: { event: EventType }) => {
     </View>
   );
 };
-const TeamSelect = ({ selectedValue, onValueChange, breederId }: any) => {
+const TeamSelect = ({ selectedValue, onValueChange }: any) => {
   const [teams, setTeams] = useState([]);
   useEffect(() => {
     const getTeams = async () => {
       try {
-        const res = await api.get("/breeder/teams", { params: { breederId } });
+        const res = await api.get("/breeder/teams");
         setTeams(res.data.teams);
       } catch (err: any) {
         console.log(err.message);
       }
     };
     getTeams();
-  }, [breederId]);
+  }, []);
   return (
     <View className="mt-1 border-2 border-cyan-600 rounded-xl bg-gray-50">
       <Picker
@@ -272,19 +280,44 @@ const TeamSelect = ({ selectedValue, onValueChange, breederId }: any) => {
   );
 };
 
+const EMPTY_BIRD = { birdName: "", color: "", sex: "0", band1: "", band2: new Date().getFullYear().toString(), band3: "", band4: "" };
+
 const SelectBirds = ({
   event,
   setSelectedBirds,
   selectedBirds,
   toast,
 }: any) => {
-  const { birds, fetchBirds } = useBirds();
+  const { birds, fetchBirds, addBird } = useBirds();
   const maxBirdCount = event?.feeScheme?.maxBirdCount || 0;
-  useEffect(() => {
-    fetchBirds();
-  }, []);
+  const [addOpen, setAddOpen] = useState(false);
+  const [newBird, setNewBird] = useState(EMPTY_BIRD);
+  const [addLoading, setAddLoading] = useState(false);
+
+  useEffect(() => { fetchBirds(); }, []);
+
+  const handleAddNew = async () => {
+    if (!newBird.band1 || !newBird.band3 || !newBird.band4 || !newBird.color) {
+      Alert.alert("Missing fields", "Fill federation, letters, band number and color.");
+      return;
+    }
+    setAddLoading(true);
+    try {
+      const added = await addBird({ ...newBird, sex: parseInt(newBird.sex, 10) || 0 });
+      if (added) {
+        setNewBird(EMPTY_BIRD);
+        setAddOpen(false);
+        await fetchBirds();
+        toast.success("Bird added! Select it below to register.");
+      }
+    } catch {
+      toast.error("Failed to add bird.");
+    } finally {
+      setAddLoading(false);
+    }
+  };
   const handleAddBird = (bird: BirdType) => {
-    if (selectedBirds.length >= maxBirdCount) {
+    if (maxBirdCount > 0 && selectedBirds.length >= maxBirdCount) {
       toast.error(`Maximum ${maxBirdCount} birds allowed for this event`);
       return;
     }
@@ -313,9 +346,83 @@ const SelectBirds = ({
   };
   return (
     <View>
-      <Text className="font-bold text-xl mt-6 text-primary">
-        Bird Information
-      </Text>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 24 }}>
+        <Text className="font-bold text-xl text-primary">Bird Information</Text>
+        <TouchableOpacity
+          style={{ backgroundColor: "#189AB4", flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, gap: 4 }}
+          onPress={() => setAddOpen(true)}
+        >
+          <Text style={{ color: "white", fontWeight: "700", fontSize: 13 }}>+ Add New Bird</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Add Bird Modal */}
+      <Modal open={addOpen} setOpen={setAddOpen}>
+        <Text style={{ fontSize: 20, fontWeight: "700", marginBottom: 12 }}>Add New Bird</Text>
+
+        <Text style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>Bird Name</Text>
+        <TextInput
+          style={{ borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, padding: 10, marginBottom: 12, color: "#000" }}
+          placeholder="Enter bird name"
+          value={newBird.birdName}
+          onChangeText={(t) => setNewBird({ ...newBird, birdName: t })}
+        />
+
+        <Text style={{ fontSize: 15, fontWeight: "600", marginBottom: 8 }}>Band Details</Text>
+
+        <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
+          <InlineDropdown label="Federation" value={newBird.band1} options={FEDERATIONS} onChange={(v) => setNewBird({ ...newBird, band1: v })} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>Year</Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, padding: 10, color: "#000" }}
+              placeholder="2024" keyboardType="numeric" value={newBird.band2}
+              onChangeText={(t) => setNewBird({ ...newBird, band2: t.replace(/[^0-9]/g, "") })}
+            />
+          </View>
+        </View>
+
+        <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>Letters</Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, padding: 10, color: "#000" }}
+              placeholder="ABC" autoCapitalize="characters" value={newBird.band3}
+              onChangeText={(t) => setNewBird({ ...newBird, band3: t.toUpperCase() })}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>Band Number</Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, padding: 10, color: "#000" }}
+              placeholder="12345" value={newBird.band4}
+              onChangeText={(t) => setNewBird({ ...newBird, band4: t })}
+            />
+          </View>
+        </View>
+
+        <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
+          <InlineDropdown label="Color" value={newBird.color} options={COLORS} onChange={(v) => setNewBird({ ...newBird, color: v })} />
+          <InlineDropdown label="Sex" value={newBird.sex} options={SEX_OPTIONS} onChange={(v) => setNewBird({ ...newBird, sex: v })} />
+        </View>
+
+        <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
+          <TouchableOpacity
+            style={{ backgroundColor: "#e5e7eb", paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10 }}
+            onPress={() => { setAddOpen(false); setNewBird(EMPTY_BIRD); }}
+          >
+            <Text style={{ color: "#374151", fontWeight: "600" }}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{ backgroundColor: "#189AB4", paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10, minWidth: 80, alignItems: "center" }}
+            onPress={handleAddNew}
+            disabled={addLoading}
+          >
+            {addLoading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: "white", fontWeight: "700" }}>Save Bird</Text>}
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
       {maxBirdCount > 0 && (
         <View className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <Text className="text-sm text-blue-800">
@@ -345,7 +452,7 @@ const SelectBirds = ({
                 (b: BirdType) => b.id === bird.id
               );
               const isDisabled =
-                !isSelected && selectedBirds.length >= maxBirdCount;
+                !isSelected && maxBirdCount > 0 && selectedBirds.length >= maxBirdCount;
 
               return (
                 <TouchableOpacity
@@ -566,7 +673,7 @@ function PaymentInformation({
               Number of Birds:
             </Text>
             <Text className="font-medium text-sm sm:text-base">
-              {selectedBirds.length} / {event.feeScheme.maxBirdCount}
+              {selectedBirds.length}{event.feeScheme?.maxBirdCount ? ` / ${event.feeScheme.maxBirdCount}` : ""}
             </Text>
           </View>
         </View>

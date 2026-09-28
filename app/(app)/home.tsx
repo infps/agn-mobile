@@ -1,262 +1,313 @@
-import Carousel from "@/components/carousel";
-import { useEvents } from "@/context";
-import { EventType } from "@/context/EventContext";
+import { useAuth, useEvents } from "@/context";
 import api from "@/service/api.service";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { Link, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
-  Image,
+  RefreshControl,
   ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-const pedigree = [
-  { id: "1", name: "XYZ" },
-  { id: "2", name: "XYZ" },
-  { id: "3", name: "XYZ" },
-  { id: "4", name: "XYZ" },
-  { id: "5", name: "XYZ" },
-];
 
-const QUICK_ACTIONS = [
-  { label: "My Events", icon: "calendar-outline" as const, href: "/my-events" },
-  { label: "My Birds", icon: "paw-outline" as const, href: "/birds" },
-  { label: "Payments", icon: "card-outline" as const, href: "/payments" },
-];
+interface LiveRace {
+  id: number;
+  name: string | null;
+  raceNumber: number | null;
+  status: string;
+  startTime: string | null;
+  arrivedCount: number;
+  _count: { raceItems: number };
+  event: { id: number; name: string; shortName: string | null } | null;
+}
+
+interface PendingPayment {
+  id: number;
+  paymentValue: number | null;
+  eventInventory?: { season?: { event?: { name?: string } | null } | null } | null;
+}
 
 export default function HomeScreen() {
-  const { events, loading, error } = useEvents();
+  const { events, loading: eventsLoading, listEvents } = useEvents();
+  const { user } = useAuth();
   const router = useRouter();
 
-  const [messages, setMessages] = useState<any[]>([]);
-  const [msgsLoading, setMsgsLoading] = useState(true);
-  useEffect(() => {
-    api.get("/breeder/messages?limit=3")
-      .then((r) => setMessages(r.data?.messages ?? []))
-      .catch(() => {})
-      .finally(() => setMsgsLoading(false));
-  }, []);
+  const [liveRaces, setLiveRaces] = useState<LiveRace[]>([]);
+  const [birdCount, setBirdCount] = useState<number | null>(null);
+  const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
+  const [totalPending, setTotalPending] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Split events into ongoing and upcoming
-  const categorizeEvents = (events: EventType[]) => {
-    const now = new Date();
-    const ongoing: EventType[] = [];
-    const upcoming: EventType[] = [];
+  const firstName = user?.name?.split(" ")[0] ?? "Breeder";
 
-    events.forEach((event) => {
-      const hasLiveRace = event.races?.some(r => !!r.startTime && r.isClosed !== 1);
-      const eventDate = new Date(event.eventDate);
-      if (hasLiveRace || eventDate < now) {
-        ongoing.push(event);
-      } else {
-        upcoming.push(event);
+  const liveEvents = (events ?? []).filter(
+    (e) => e.races?.some((r) => !!r.startTime && r.isClosed !== 1)
+  );
+  const openEvents = (events ?? []).filter((e) => e.isOpen === 1);
+
+  const load = async () => {
+    try {
+      const [racesRes, birdsRes, paymentsRes] = await Promise.allSettled([
+        api.get("/breeder/races/live"),
+        api.get("/breeder/birds"),
+        api.get("/breeder/payments/pending"),
+      ]);
+
+      if (racesRes.status === "fulfilled") setLiveRaces(racesRes.value.data?.races ?? []);
+      if (birdsRes.status === "fulfilled") setBirdCount(birdsRes.value.data?.birds?.length ?? 0);
+      if (paymentsRes.status === "fulfilled") {
+        setPendingPayments(paymentsRes.value.data?.payments ?? []);
+        setTotalPending(paymentsRes.value.data?.totalPending ?? 0);
       }
-    });
-
-    return { ongoing, upcoming };
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
-  const { ongoing, upcoming } = categorizeEvents(events || []);
+  useEffect(() => { load(); }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    listEvents();
+    load();
+  };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <ScrollView showsVerticalScrollIndicator={false}>
+    <SafeAreaView className="flex-1 bg-gray-50">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
         {/* HEADER */}
-        <View className="px-4 flex-row items-center justify-between">
-          <View className="flex-row">
-            <TouchableOpacity
-              onPress={() => router.push("/settings")}
-              className="mr-2 mt-2"
-            >
+        <View className="px-4 pt-2 flex-row items-center justify-between">
+          <View className="flex-row items-center gap-3">
+            <TouchableOpacity onPress={() => router.push("/settings" as any)}>
               <MaterialIcons name="menu" size={28} color="#000" />
             </TouchableOpacity>
-            <View className="justify-center items-center w-12 h-12 rounded-full bg-black">
-              <Text className=" text-white  text-center">AGN</Text>
+            <View>
+              <Text className="text-xs text-gray-500">Welcome back</Text>
+              <Text className="text-lg font-bold text-gray-900">{firstName}</Text>
             </View>
           </View>
-          <View className="flex-row items-center gap-3">
-            <TouchableOpacity onPress={() => router.push("/notifications")}>
-              <Ionicons name="notifications-outline" size={24} color="#000" />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity onPress={() => router.push("/notifications" as any)}>
+            <Ionicons name="notifications-outline" size={24} color="#000" />
+          </TouchableOpacity>
         </View>
 
-        {/* SEARCH BOX */}
-        <View className="px-4 mt-4">
-          <View className="bg-white rounded-full border border-gray-300 px-4 py-3 flex-row items-center">
-            <TextInput
-              placeholder="Search here"
-              className="flex-1 text-gray-700 p-0 my-0 mx-0"
-            />
-          </View>
+        {/* STAT CARDS */}
+        <View className="px-4 mt-5 flex-row gap-3">
+          {/* Bird count */}
+          <TouchableOpacity
+            className="flex-1 bg-white rounded-2xl p-4 border border-gray-100"
+            onPress={() => router.push("/birds" as any)}
+          >
+            <View className="w-9 h-9 rounded-full bg-blue-50 items-center justify-center mb-2">
+              <Ionicons name="egg-outline" size={18} color="#189AB4" />
+            </View>
+            <Text className="text-2xl font-bold text-gray-900">
+              {loading ? "—" : birdCount ?? 0}
+            </Text>
+            <Text className="text-xs text-gray-500 mt-0.5">Active Birds</Text>
+          </TouchableOpacity>
+
+          {/* Pending payment */}
+          <TouchableOpacity
+            className="flex-1 bg-white rounded-2xl p-4 border border-gray-100"
+            onPress={() => router.push("/payments" as any)}
+          >
+            <View className="w-9 h-9 rounded-full bg-red-50 items-center justify-center mb-2">
+              <Ionicons name="card-outline" size={18} color="#ef4444" />
+            </View>
+            <Text className="text-2xl font-bold text-gray-900">
+              {loading ? "—" : `$${totalPending.toFixed(0)}`}
+            </Text>
+            <Text className="text-xs text-gray-500 mt-0.5">
+              Due · {pendingPayments.length} bill{pendingPayments.length !== 1 ? "s" : ""}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Open events */}
+          <TouchableOpacity
+            className="flex-1 bg-white rounded-2xl p-4 border border-gray-100"
+            onPress={() => router.push("/events" as any)}
+          >
+            <View className="w-9 h-9 rounded-full bg-green-50 items-center justify-center mb-2">
+              <Ionicons name="calendar-outline" size={18} color="#22c55e" />
+            </View>
+            <Text className="text-2xl font-bold text-gray-900">
+              {eventsLoading ? "—" : openEvents.length}
+            </Text>
+            <Text className="text-xs text-gray-500 mt-0.5">Open Events</Text>
+          </TouchableOpacity>
         </View>
 
         {/* QUICK ACTIONS */}
-        <View className="px-4 mt-4 flex-row gap-3">
-          {QUICK_ACTIONS.map((a) => (
+        <View className="px-4 mt-5 flex-row gap-3">
+          {[
+            { label: "My Events", icon: "list-outline" as const, href: "/my-events", color: "#189AB4" },
+            { label: "My Birds", icon: "egg-outline" as const, href: "/birds", color: "#8b5cf6" },
+            { label: "Payments", icon: "card-outline" as const, href: "/payments", color: "#f59e0b" },
+            { label: "Results", icon: "trophy-outline" as const, href: "/result", color: "#10b981" },
+          ].map((a) => (
             <TouchableOpacity
               key={a.href}
               onPress={() => router.push(a.href as any)}
-              className="flex-1 bg-white border border-gray-200 rounded-xl items-center py-3 gap-1"
+              className="flex-1 bg-white border border-gray-100 rounded-xl items-center py-3 gap-1"
             >
-              <Ionicons name={a.icon} size={22} color="#189AB4" />
-              <Text className="text-[10px] text-gray-700 font-medium text-center">{a.label}</Text>
+              <Ionicons name={a.icon} size={20} color={a.color} />
+              <Text className="text-[9px] text-gray-600 font-medium text-center">{a.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* BANNER */}
-        <LinearGradient
-          colors={["#fff", "#dbeafe"]}
-          start={{ x: 0, y: 0.5 }} // Start from the left center
-          end={{ x: 1, y: 0.5 }} // End at the right center
-          className="mt-5 mx-4 rounded-2xl pl-5 flex-row justify-between items-center"
-        >
-          <View>
-            <Text className="text-2xl text-gray-800">
-              TRACK <Text className="text-primary">PIGEONS</Text>
-              {"\n"}WATCH LIVE RESULTS
-            </Text>
-            <Text className="text-gray-600 mt-2 w-56">
-              Experience the thrill of pigeon racing with real-time tracking and
-              results.
-            </Text>
-          </View>
-
-          <Image
-            source={require("../../assets/pigeon.png")}
-            className="w-32 mt-4"
-            style={{ objectFit: "contain" }}
-          />
-        </LinearGradient>
-
-        {/* WIN PEDIGREE */}
-        <Text className="text-lg font-bold px-4 mt-6">Win Pedigree</Text>
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={pedigree}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View className="items-center mx-3 mt-3">
-              <View className="w-14 h-14 rounded-full bg-gray-200" />
-              <Text className="text-xs mt-2 text-gray-600">{item.name}</Text>
-            </View>
-          )}
-        />
-
-        <View className="mt-8">
+        {/* LIVE RACES */}
+        <View className="mt-6">
           <View className="flex-row justify-between items-center px-4 mb-3">
-            <Text className="text-xl font-bold">Ongoing Races</Text>
-            <Link href="/events">
-              <Text className="text-blue-500">See All</Text>
-            </Link>
+            <View className="flex-row items-center gap-2">
+              <View className="w-2 h-2 rounded-full bg-red-500" />
+              <Text className="text-base font-bold text-gray-900">Live Races</Text>
+            </View>
+            <TouchableOpacity onPress={() => router.push("/races" as any)}>
+              <Text className="text-xs text-blue-500">See All</Text>
+            </TouchableOpacity>
           </View>
+
           {loading ? (
-            <Carousel data={[]} loading={true} />
-          ) : error ? (
-            <Text className="text-red-500">Error loading events: {error}</Text>
+            <View className="mx-4 bg-white rounded-2xl p-6 items-center">
+              <ActivityIndicator size="small" color="#189AB4" />
+            </View>
+          ) : liveRaces.length === 0 ? (
+            <View className="mx-4 bg-white rounded-2xl p-5 items-center border border-gray-100">
+              <Ionicons name="radio-outline" size={28} color="#d1d5db" />
+              <Text className="text-gray-400 text-sm mt-2">No races in the air right now</Text>
+            </View>
           ) : (
-            <Carousel data={ongoing?.slice(0, 5)} />
+            <FlatList
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
+              data={liveRaces}
+              keyExtractor={(r) => String(r.id)}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  className="w-56 bg-white rounded-2xl p-4 border border-gray-100"
+                  onPress={() => router.push({ pathname: "/live-race", params: { raceId: String(item.id) } } as any)}
+                >
+                  <View className="flex-row items-center justify-between mb-2">
+                    <View className="flex-row items-center gap-1.5">
+                      <View className="w-2 h-2 rounded-full bg-red-500" />
+                      <Text className="text-[10px] text-red-500 font-semibold uppercase">Live</Text>
+                    </View>
+                    <Text className="text-[10px] text-gray-400">
+                      {item.arrivedCount}/{item._count.raceItems} in
+                    </Text>
+                  </View>
+                  <Text className="font-bold text-gray-900 text-sm" numberOfLines={1}>
+                    {item.name ?? `Race ${item.raceNumber ?? item.id}`}
+                  </Text>
+                  <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={1}>
+                    {item.event?.shortName ?? item.event?.name ?? "—"}
+                  </Text>
+                  <View className="mt-3 bg-red-500 rounded-lg py-1.5 items-center">
+                    <Text className="text-white text-xs font-semibold">Watch Live</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+            />
           )}
         </View>
 
-        {/* LIVE SECTION */}
-        <View className="mx-4 mt-8 bg-white flex-row shadow">
-          <Image
-            source={{
-              uri: "https://images.pexels.com/photos/306407/pexels-photo-306407.jpeg",
-            }}
-            className="w-1/2 h-40"
-          />
-
-          <View className="pl-4">
-            <Text className="text-lg font-bold">Live Pigeon Races</Text>
-            <Text className="text-gray-600 mt-1">
-              We are committed to providing accurate live race results with fast
-              tracking.
-            </Text>
+        {/* LIVE / OPEN EVENTS */}
+        <View className="mt-6">
+          <View className="flex-row justify-between items-center px-4 mb-3">
+            <Text className="text-base font-bold text-gray-900">Events</Text>
+            <TouchableOpacity onPress={() => router.push("/events" as any)}>
+              <Text className="text-xs text-blue-500">See All</Text>
+            </TouchableOpacity>
           </View>
-        </View>
-        <View className="mt-10 px-8">
-          <View className="flex-row justify-around w-full">
-            <View className="w-1/2 items-center border-r border-gray-500 border-b p-4">
-              <Text className="text-4xl font-bold">836M</Text>
-              <Text className="text-gray-500 text-lg">Total Race</Text>
-            </View>
 
-            <View className="w-1/2 items-center border-b border-gray-500 py-4">
-              <Text className="text-4xl font-bold">738M</Text>
-              <Text className="text-gray-500 text-lg w-full text-center">
-                Total Loft Manager
-              </Text>
+          {eventsLoading ? (
+            <View className="mx-4 bg-white rounded-2xl p-6 items-center">
+              <ActivityIndicator size="small" color="#189AB4" />
             </View>
-          </View>
-          <View className="flex-row justify-around mb-10 w-full">
-            <View className="w-1/2 items-center border-r border-gray-500 p-4">
-              <Text className="text-4xl font-bold">100M</Text>
-              <Text className="text-gray-500 text-lg">Races Per Day</Text>
+          ) : liveEvents.length === 0 && openEvents.length === 0 ? (
+            <View className="mx-4 bg-white rounded-2xl p-5 items-center border border-gray-100">
+              <Text className="text-gray-400 text-sm">No active events</Text>
             </View>
-
-            <View className="w-1/2 items-center py-4">
-              <Text className="text-4xl font-bold">238M</Text>
-              <Text className="text-gray-500 text-lg w-full text-center">
-                Today Race
-              </Text>
-            </View>
-          </View>
-        </View>
-        {/* STATS */}
-        {upcoming.length > 0 && (
-          <View className="mt-8">
-            <View className="flex-row justify-between items-center px-4 mb-3">
-              <Text className="text-xl font-bold">Upcoming Races</Text>
-              <TouchableOpacity>
-                <Text className="text-blue-500">See All</Text>
-              </TouchableOpacity>
-            </View>
-          {loading ? (
-            <Carousel data={[]} loading={true} />
-          ) : error ? (
-            <Text className="text-red-500">Error loading events: {error}</Text>
           ) : (
-            <Carousel data={upcoming?.slice(0, 5)} />
+            <FlatList
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
+              data={[...liveEvents, ...openEvents.filter((e) => !liveEvents.find((l) => l.id === e.id))].slice(0, 8)}
+              keyExtractor={(e) => String(e.id)}
+              renderItem={({ item }) => {
+                const isLive = liveEvents.some((l) => l.id === item.id);
+                return (
+                  <TouchableOpacity
+                    className="w-44 bg-white rounded-2xl p-4 border border-gray-100"
+                    onPress={() => router.push(`/(app)/event-detail?id=${item.id}` as any)}
+                  >
+                    {isLive && (
+                      <View className="flex-row items-center gap-1 mb-1">
+                        <View className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                        <Text className="text-[9px] text-red-500 font-semibold uppercase">Live</Text>
+                      </View>
+                    )}
+                    <Text className="font-bold text-gray-900 text-sm" numberOfLines={2}>{item.name}</Text>
+                    <Text className="text-[10px] text-gray-400 mt-1">
+                      {item.eventDate ? new Date(item.eventDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}
+                    </Text>
+                    <View className={`mt-3 rounded-lg py-1.5 items-center ${isLive ? "bg-red-500" : "bg-blue-500"}`}>
+                      <Text className="text-white text-xs font-semibold">
+                        {isLive ? "Watch" : "View"}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
+            />
           )}
-          </View>
-        )}
+        </View>
 
-        {/* ANNOUNCEMENTS */}
-        {(msgsLoading || messages.length > 0) && (
-          <View className="mt-8 mb-4">
+        {/* PENDING PAYMENTS DETAIL */}
+        {pendingPayments.length > 0 && (
+          <View className="mt-6 mb-4">
             <View className="flex-row justify-between items-center px-4 mb-3">
-              <Text className="text-xl font-bold">Announcements</Text>
-              <TouchableOpacity onPress={() => router.push("/messages" as any)}>
-                <Text className="text-blue-500">See All</Text>
+              <Text className="text-base font-bold text-gray-900">Pending Bills</Text>
+              <TouchableOpacity onPress={() => router.push("/payments" as any)}>
+                <Text className="text-xs text-blue-500">See All</Text>
               </TouchableOpacity>
             </View>
-            {msgsLoading ? (
-              [0, 1, 2].map((i) => (
-                <View key={i} className="mx-4 mb-2 h-16 bg-gray-200 rounded-xl" />
-              ))
-            ) : (
-              messages.map((m) => (
-                <View key={m.id} className="mx-4 mb-2 bg-white border border-gray-100 rounded-xl p-3">
-                  <Text className="font-semibold text-gray-900" numberOfLines={1}>{m.title ?? m.event?.name ?? "Announcement"}</Text>
-                  <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={2}>{m.body ?? m.content ?? ""}</Text>
-                  <Text className="text-[10px] text-gray-400 mt-1">
-                    {m.createdAt ? new Date(m.createdAt).toLocaleDateString() : ""}
+            {pendingPayments.slice(0, 3).map((p) => (
+              <TouchableOpacity
+                key={p.id}
+                className="mx-4 mb-2 bg-white border border-gray-100 rounded-xl px-4 py-3 flex-row items-center justify-between"
+                onPress={() => router.push("/payments" as any)}
+              >
+                <View className="flex-row items-center gap-3">
+                  <View className="w-8 h-8 rounded-full bg-red-50 items-center justify-center">
+                    <Ionicons name="card-outline" size={15} color="#ef4444" />
+                  </View>
+                  <Text className="text-sm text-gray-800" numberOfLines={1}>
+                    {p.eventInventory?.season?.event?.name ?? "Payment due"}
                   </Text>
                 </View>
-              ))
-            )}
+                <Text className="text-sm font-bold text-red-500">
+                  ${(p.paymentValue ?? 0).toFixed(2)}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         )}
+
+        <View className="h-6" />
       </ScrollView>
     </SafeAreaView>
   );

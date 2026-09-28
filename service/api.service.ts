@@ -56,6 +56,8 @@ function devHost(): string | null {
 const getApiUrl = () => {
   if (inProduction) return PRODUCTION_API_URL;
 
+  if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
+
   const host = devHost();
   if (host) return `http://${host}:3000/api`;
 
@@ -86,6 +88,7 @@ const api = axios.create({
   timeout: REQUEST_TIMEOUT_MS,
   headers: {
     'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
   },
 });
 
