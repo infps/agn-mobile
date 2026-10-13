@@ -1,6 +1,7 @@
 import Header from "@/components/header";
-import api from "@/service/api.service";
+import { useToast } from "@/context/ToastContext";
 import { useResponsive } from "@/hooks/useResponsive";
+import api from "@/service/api.service";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
@@ -30,37 +31,87 @@ const ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   BIRD_ARRIVED: "airplane-outline",
   RACE_STARTED: "flag-outline",
   RACE_ENDED: "trophy-outline",
+  BETTING_OPEN: "cash-outline",
   PAYMENT_DUE: "card-outline",
-  MESSAGE: "chatbubble-outline",
+  EVENT_MESSAGE: "chatbubble-outline",
+  BIRD_LOST: "alert-circle-outline",
+  STORE_LISTING: "pricetag-outline",
 };
+
+// Same wording as the portal's notifications page.
+const KIND_LABEL: Record<string, string> = {
+  RACE_STARTED: "Race released",
+  BIRD_ARRIVED: "Arrival",
+  RACE_ENDED: "Results",
+  BETTING_OPEN: "Betting",
+  PAYMENT_DUE: "Payment",
+  EVENT_MESSAGE: "Announcement",
+  BIRD_LOST: "Lost bird",
+  STORE_LISTING: "Event store",
+};
+
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const minutes = Math.round((Date.now() - then) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+/**
+ * Where a notification leads.
+ *
+ * The server writes portal paths into `link` — /races/12, /events/4, /payments.
+ * Those are turned into the matching screens here; anything unrecognised simply
+ * does not navigate.
+ */
+function destination(
+  n: Notification
+): { pathname: string; params?: Record<string, string> } | null {
+  const link = n.link ?? "";
+  const race = link.match(/^\/races\/(\d+)/);
+  if (race) return { pathname: "/live-race", params: { raceId: race[1] } };
+  const event = link.match(/^\/events\/(\d+)/);
+  // event-detail reads `id`.
+  if (event) return { pathname: "/event-detail", params: { id: event[1] } };
+  if (link.startsWith("/payments")) return { pathname: "/payments" };
+  if (n.raceId) return { pathname: "/live-race", params: { raceId: String(n.raceId) } };
+  return null;
+}
 
 /**
  * What has happened while you were not looking.
  *
  * A bird clocking in is the notification people actually open the app for, so
  * an unread one is marked plainly down the left rather than with a count
- * somewhere else. Tapping a race notification goes to that race, because the
- * next thing anybody wants after "your bird is home" is the standings.
+ * somewhere else. Tapping one marks it read and goes where the portal's link
+ * would have gone.
  */
 export default function Notifications() {
   const { gutter } = useResponsive();
   const router = useRouter();
+  const toast = useToast();
 
   const [items, setItems] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [marking, setMarking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const { data } = await api.get("/notifications");
+      const { data } = await api.get("/notifications", { params: { limit: 100 } });
       setItems(data?.notifications ?? []);
       setUnread(data?.unreadCount ?? 0);
     } catch {
       setError("Could not load your notifications just now.");
-      setItems([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -69,7 +120,35 @@ export default function Notifications() {
 
   useEffect(() => {
     load();
+    // Race day moves quickly, so the feed refreshes itself — as the portal's does.
+    const timer = setInterval(load, 30000);
+    return () => clearInterval(timer);
   }, [load]);
+
+  const markAllRead = async () => {
+    setMarking(true);
+    try {
+      // No ids means "everything".
+      await api.post("/notifications", {});
+      await load();
+    } catch {
+      toast.error("Could not mark notifications as read");
+    } finally {
+      setMarking(false);
+    }
+  };
+
+  const markOneRead = async (id: number) => {
+    setItems((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n))
+    );
+    setUnread((c) => Math.max(0, c - 1));
+    try {
+      await api.post("/notifications", { ids: [id] });
+    } catch {
+      // The next refresh puts the truth back.
+    }
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-white">
@@ -93,9 +172,19 @@ export default function Notifications() {
           }
         >
           {unread > 0 && (
-            <Text className="py-3 text-sm text-gray-500">
-              {unread} unread
-            </Text>
+            <View className="flex-row items-center justify-between py-3">
+              <Text className="text-sm text-gray-500">{unread} unread</Text>
+              <Pressable
+                onPress={markAllRead}
+                disabled={marking}
+                className="flex-row items-center rounded-lg border border-primary px-3 py-1.5"
+              >
+                <Ionicons name="checkmark-done-outline" size={14} color="#189AB4" />
+                <Text className="ml-1 text-xs font-semibold text-primary">
+                  {marking ? "Marking…" : "Mark all read"}
+                </Text>
+              </Pressable>
+            </View>
           )}
 
           {error ? (
@@ -107,23 +196,21 @@ export default function Notifications() {
           {items.length === 0 ? (
             <View className="mt-6 rounded-xl border border-gray-200 p-8">
               <Text className="text-center text-sm text-gray-500">
-                Nothing yet. You will hear from us when a bird clocks in.
+                Nothing yet. Race releases, arrivals, results, betting and payment
+                reminders land here.
               </Text>
             </View>
           ) : (
             <View className="mt-2 overflow-hidden rounded-xl border border-gray-200">
               {items.map((n, index) => {
                 const isUnread = !n.readAt;
+                const dest = destination(n);
                 return (
                   <Pressable
                     key={n.id}
                     onPress={() => {
-                      if (n.raceId) {
-                        router.push({
-                          pathname: "/live-race",
-                          params: { raceId: String(n.raceId) },
-                        });
-                      }
+                      if (isUnread) markOneRead(n.id);
+                      if (dest) router.push(dest as any);
                     }}
                     className={`flex-row gap-3 p-4 ${
                       index > 0 ? "border-t border-gray-100" : ""
@@ -157,11 +244,11 @@ export default function Notifications() {
                         <Text className="mt-0.5 text-xs text-gray-600">{n.body}</Text>
                       ) : null}
                       <Text className="mt-1 text-xs text-gray-400">
-                        {new Date(n.createdAt).toLocaleString()}
+                        {KIND_LABEL[n.kind] ?? n.kind} · {relativeTime(n.createdAt)}
                       </Text>
                     </View>
 
-                    {n.raceId ? (
+                    {dest ? (
                       <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
                     ) : null}
                   </Pressable>

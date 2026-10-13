@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Text, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAdminData } from "@/hooks/useAdminData";
 import {
   Empty,
@@ -12,73 +11,93 @@ import {
   Rows,
   SearchBar,
   Screen,
-  Truncated,
 } from "@/components/admin/ui";
 
-interface Entry {
+interface Race {
   id: number;
-  action: string;
-  detail: string | null;
-  createdAt: string;
-  performedBy?: { name: string | null } | null;
-  eventInventoryItem?: {
-    bird?: { band: string | null; birdName: string | null } | null;
-  } | null;
-  bird?: { band: string | null } | null;
+  name: string | null;
+  description: string | null;
+  location: string | null;
+  startTime: string | null;
+  distance: number | null;
+  season: string | null;
+  status: string | null;
+  raceType: { id: number; name: string | null } | null;
 }
 
-const ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
-  REGISTERED: "add-circle-outline",
-  CHECKED_IN: "checkmark-circle-outline",
-  STATUS_CHANGED: "swap-horizontal-outline",
-  BASKET_ASSIGNED: "cube-outline",
-  SUBSTITUTED: "repeat-outline",
-  RETURNED: "arrow-undo-outline",
-  LOST: "alert-circle-outline",
+/** The season label the portal shows: the race's own, or YB + the year it flew. */
+const seasonOf = (r: Race) => {
+  if (r.season && r.season.trim()) return r.season.trim();
+  if (r.startTime) return `YB${String(new Date(r.startTime).getFullYear()).slice(2)}`;
+  return "Unknown";
+};
+
+const liberation = (iso: string | null) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(
+    d.getMinutes()
+  )}:${p(d.getSeconds())}`;
 };
 
 /**
- * Everything that has happened to the birds in this event, newest first.
+ * The event's archived races, grouped by the year they were flown.
  *
- * This is the record you reach for when somebody disputes what was done to
- * their bird, so it stays a plain chronological log — no grouping, no
- * summarising, and the person who did it named on every line. A log that has
- * been tidied is a log you cannot rely on in an argument.
+ * This is the portal's History tab: the list of every race the event has run,
+ * oldest first within its year, each one a way into its results. It is the
+ * record of the *event* — what was flown, from where, how far.
+ *
+ * What happened to an individual bird is a different record and lives with the
+ * bird: open one from the Birds section and its activity log is on its page.
+ * The portal draws a month calendar above this list from the same races; the
+ * liberation time on each row carries the same information here.
  */
 export default function EventHistory() {
   const { eventId, name } = useLocalSearchParams<{ eventId?: string; name?: string }>();
+  const router = useRouter();
   const [query, setQuery] = useState("");
 
   const { data, loading, refreshing, forbidden, error, refresh } = useAdminData<{
-    history?: Entry[];
-  }>(eventId ? `/admin/event/${eventId}/bird-history` : null, [eventId]);
+    races?: Race[];
+  }>(eventId ? `/breeder/event/${eventId}/history` : null, [eventId]);
 
-  const history = data?.history ?? [];
+  const races = useMemo(() => data?.races ?? [], [data]);
 
-  const results = useMemo(() => {
+  const grouped = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return history;
-    return history.filter((h) => {
-      const band =
-        h.eventInventoryItem?.bird?.band ?? h.bird?.band ?? "";
-      return (
-        band.toLowerCase().includes(q) ||
-        h.action.toLowerCase().includes(q) ||
-        (h.detail ?? "").toLowerCase().includes(q) ||
-        (h.performedBy?.name ?? "").toLowerCase().includes(q)
+    const map = new Map<string, Race[]>();
+    for (const r of races) {
+      if (
+        q &&
+        ![r.name, r.description, r.location, r.raceType?.name, seasonOf(r)].some((v) =>
+          (v ?? "").toLowerCase().includes(q)
+        )
+      ) {
+        continue;
+      }
+      const key = seasonOf(r);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(r);
+    }
+    for (const list of map.values()) {
+      list.sort(
+        (a, b) => new Date(a.startTime ?? 0).getTime() - new Date(b.startTime ?? 0).getTime()
       );
-    });
-  }, [history, query]);
+    }
+    return Array.from(map.entries());
+  }, [races, query]);
 
-  if (forbidden) return <NoAccess what="Bird history" />;
+  if (forbidden) return <NoAccess what="Race history" />;
 
   return (
     <Screen
       title="History"
-      subtitle={name ? `${name} · ${history.length} entries` : `${history.length} entries`}
+      subtitle={[name, `${races.length} race${races.length === 1 ? "" : "s"}`].filter(Boolean).join(" · ")}
       onRefresh={refresh}
       refreshing={refreshing}
-      header={<SearchBar value={query} onChange={setQuery} placeholder="Band, action or person" />}
+      header={<SearchBar value={query} onChange={setQuery} placeholder="Race, station or type" />}
     >
       {loading ? (
         <Loading />
@@ -86,42 +105,39 @@ export default function EventHistory() {
         <>
           {error ? <Notice>{error}</Notice> : null}
 
-          <View className="mt-4">
-            {results.length === 0 ? (
+          {grouped.length === 0 ? (
+            <View className="mt-4">
               <Empty>
-                {history.length === 0
-                  ? "Nothing has been recorded against this event's birds yet."
-                  : "Nothing matches that search."}
+                {races.length === 0
+                  ? "No races recorded yet for this event."
+                  : "No race matches that search."}
               </Empty>
-            ) : (
-              <Rows>
-                {results.slice(0, 200).map((h) => {
-                  const band =
-                    h.eventInventoryItem?.bird?.band ?? h.bird?.band ?? "Unknown bird";
-                  return (
+            </View>
+          ) : (
+            grouped.map(([season, list]) => (
+              <View key={season}>
+                <Text className="mb-1.5 mt-5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  Year: {season}
+                </Text>
+                <Rows>
+                  {list.map((r, index) => (
                     <Row
-                      key={h.id}
-                      leading={
-                        <Ionicons
-                          name={ICON[h.action] ?? "ellipse-outline"}
-                          size={16}
-                          color="#94a3b8"
-                        />
-                      }
-                      title={`${band} · ${h.action.toLowerCase().replace(/_/g, " ")}`}
+                      key={r.id}
+                      title={`${index + 1}. ${r.description ?? r.name ?? "Race"}`}
                       subtitle={
-                        [h.detail, h.performedBy?.name].filter(Boolean).join(" · ") || undefined
+                        [liberation(r.startTime), r.location, r.raceType?.name]
+                          .filter(Boolean)
+                          .join(" · ") || undefined
                       }
-                      right={new Date(h.createdAt).toLocaleDateString()}
-                      rightSub={new Date(h.createdAt).toLocaleTimeString()}
-                      rightTone="text-slate-400"
+                      right={r.distance != null ? String(r.distance) : "—"}
+                      rightSub={r.status ? r.status.toLowerCase() : undefined}
+                      onPress={() => router.push(`/(admin)/race-detail?raceId=${r.id}` as never)}
                     />
-                  );
-                })}
-              </Rows>
-            )}
-            <Truncated shown={Math.min(results.length, 200)} total={results.length} />
-          </View>
+                  ))}
+                </Rows>
+              </View>
+            ))
+          )}
         </>
       )}
     </Screen>

@@ -1,399 +1,372 @@
-// import Carousel from "@/components/carousel";
-// import Header from "@/components/header";
-// import { Ionicons } from "@expo/vector-icons";
-// import { LinearGradient } from "expo-linear-gradient";
-// import React from "react";
-// import {
-//   Image,
-//   ScrollView,
-//   StyleSheet,
-//   Text,
-//   TouchableOpacity,
-//   View,
-// } from "react-native";
-// import { SafeAreaView } from "react-native-safe-area-context";
-
-// const Payments = () => {
-//   return (
-//     <SafeAreaView className="flex-1 bg-[#f5f5f5]">
-//       <ScrollView showsVerticalScrollIndicator={false}>
-//         <Header title="Payments" />
-//         {/* BANNER */}
-//         <LinearGradient
-//           colors={["#189AB4", "#64bacb", "#dbeafe", "#f4f5f6"]}
-//           start={{ x: 0, y: 0.5 }} // Start from the left center
-//           end={{ x: 1, y: 0.5 }} // End at the right center
-//           className="pl-5 flex-row justify-between items-center"
-//         >
-//           <View className="w-66">
-//             <Text className="text-2xl text-white">Requirements</Text>
-//             <Text className="text-white mt-2 text-sm">
-//               <Ionicons name="checkmark-outline" /> You get 24/7 roadside
-//               assistance
-//             </Text>
-//             <Text className="text-white mt-2 text-sm">
-//               <Ionicons name="checkmark-outline" /> We fixe 4 out of 5 Cars at
-//               the roadside
-//             </Text>
-//           </View>
-
-//           <Image
-//             source={require("../../assets/pigeon.png")}
-//             className="w-32 mt-4"
-//             style={{ objectFit: "contain" }}
-//           />
-//         </LinearGradient>
-//         <View className="bg-gray-200 flex-row justify-between mt-2">
-//           {/* Section 1 */}
-//           <View className="">
-//             <View>
-//               <Text className="text-[10px]">Race Route</Text>
-//               <Text className="text-xs">UA TO USA</Text>
-//             </View>
-//           </View>
-//           {/* Section 2 */}
-//           <View className="">
-//             <View>
-//               <Text className="text-[10px]">Entry FEE</Text>
-//               <Text className="text-xs">$89.00/</Text>
-//             </View>
-//           </View>
-
-//           {/* Section 3 */}
-//           <View className="">
-//             <View>
-//               <Text className="text-[10px]"> Registration Deadline</Text>
-//               <Text className="text-xs">23/02/2025</Text>
-//             </View>
-//           </View>
-
-//           {/* Section 4 */}
-//           <View>
-//             <View>
-//               <Text className="text-[10px]">Spot Available</Text>
-//               <Text className="text-xs">32</Text>
-//             </View>
-//           </View>
-//           <TouchableOpacity
-//             className="bg-primary"
-//             onPress={() => {
-//               // handle press
-//             }}
-//           >
-//             <Text className="text-white text-center text-[10px]">
-//               Register Now
-//             </Text>
-//           </TouchableOpacity>
-//         </View>
-//         <View className="mt-8 p-2">
-//           <Text className="text-xl font-bold tracking-wider">Rules Regulation</Text>
-//           <Text className="mt-2 tracking-wider text-lg">
-//             From they fine john he give of rich he. They age and draw mrs like.
-//             Improving end distrusts may instantly was household applauded
-//             incommode. Why kept very ever home mrs. Considered sympathize ten
-//             uncommonly occasional assistance sufficient not.
-//           </Text>
-//         </View>
-//         <Carousel/>
-//       </ScrollView>
-//     </SafeAreaView>
-//   );
-// };
-
-// export default Payments;
-
-// const styles = StyleSheet.create({});
-
+import BreederExportButton from "@/components/BreederExportButton";
 import Header from "@/components/header";
-import { usePayments } from "@/context";
-import { PaymentType } from "@/context/PaymentContext";
-import { format } from "date-fns";
-import { useEffect, useMemo, useState } from "react";
-import { FlatList, Text, View, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import * as WebBrowser from "expo-web-browser";
-import api from "@/service/api.service";
 import { useToast } from "@/context/ToastContext";
+import api from "@/service/api.service";
+import { Ionicons } from "@expo/vector-icons";
+import { format } from "date-fns";
+import * as WebBrowser from "expo-web-browser";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-const statusLabel = (status: number) => {
-  switch (status) {
-    case 1: return "Paid";
-    case 2: return "Partial";
-    case 0: return "Pending";
-    case 3: return "Failed";
-    case 4: return "Refunded";
-    default: return String(status);
-  }
+/**
+ * Payments — the portal's /payments page plus paying what is still owed.
+ *
+ * GET /api/breeder/payments returns each payment with a numeric status and the
+ * event nested at eventInventory.season.event (there is no eventInventory.event).
+ *
+ * Paying goes through /payment/paypal/create-bulk even for a single payment,
+ * because that route returns PayPal's own `approveUrl`. The per-payment route
+ * (/breeder/payment/[id]/pay) returns only an order id, which is enough for the
+ * portal's JS SDK button but gives a phone nowhere to send the payer.
+ */
+
+interface Payment {
+  id: number;
+  paymentValue: number | null;
+  paymentMethod: number | null;
+  paymentType: number | null;
+  paymentDate: string | null;
+  paymentDesc?: string | null;
+  transactionId?: string | null;
+  status: number;
+  eventInventory?: {
+    season?: { event?: { id: number; name: string; eventDate?: string } | null } | null;
+  } | null;
+}
+
+// Same tables as the portal's payments/columns.tsx.
+const TYPE_LABELS: Record<number, string> = {
+  0: "Perch Fee",
+  1: "Per Bird Fee",
+  2: "Races Fee",
+  3: "Payouts",
+  4: "Other",
+};
+const METHOD_LABELS: Record<number, string> = {
+  0: "Cash",
+  1: "Credit Card",
+  2: "PayPal",
+  3: "Bank Transfer",
+};
+const STATUS: Record<number, { label: string; className: string }> = {
+  0: { label: "Pending", className: "text-yellow-600" },
+  1: { label: "Paid", className: "text-green-600" },
+  2: { label: "Partial", className: "text-amber-600" },
+  3: { label: "Failed", className: "text-red-600" },
+  4: { label: "Refunded", className: "text-gray-500" },
 };
 
-const statusColor = (status: number) => {
-  switch (status) {
-    case 1: return "text-green-600";
-    case 2: return "text-yellow-600";
-    case 0: return "text-red-500";
-    case 3: return "text-red-700";
-    case 4: return "text-gray-500";
-    default: return "text-gray-600";
-  }
-};
+const POLL_MS = 3000;
+const MAX_POLLS = 100; // five minutes
+
+const eventOf = (p: Payment) => p.eventInventory?.season?.event ?? null;
 
 const PaymentsList = () => {
-  const { payments, loading, getMyPayments } = usePayments();
-  const [selectedPayments, setSelectedPayments] = useState<Set<number>>(new Set());
-  const [paying, setPaying] = useState(false);
   const toast = useToast();
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [eventFilter, setEventFilter] = useState<number | "ALL">("ALL");
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [paying, setPaying] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await api.get("/breeder/payments");
+      setPayments(res.data?.payments || []);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to fetch payments");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
-    getMyPayments();
+    load();
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const totalAmount = useMemo(
-    () => payments.reduce((sum, p) => sum + (p.paymentValue || 0), 0),
-    [payments]
-  );
-  const totalPaid = useMemo(
-    () => payments.filter(p => p.status === 1).reduce((sum, p) => sum + (p.paymentValue || 0), 0),
-    [payments]
-  );
-  const totalRemaining = totalAmount - totalPaid;
+  const eventOptions = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const p of payments) {
+      const ev = eventOf(p);
+      if (ev?.id != null) map.set(ev.id, ev.name ?? `Event ${ev.id}`);
+    }
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [payments]);
 
-  const pendingPayments = useMemo(
-    () => payments.filter(p => p.status === 0),
-    [payments]
+  const visible = useMemo(
+    () => (eventFilter === "ALL" ? payments : payments.filter((p) => eventOf(p)?.id === eventFilter)),
+    [payments, eventFilter]
   );
 
-  const selectedTotal = useMemo(() => {
-    return Array.from(selectedPayments).reduce((sum, id) => {
-      const payment = payments.find(p => p.id === id);
-      return sum + (payment?.paymentValue || 0);
-    }, 0);
-  }, [selectedPayments, payments]);
+  const { total, paid } = useMemo(() => {
+    let t = 0;
+    let pd = 0;
+    for (const p of visible) {
+      const v = p.paymentValue ?? 0;
+      t += v;
+      if (p.status === 1) pd += v;
+    }
+    return { total: t, paid: pd };
+  }, [visible]);
+  const remaining = total - paid;
 
-  const togglePaymentSelection = (paymentId: number) => {
-    setSelectedPayments(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(paymentId)) {
-        newSet.delete(paymentId);
-      } else {
-        newSet.add(paymentId);
-      }
-      return newSet;
+  const pendingVisible = useMemo(() => visible.filter((p) => p.status === 0), [visible]);
+
+  const selectedTotal = useMemo(
+    () =>
+      Array.from(selected).reduce(
+        (sum, id) => sum + (payments.find((p) => p.id === id)?.paymentValue || 0),
+        0
+      ),
+    [selected, payments]
+  );
+
+  const toggle = (id: number) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
-  };
 
-  const handlePayPending = async () => {
-    if (selectedPayments.size === 0) {
+  const allPendingSelected =
+    pendingVisible.length > 0 && pendingVisible.every((p) => selected.has(p.id));
+
+  const toggleAll = () =>
+    setSelected(allPendingSelected ? new Set() : new Set(pendingVisible.map((p) => p.id)));
+
+  const handlePay = async () => {
+    const paymentIds = Array.from(selected);
+    if (paymentIds.length === 0) {
       toast.error("No payments selected");
       return;
     }
-
-    console.log("[Payment] Starting payment flow, selected:", selectedPayments.size);
+    const amount = selectedTotal;
 
     try {
       setPaying(true);
-      console.log("[Payment] Set paying to true");
-
-      // Create bulk PayPal order for selected payments
-      const paymentIds = Array.from(selectedPayments);
-      console.log("[Payment] Creating PayPal order for IDs:", paymentIds);
-
       const orderRes = await api.post("/payment/paypal/create-bulk", {
         paymentIds,
         currency: "USD",
       });
+      const { orderID, approveUrl } = orderRes.data as { orderID: string; approveUrl?: string };
+      if (!approveUrl) {
+        toast.error("PayPal did not return an approval link");
+        setPaying(false);
+        return;
+      }
 
-      console.log("[Payment] Order created:", orderRes.data);
-      const { orderID } = orderRes.data;
-      const approvalUrl = `https://www.sandbox.paypal.com/checkoutnow?token=${orderID}`;
+      WebBrowser.openBrowserAsync(approveUrl);
 
-      // Open PayPal immediately
-      console.log("[Payment] Opening PayPal browser");
-      WebBrowser.openBrowserAsync(approvalUrl);
+      let polls = 0;
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = setInterval(async () => {
+        polls += 1;
+        if (polls > MAX_POLLS) {
+          if (pollRef.current) clearInterval(pollRef.current);
+          pollRef.current = null;
+          setPaying(false);
+          toast.error("Timed out waiting for PayPal. Pull to refresh to check your payments.");
+          load();
+          return;
+        }
 
-      // Poll PayPal to check if payment approved
-      const pollInterval = setInterval(async () => {
         try {
-          console.log("[Payment] Polling PayPal order status");
-          const statusRes = await api.post("/payment/paypal/check-status", {
-            orderID,
-          });
+          const statusRes = await api.post("/payment/paypal/check-status", { orderID });
+          if (!statusRes.data?.isApproved && !statusRes.data?.isCompleted) return;
 
-          console.log("[Payment] Status check:", statusRes.data);
+          if (pollRef.current) clearInterval(pollRef.current);
+          pollRef.current = null;
 
-          if (statusRes.data.isApproved || statusRes.data.isCompleted) {
-            console.log("[Payment] Payment approved! Auto-capturing...");
-            clearInterval(pollInterval);
-
-            // Auto-capture payment
-            try {
-              const captureRes = await api.post("/payment/paypal/capture-bulk", {
-                orderID,
-                paymentIds: Array.from(selectedPayments),
-              });
-
-              console.log("[Payment] Capture response:", captureRes.data);
-
-              if (captureRes.data.status === "COMPLETED") {
-                console.log("[Payment] Payment completed successfully");
-                Alert.alert("Success", `Payment of $${selectedTotal.toFixed(2)} completed!`);
-                setSelectedPayments(new Set());
-                getMyPayments();
-              } else {
-                console.log("[Payment] Payment not completed, status:", captureRes.data.status);
-                toast.error("Payment incomplete. Please try again.");
-              }
-            } catch (captureErr: any) {
-              console.error("[Payment] Capture error:", captureErr);
-              const msg = captureErr.response?.data?.message || "Failed to capture payment";
-              toast.error(msg);
-            } finally {
-              setPaying(false);
+          try {
+            const captureRes = await api.post("/payment/paypal/capture-bulk", {
+              orderID,
+              paymentIds,
+            });
+            if (captureRes.data?.status === "COMPLETED") {
+              toast.success(`Payment of $${amount.toFixed(2)} completed`);
+              setSelected(new Set());
+            } else {
+              toast.error("Payment incomplete. Please try again.");
             }
+          } catch (captureErr: any) {
+            toast.error(captureErr?.response?.data?.message || "Failed to capture payment");
+          } finally {
+            setPaying(false);
+            load();
           }
-        } catch (pollErr: any) {
-          console.error("[Payment] Poll error:", pollErr);
-          // Continue polling even if one check fails
+        } catch {
+          // One failed check is not a failed payment. Keep polling until the cap.
         }
-      }, 3000); // Poll every 3 seconds
-
-      // Stop polling after 5 minutes
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        if (paying) {
-          console.log("[Payment] Polling timeout");
-          Alert.alert(
-            "Payment Timeout",
-            "We couldn't verify your payment. Please check your PayPal account or contact support.",
-            [
-              {
-                text: "OK",
-                onPress: () => {
-                  setPaying(false);
-                  getMyPayments(); // Refresh to see if payment went through
-                },
-              },
-            ]
-          );
-        }
-      }, 300000); // 5 minutes
+      }, POLL_MS);
     } catch (err: any) {
-      console.error("[Payment] Error in payment flow:", err);
-      const msg = err.response?.data?.message || err.message || "Payment failed";
-      toast.error(msg);
+      toast.error(err?.response?.data?.message || "Failed to start payment");
       setPaying(false);
     }
+  };
+
+  const renderItem = ({ item, index }: { item: Payment; index: number }) => {
+    const isPending = item.status === 0;
+    const isSelected = selected.has(item.id);
+    const st = STATUS[item.status];
+    return (
+      <TouchableOpacity
+        className="bg-white mx-2 mb-2 rounded-lg p-3 flex-row items-center"
+        onPress={() => isPending && toggle(item.id)}
+        disabled={!isPending || paying}
+        activeOpacity={isPending ? 0.7 : 1}
+      >
+        <View className="w-7">
+          {isPending ? (
+            <Ionicons
+              name={isSelected ? "checkbox" : "square-outline"}
+              size={20}
+              color={isSelected ? "#189AB4" : "#999"}
+            />
+          ) : (
+            <Text className="text-xs text-gray-400">{index + 1}</Text>
+          )}
+        </View>
+        <View className="flex-1">
+          <Text className="text-sm font-semibold text-gray-800" numberOfLines={1}>
+            {eventOf(item)?.name || "-"}
+          </Text>
+          <Text className="text-xs text-gray-500 mt-0.5">
+            {item.paymentType != null ? TYPE_LABELS[item.paymentType] ?? String(item.paymentType) : "-"}
+            {" · "}
+            {item.paymentMethod != null
+              ? METHOD_LABELS[item.paymentMethod] ?? String(item.paymentMethod)
+              : "-"}
+            {" · "}
+            {item.paymentDate ? format(new Date(item.paymentDate), "MMM d, yyyy") : "-"}
+          </Text>
+        </View>
+        <View className="items-end">
+          <Text className="text-sm font-bold text-gray-800">
+            ${(item.paymentValue ?? 0).toFixed(2)}
+          </Text>
+          <Text className={`text-xs font-semibold ${st?.className ?? "text-gray-600"}`}>
+            {st?.label ?? String(item.status)}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
   };
 
   return (
     <SafeAreaView className="flex-1 bg-[#f5f5f5]">
       <Header title="Payments" />
 
+      {/* Event filter + export */}
+      <View className="flex-row items-center px-2 mt-2">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1 mr-2">
+          {[{ id: "ALL" as const, name: "All events" }, ...eventOptions].map((e) => {
+            const active = eventFilter === e.id;
+            return (
+              <TouchableOpacity
+                key={String(e.id)}
+                onPress={() => setEventFilter(e.id)}
+                className={`px-3 py-2 rounded-full mr-2 ${active ? "bg-primary" : "bg-white"}`}
+              >
+                <Text className={`text-xs font-semibold ${active ? "text-white" : "text-gray-700"}`}>
+                  {e.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+        <BreederExportButton
+          kind="payments"
+          eventId={eventFilter === "ALL" ? undefined : eventFilter}
+        />
+      </View>
+
       {/* Summary */}
-      {!loading && payments.length > 0 && (
-        <View className="mx-2 mt-2 p-3 bg-white rounded-lg flex-row justify-between">
-          <View className="items-center">
-            <Text className="text-[10px] text-gray-500">Total Amount</Text>
-            <Text className="text-sm font-bold">${totalAmount.toFixed(2)}</Text>
-          </View>
-          <View className="items-center">
-            <Text className="text-[10px] text-gray-500">Total Paid</Text>
-            <Text className="text-sm font-bold text-green-600">${totalPaid.toFixed(2)}</Text>
-          </View>
-          <View className="items-center">
-            <Text className="text-[10px] text-gray-500">Remaining</Text>
-            <Text className={`text-sm font-bold ${totalRemaining > 0 ? "text-red-500" : "text-green-600"}`}>
-              ${totalRemaining.toFixed(2)}
-            </Text>
-          </View>
+      <View className="mx-2 mt-2 p-3 bg-white rounded-lg flex-row justify-between">
+        <View className="items-center flex-1">
+          <Text className="text-[10px] text-gray-500">Total Amount</Text>
+          <Text className="text-sm font-bold">${total.toFixed(2)}</Text>
         </View>
+        <View className="items-center flex-1">
+          <Text className="text-[10px] text-gray-500">Total Paid</Text>
+          <Text className="text-sm font-bold text-green-600">${paid.toFixed(2)}</Text>
+        </View>
+        <View className="items-center flex-1">
+          <Text className="text-[10px] text-gray-500">Remaining</Text>
+          <Text className={`text-sm font-bold ${remaining > 0 ? "text-red-500" : "text-green-600"}`}>
+            ${remaining.toFixed(2)}
+          </Text>
+        </View>
+      </View>
+
+      {pendingVisible.length > 0 && (
+        <TouchableOpacity onPress={toggleAll} disabled={paying} className="flex-row items-center mx-3 mt-3">
+          <Ionicons
+            name={allPendingSelected ? "checkbox" : "square-outline"}
+            size={18}
+            color={allPendingSelected ? "#189AB4" : "#999"}
+          />
+          <Text className="text-xs text-gray-600 ml-2">
+            Select all pending ({pendingVisible.length})
+          </Text>
+        </TouchableOpacity>
       )}
 
-      {/* Table header */}
-      <View className="p-2 bg-primary flex-row mt-2 mx-2">
-        <Text className="text-white text-[10px] w-[8%]"></Text>
-        <Text className="text-white text-[10px] w-[6%]">#</Text>
-        <Text className="text-white text-[10px] w-[22%]">Event</Text>
-        <Text className="text-white text-[10px] w-[14%]">Type</Text>
-        <Text className="text-white text-[10px] w-[28%] text-right">Amount</Text>
-        <Text className="text-white text-[10px] w-[22%] text-center">Status</Text>
-      </View>
-
-      <View className="mx-2 flex-1">
-        {loading ? (
-          [1, 2, 3, 4, 5].map((_, index) => (
-            <View className="p-2 flex-row" key={index}>
-              <View className="w-full h-8 bg-gray-200 rounded" />
+      {loading ? (
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#189AB4" />
+        </View>
+      ) : (
+        <FlatList
+          data={visible}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={renderItem}
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: selected.size > 0 ? 130 : 24 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                load();
+              }}
+            />
+          }
+          ListEmptyComponent={
+            <View className="items-center py-12">
+              <Ionicons name="card-outline" size={40} color="#9ca3af" />
+              <Text className="text-gray-500 mt-2">No payment transactions yet.</Text>
             </View>
-          ))
-        ) : payments.length > 0 ? (
-          <FlatList
-            data={payments}
-            keyExtractor={(item: PaymentType) => String(item.id)}
-            renderItem={({
-              item,
-              index,
-            }: {
-              item: PaymentType;
-              index: number;
-            }) => {
-              const isPending = item.status === 0;
-              const isSelected = selectedPayments.has(item.id);
+          }
+        />
+      )}
 
-              return (
-                <TouchableOpacity
-                  className="p-2 flex-row border-b border-gray-200 items-center"
-                  onPress={() => isPending && togglePaymentSelection(item.id)}
-                  disabled={!isPending}
-                  activeOpacity={isPending ? 0.7 : 1}
-                >
-                  {/* Checkbox */}
-                  <View className="w-[8%] items-center">
-                    {isPending && (
-                      <Ionicons
-                        name={isSelected ? "checkbox" : "square-outline"}
-                        size={18}
-                        color={isSelected ? "#189AB4" : "#999"}
-                      />
-                    )}
-                  </View>
-
-                  <Text className="text-[10px] w-[6%]">{index + 1}</Text>
-                  <Text className="text-[10px] w-[22%]" numberOfLines={1}>
-                    {item?.eventInventory?.event?.name || "N/A"}
-                  </Text>
-                  <Text className="text-[10px] w-[14%]">
-                    {item.paymentType === 1 ? "Perch" : item.paymentType === 2 ? "Bird" : String(item.paymentType)}
-                  </Text>
-                  <Text className="text-[10px] w-[28%] text-right">
-                    ${(item.paymentValue || 0).toFixed(2)}
-                  </Text>
-                  <Text className={`text-[10px] w-[22%] text-center font-semibold ${statusColor(item.status)}`}>
-                    {statusLabel(item.status)}
-                  </Text>
-                </TouchableOpacity>
-              );
-            }}
-          />
-        ) : (
-          <Text className="text-center py-4">No Payment Transaction</Text>
-        )}
-      </View>
-
-      {/* Fixed Pay Pending Button */}
-      {pendingPayments.length > 0 && selectedPayments.size > 0 && (
+      {selected.size > 0 && (
         <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-300 p-4">
           <View className="flex-row justify-between items-center mb-2">
             <Text className="text-sm text-gray-600">
-              {selectedPayments.size} payment{selectedPayments.size > 1 ? "s" : ""} selected
+              {selected.size} payment{selected.size > 1 ? "s" : ""} selected
             </Text>
-            <Text className="text-lg font-bold text-primary">
-              ${selectedTotal.toFixed(2)}
-            </Text>
+            <Text className="text-lg font-bold text-primary">${selectedTotal.toFixed(2)}</Text>
           </View>
           <TouchableOpacity
             className="bg-[#FFC439] py-3 rounded-lg items-center"
-            onPress={handlePayPending}
+            onPress={handlePay}
             disabled={paying}
           >
             {paying ? (

@@ -1,316 +1,283 @@
+import {
+  BirdsTab,
+  BreedersTab,
+  HistoryTab,
+  MessagesTab,
+  ResultTab,
+  StationsTab,
+} from "@/components/EventDetailTabs";
+import { ApprovalBanner, feeSchemeOf, isLiveRace, money, racesOf } from "@/components/EventShared";
 import Header from "@/components/header";
 import api from "@/service/api.service";
 import { Ionicons } from "@expo/vector-icons";
 import { format } from "date-fns";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const TABS = ["Overview", "Races", "Messages", "Averages"] as const;
+/**
+ * One event — the portal's /events/[eventId] page.
+ *
+ * The same tabs in the same order: Breeders, Birds, Result, Stations, Messages,
+ * History, and Register (which opens the registration screen). The pieces the
+ * portal puts on separate pages — rules, the Calcutta auction, the season
+ * archive, the event store — hang off the header as shortcuts.
+ */
+
+const TABS = ["Breeders", "Birds", "Result", "Stations", "Messages", "History"] as const;
 type Tab = (typeof TABS)[number];
 
+const tabFromParam = (value: unknown): Tab => {
+  const wanted = String(value ?? "").toLowerCase();
+  return TABS.find((t) => t.toLowerCase() === wanted) ?? "Breeders";
+};
+
+interface PaymentStatus {
+  eventInventoryId: number;
+  approvalStatus?: string | null;
+  totalPaid: number;
+  totalPending: number;
+  totalDue: number;
+  isPaid: boolean;
+}
+
+function Shortcut({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      className="flex-row items-center border border-gray-200 rounded-full px-3 py-1.5 mr-2 bg-white"
+    >
+      <Ionicons name={icon} size={14} color="#189AB4" />
+      <Text className="text-xs font-semibold text-gray-700 ml-1">{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
 const EventDetail = () => {
-  const { id } = useLocalSearchParams();
-  const [currentEvent, setCurrentEvent] = useState<any>(null);
-  const [participants, setParticipants] = useState<any[]>([]);
+  const params = useLocalSearchParams<{ id?: string; eventId?: string; tab?: string }>();
+  const id = String(params.id ?? params.eventId ?? "");
+  const [event, setEvent] = useState<any>(null);
+  const [stats, setStats] = useState<{ breeders: number; birds: number; races: number } | null>(null);
+  const [status, setStatus] = useState<PaymentStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>("Overview");
+  const [failed, setFailed] = useState(false);
+  const [tab, setTab] = useState<Tab>(tabFromParam(params.tab));
 
   useEffect(() => {
     if (!id) return;
+    let alive = true;
     setLoading(true);
-    setCurrentEvent(null);
-    setParticipants([]);
-    Promise.all([
-      api.get(`/breeder/events/${id}`).then((r) => setCurrentEvent(r.data.event)),
-      api.get(`/breeder/event/${id}/inventory-items`).then((r) => {
-        const items = r.data.eventInventoryItems ?? [];
-        const map = new Map<number, any>();
-        for (const item of items) {
-          const inv = item.eventInventory;
-          const key = inv?.breederId;
-          if (!key) continue;
-          if (!map.has(key)) {
-            map.set(key, {
-              id: inv.id,
-              breederName: `${inv.breeder?.firstName ?? ""} ${inv.breeder?.lastName ?? ""}`.trim() || "Unknown",
-              loft: inv.loft || "N/A",
-              birds: [],
-            });
-          }
-          if (item.bird) map.get(key)!.birds.push(item.bird);
-        }
-        setParticipants(Array.from(map.values()));
-      }).catch(() => {}),
-    ]).finally(() => setLoading(false));
+    setFailed(false);
+    setEvent(null);
+    setStatus(null);
+    api
+      .get(`/breeder/events/${id}`)
+      .then((r) => {
+        if (!alive) return;
+        setEvent(r.data.event);
+        setStats(r.data.stats ?? null);
+      })
+      .catch(() => alive && setFailed(true))
+      .finally(() => alive && setLoading(false));
+    // 404 here simply means "not registered", which is the common case.
+    api
+      .get(`/breeder/event/${id}/payment-status`)
+      .then((r) => alive && setStatus(r.data))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
   }, [id]);
+
+  if (loading) {
+    return (
+      <SafeAreaView className="flex-1 bg-white">
+        <Header title="Event" />
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#189AB4" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (failed || !event) {
+    return (
+      <SafeAreaView className="flex-1 bg-white">
+        <Header title="Event" />
+        <Text className="text-center text-red-500 mt-10">Event not found or unavailable.</Text>
+      </SafeAreaView>
+    );
+  }
+
+  const races = racesOf(event);
+  const feeScheme = feeSchemeOf(event);
+  const liveRace = races.find(isLiveRace);
+  const registered = !!status;
+  const eventName: string = event.name ?? "Event";
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <Header title={currentEvent?.name ?? "Event"} />
+      <Header title={eventName} />
 
-      {/* Fee row */}
-      <View className="flex-row mx-4 py-4 justify-between border-b border-gray-400">
-        <View>
-          <Text className="text-sm font-bold text-black text-center">Perch Fee</Text>
-          <Text className="text-center text-sm">${currentEvent?.feeScheme?.entryFee ?? "N/A"}</Text>
+      {event.shortName || event.locationAddress ? (
+        <View className="px-4 pt-2">
+          {event.shortName ? (
+            <Text className="text-center text-xs text-gray-500">{event.shortName}</Text>
+          ) : null}
+          {event.locationAddress ? (
+            <Text className="text-center text-xs text-gray-500 mt-0.5">
+              Liberation Point: {event.locationAddress}
+            </Text>
+          ) : null}
         </View>
-        <View>
-          <Text className="text-sm font-bold text-black text-center">Bird Fee</Text>
-          <Text className="text-center text-sm">
-            ${currentEvent?.feeScheme?.perchFeeItems?.[0]?.perchFee ?? "N/A"}
+      ) : null}
+
+      {/* Headline figures */}
+      <View className="flex-row mx-4 py-3 justify-between border-b border-gray-200">
+        <View className="items-center flex-1">
+          <Text className="text-[11px] font-bold text-black">Entry Fee</Text>
+          <Text className="text-xs">{feeScheme?.entryFee != null ? money(feeScheme.entryFee) : "N/A"}</Text>
+        </View>
+        <View className="items-center flex-1">
+          <Text className="text-[11px] font-bold text-black">Date</Text>
+          <Text className="text-xs">
+            {event.eventDate ? format(new Date(event.eventDate), "MMM dd, yyyy") : "-"}
           </Text>
         </View>
-        <View>
-          <Text className="text-sm font-bold ml-4">Race Date</Text>
-          <Text className="text-center text-sm">
-            {currentEvent ? format(new Date(currentEvent.eventDate), "MMM dd, yyyy") : ""}
-          </Text>
+        <View className="items-center flex-1">
+          <Text className="text-[11px] font-bold text-black">Breeders</Text>
+          <Text className="text-xs">{stats?.breeders ?? "-"}</Text>
         </View>
-        <View>
-          <Text className="text-sm font-bold text-black">Participants</Text>
-          <Text className="text-center text-sm">
-            {currentEvent?._count?.eventInventories ?? currentEvent?.eventInventories?.length ?? "N/A"}
-          </Text>
+        <View className="items-center flex-1">
+          <Text className="text-[11px] font-bold text-black">Birds</Text>
+          <Text className="text-xs">{stats?.birds ?? "-"}</Text>
+        </View>
+        <View className="items-center flex-1">
+          <Text className="text-[11px] font-bold text-black">Races</Text>
+          <Text className="text-xs">{stats?.races ?? races.length}</Text>
         </View>
       </View>
 
-      {/* Action buttons */}
+      {/* Registration banner — the portal's RegistrationBanner */}
+      <ApprovalBanner status={status?.approvalStatus} />
+      {registered && status && status.totalDue > 0 ? (
+        <TouchableOpacity
+          onPress={() => router.push("/payments" as any)}
+          className="mx-4 mt-3 p-3 rounded-lg border border-amber-300 bg-amber-50 flex-row items-center justify-between"
+        >
+          <Text className="text-xs text-amber-900 flex-1">
+            You have {money(status.totalDue)} outstanding for this event.
+          </Text>
+          <Text className="text-xs font-bold text-amber-900">Pay now</Text>
+        </TouchableOpacity>
+      ) : null}
+
+      {/* Primary actions */}
       <View style={{ flexDirection: "row", marginHorizontal: 16, marginTop: 12, gap: 8 }}>
-        {currentEvent?.isOpen === 1 && (
+        {event.isOpen === 1 || event.isOpen === true ? (
           <TouchableOpacity
-            style={{ flex: 1, backgroundColor: "#189AB4", paddingVertical: 12, borderRadius: 8, alignItems: "center" }}
-            onPress={() => router.push({ pathname: "/register-in-event", params: { eventId: String(id) } } as any)}
+            style={{ flex: 1, backgroundColor: "#189AB4", paddingVertical: 11, borderRadius: 8, alignItems: "center" }}
+            onPress={() => router.push({ pathname: "/register-in-event", params: { eventId: id } } as any)}
           >
-            <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Register</Text>
+            <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>
+              {registered ? "Register more birds" : "Register"}
+            </Text>
           </TouchableOpacity>
-        )}
-        {currentEvent?.races?.some((r: any) => !!r.startTime && r.isClosed !== 1) && (
+        ) : null}
+        {registered ? (
           <TouchableOpacity
-            style={{ flex: 1, backgroundColor: "#ef4444", paddingVertical: 12, borderRadius: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}
-            onPress={() => {
-              const liveRace = currentEvent.races?.find((r: any) => !!r.startTime && r.isClosed !== 1);
-              if (liveRace) router.push({ pathname: "/live-race", params: { raceId: String(liveRace.id) } });
-            }}
+            style={{ flex: 1, borderWidth: 1, borderColor: "#189AB4", paddingVertical: 11, borderRadius: 8, alignItems: "center" }}
+            onPress={() =>
+              router.push({ pathname: "/my-registration", params: { eventId: id, eventName } } as any)
+            }
+          >
+            <Text style={{ color: "#189AB4", fontWeight: "700", fontSize: 14 }}>My registration</Text>
+          </TouchableOpacity>
+        ) : null}
+        {liveRace ? (
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: "#ef4444", paddingVertical: 11, borderRadius: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}
+            onPress={() => router.push({ pathname: "/live-race", params: { raceId: String(liveRace.id) } })}
           >
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#fff" }} />
-            <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Watch Live</Text>
+            <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>Watch Live</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
+      </View>
+
+      {/* The portal's separate event pages */}
+      <View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10 }}
+        >
+          {event.raceFormat === "CALCUTTA" ? (
+            <Shortcut
+              icon="hammer-outline"
+              label="Join Calcutta Auction"
+              onPress={() => router.push({ pathname: "/event-calcutta", params: { eventId: id, eventName } } as any)}
+            />
+          ) : null}
+          <Shortcut
+            icon="document-text-outline"
+            label="Rules"
+            onPress={() => router.push({ pathname: "/event-rules", params: { eventId: id } } as any)}
+          />
+          <Shortcut
+            icon="navigate-outline"
+            label="Station coordinates"
+            onPress={() => router.push({ pathname: "/event-stations", params: { eventId: id } } as any)}
+          />
+          <Shortcut
+            icon="archive-outline"
+            label="Archive"
+            onPress={() => router.push({ pathname: "/event-archive", params: { eventId: id } } as any)}
+          />
+          <Shortcut
+            icon="pricetag-outline"
+            label="Store"
+            onPress={() => router.push({ pathname: "/event-store", params: { eventId: id } } as any)}
+          />
+          <Shortcut
+            icon="alert-circle-outline"
+            label="Defaulters"
+            onPress={() => router.push({ pathname: "/event-defaulters", params: { eventId: id } } as any)}
+          />
+        </ScrollView>
       </View>
 
       {/* Tab bar */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        className="border-b border-gray-200"
-        contentContainerStyle={{ paddingHorizontal: 8 }}
-      >
-        {TABS.map((t) => (
-          <TouchableOpacity
-            key={t}
-            onPress={() => setTab(t)}
-            className="px-4 py-3"
-          >
-            <Text className={`text-sm font-semibold ${tab === t ? "text-primary" : "text-gray-500"}`}>{t}</Text>
-            {tab === t && <View className="h-0.5 bg-primary mt-1 rounded-full" />}
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <View className="border-b border-gray-200">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 8 }}>
+          {TABS.map((t) => (
+            <TouchableOpacity key={t} onPress={() => setTab(t)} className="px-4 py-3">
+              <Text className={`text-sm font-semibold ${tab === t ? "text-primary" : "text-gray-500"}`}>{t}</Text>
+              {tab === t && <View className="h-0.5 bg-primary mt-1 rounded-full" />}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
-      {tab === "Overview" && <OverviewTab participants={participants} loading={loading} eventId={id as string} />}
-      {tab === "Races" && <RacesTab eventId={id as string} />}
-      {tab === "Messages" && <MessagesTab eventId={id as string} />}
-      {tab === "Averages" && <AveragesTab eventId={id as string} />}
+      <View className="flex-1">
+        {tab === "Breeders" && <BreedersTab eventId={id} />}
+        {tab === "Birds" && <BirdsTab eventId={id} />}
+        {tab === "Result" && <ResultTab eventId={id} races={races} />}
+        {tab === "Stations" && <StationsTab eventId={id} event={event} />}
+        {tab === "Messages" && <MessagesTab eventId={id} />}
+        {tab === "History" && <HistoryTab eventId={id} />}
+      </View>
     </SafeAreaView>
   );
 };
 
 export default EventDetail;
-
-// ── Overview ──────────────────────────────────────────────────────────────────
-
-function OverviewTab({ participants, loading, eventId }: { participants: any[]; loading: boolean; eventId: string }) {
-  return (
-    <>
-      <View className="flex-row p-4 justify-between items-center">
-        <View className="flex-row items-center">
-          <Ionicons name="people-outline" size={24} />
-          <Text className="text-lg ml-2">Registered Participants</Text>
-        </View>
-        <View className="flex-row gap-2 items-center">
-          <View className="rounded-2xl bg-primary px-4 py-2">
-            <Text className="text-white text-sm">{participants?.length ?? 0} Breeders</Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => router.push({ pathname: "/event-defaulters", params: { eventId } })}
-            className="rounded-2xl bg-red-100 px-3 py-2"
-          >
-            <Text className="text-red-600 text-xs font-semibold">Defaulters</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-      <View className="flex-row bg-primary justify-between p-3 mx-2 border-b border-gray-200">
-        <Text className="font-bold text-sm text-white w-12">#</Text>
-        <Text className="font-bold text-sm text-center text-white w-32">Breeder Name</Text>
-        <Text className="font-bold text-sm text-center text-white w-32">Loft Name</Text>
-        <Text className="font-bold text-sm text-white w-18">Total Birds</Text>
-      </View>
-      {loading ? (
-        <ActivityIndicator className="mt-8" />
-      ) : (
-        <FlatList
-          data={participants}
-          keyExtractor={(_, i) => i.toString()}
-          renderItem={({ item, index }) => (
-            <View className="flex-row justify-between p-4 border-b border-gray-200">
-              <Text className="text-sm w-12">{index + 1}</Text>
-              <Text className="text-sm w-32">{item?.breederName || "Unknown Breeder"}</Text>
-              <Text className="text-sm w-32">{item?.loft || "Not specified"}</Text>
-              <Text className="text-sm text-center w-18">{item?.birds?.length || "0"}</Text>
-            </View>
-          )}
-          ListEmptyComponent={<Text className="text-center py-4 text-gray-500">No participants found</Text>}
-        />
-      )}
-    </>
-  );
-}
-
-// ── Races ─────────────────────────────────────────────────────────────────────
-
-function RacesTab({ eventId }: { eventId: string }) {
-  const [races, setRaces] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.get(`/breeder/event/${eventId}/history`)
-      .then((r) => setRaces(r.data.races ?? []))
-      .catch(() => setError("Could not load races."))
-      .finally(() => setLoading(false));
-  }, [eventId]);
-
-  if (loading) return <ActivityIndicator className="mt-8" />;
-  if (error) return <Text className="text-red-500 text-center mt-8">{error}</Text>;
-
-  return (
-    <FlatList
-      data={races}
-      keyExtractor={(r) => String(r.id)}
-      contentContainerStyle={{ padding: 12 }}
-      renderItem={({ item }) => (
-        <View className="border border-gray-200 rounded-xl p-4 mb-3">
-          <View className="flex-row justify-between items-start">
-            <Text className="font-semibold text-gray-900 flex-1">
-              {item.name || `Race ${item.raceNumber ?? item.id}`}
-            </Text>
-            <View className={`rounded-full px-2 py-0.5 ${item.status === "ENDED" ? "bg-green-100" : "bg-amber-100"}`}>
-              <Text className={`text-[10px] font-medium ${item.status === "ENDED" ? "text-green-700" : "text-amber-700"}`}>
-                {item.status}
-              </Text>
-            </View>
-          </View>
-          {item.raceType && <Text className="text-xs text-gray-500 mt-1">{item.raceType.name}</Text>}
-          {item.distance && <Text className="text-xs text-gray-500">{item.distance} mi</Text>}
-          {item.startTime && (
-            <Text className="text-xs text-gray-400 mt-1">
-              {format(new Date(item.startTime), "MMM dd, yyyy HH:mm")}
-            </Text>
-          )}
-        </View>
-      )}
-      ListEmptyComponent={<Text className="text-center text-gray-500 mt-8">No races yet</Text>}
-    />
-  );
-}
-
-// ── Messages ──────────────────────────────────────────────────────────────────
-
-function MessagesTab({ eventId }: { eventId: string }) {
-  const [messages, setMessages] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.get(`/breeder/event/${eventId}/messages`)
-      .then((r) => setMessages(r.data.messages ?? []))
-      .catch(() => setError("Could not load messages."))
-      .finally(() => setLoading(false));
-  }, [eventId]);
-
-  if (loading) return <ActivityIndicator className="mt-8" />;
-  if (error) return <Text className="text-red-500 text-center mt-8">{error}</Text>;
-
-  return (
-    <FlatList
-      data={messages}
-      keyExtractor={(m) => String(m.id)}
-      contentContainerStyle={{ padding: 12 }}
-      renderItem={({ item }) => (
-        <View className="border border-gray-200 rounded-xl p-4 mb-3">
-          {item.title && <Text className="font-semibold text-gray-900 mb-1">{item.title}</Text>}
-          <Text className="text-sm text-gray-700">{item.body}</Text>
-          <View className="flex-row justify-between mt-2">
-            <Text className="text-xs text-gray-400">
-              {item.author ? `${item.author.name ?? ""} ${item.author.lastName ?? ""}`.trim() : ""}
-            </Text>
-            {item.createdAt && (
-              <Text className="text-xs text-gray-400">
-                {format(new Date(item.createdAt), "MMM dd, yyyy")}
-              </Text>
-            )}
-          </View>
-        </View>
-      )}
-      ListEmptyComponent={<Text className="text-center text-gray-500 mt-8">No messages</Text>}
-    />
-  );
-}
-
-// ── Averages ──────────────────────────────────────────────────────────────────
-
-function AveragesTab({ eventId }: { eventId: string }) {
-  const [configs, setConfigs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.get(`/breeder/event/${eventId}/averages`)
-      .then((r) => setConfigs(Array.isArray(r.data) ? r.data : []))
-      .catch(() => setError("Could not load averages."))
-      .finally(() => setLoading(false));
-  }, [eventId]);
-
-  if (loading) return <ActivityIndicator className="mt-8" />;
-  if (error) return <Text className="text-red-500 text-center mt-8">{error}</Text>;
-
-  return (
-    <FlatList
-      data={configs}
-      keyExtractor={(c) => String(c.id)}
-      contentContainerStyle={{ padding: 12 }}
-      renderItem={({ item }) => (
-        <TouchableOpacity
-          className="border border-gray-200 rounded-xl p-4 mb-3 flex-row justify-between items-center"
-          onPress={() => router.push({ pathname: "/averages-detail", params: { avgId: String(item.id), eventId, name: item.name } })}
-        >
-          <View>
-            <Text className="font-semibold text-gray-900">{item.name}</Text>
-            {item.filterMode && <Text className="text-xs text-gray-500 mt-0.5">{item.filterMode}</Text>}
-          </View>
-          <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
-        </TouchableOpacity>
-      )}
-      ListEmptyComponent={<Text className="text-center text-gray-500 mt-8">No public averages configured</Text>}
-    />
-  );
-}

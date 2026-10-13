@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useAdminData } from "@/hooks/useAdminData";
 import { useAdminAction } from "@/hooks/useAdminAction";
+import { usePermissions } from "@/context/PermissionContext";
 import {
   Button,
   ButtonRow,
@@ -15,27 +16,34 @@ import {
   Sheet,
 } from "@/components/admin/ui";
 
-interface ModulePermission {
+export interface ModulePermission {
   code: string;
   label: string;
   description: string;
 }
 
-interface ModuleDef {
+export interface ModuleDef {
   key: string;
   label: string;
+  description?: string;
   permissions: ModulePermission[];
 }
 
-interface RoleRow {
+export interface RoleRow {
   role: string;
   permissions: { code: string; allowed: boolean; explicit: boolean; byDefault: boolean }[];
 }
 
-interface UserOverride {
-  userId: string;
-  permission: string;
-  allowed: boolean;
+/** One account that carries personal rules, as `/admin/permissions` lists them. */
+export interface OverrideRow {
+  user: { id: string; name: string | null; lastName: string | null; email: string; role: string };
+  permissions: { code: string; allowed: boolean }[];
+}
+
+export interface PermissionMatrix {
+  modules?: ModuleDef[];
+  roles?: RoleRow[];
+  overrides?: OverrideRow[];
 }
 
 export interface AccessUser {
@@ -62,6 +70,10 @@ const ROLES = ["BREEDER", "BETTOR", "ADMIN", "SUPERADMIN"];
  * clearing an override is a third state again — it does not revoke anything, it
  * hands the decision back to the role.
  *
+ * The two halves sit behind different permissions, as they do on the server:
+ * overrides need `users.permissions`, a role change is an account edit and
+ * needs `users.manage`.
+ *
  * Nothing here is a security boundary; the server re-checks every request. It
  * is the place the decision is recorded.
  */
@@ -75,14 +87,17 @@ export function UserAccessSheet({
   onChanged: () => void;
 }) {
   const action = useAdminAction();
+  const me = usePermissions();
   const [query, setQuery] = useState("");
   const [changingRole, setChangingRole] = useState(false);
 
-  const { data, loading, error, reload } = useAdminData<{
-    modules?: ModuleDef[];
-    roles?: RoleRow[];
-    users?: UserOverride[];
-  }>(user ? `/admin/permissions?userId=${user.id}` : null, [user?.id]);
+  const mayOverride = me.can("users.permissions");
+  const mayEditAccount = me.can("users.manage");
+
+  const { data, loading, error, reload } = useAdminData<PermissionMatrix>(
+    user && mayOverride ? `/admin/permissions?userId=${user.id}` : null,
+    [user?.id, mayOverride]
+  );
 
   const modules = useMemo(() => data?.modules ?? [], [data]);
   const roleRow = useMemo(
@@ -90,16 +105,19 @@ export function UserAccessSheet({
     [data, user?.role]
   );
   const overrides = useMemo(
-    () => (data?.users ?? []).filter((u) => u.userId === user?.id),
+    () => (data?.overrides ?? []).find((o) => o.user.id === user?.id)?.permissions ?? [],
     [data, user?.id]
   );
+
+  const isSuper = user?.role === "SUPERADMIN";
 
   /**
    * The three layers, resolved the way the server resolves them: an override
    * wins, then whatever the role says, then nothing.
    */
   const stateOf = (code: string): { allowed: boolean; from: "user" | "role" | "none" } => {
-    const override = overrides.find((o) => o.permission === code);
+    if (isSuper) return { allowed: true, from: "role" };
+    const override = overrides.find((o) => o.code === code);
     if (override) return { allowed: override.allowed, from: "user" };
     const fromRole = roleRow?.permissions.find((p) => p.code === code);
     if (fromRole?.allowed) return { allowed: true, from: "role" };
@@ -131,6 +149,8 @@ export function UserAccessSheet({
     if (ok) {
       reload();
       onChanged();
+      // Changing your own access reshapes your own menus.
+      me.refresh();
     }
   };
 
@@ -144,8 +164,10 @@ export function UserAccessSheet({
     );
     if (ok) {
       setChangingRole(false);
-      reload();
       onChanged();
+      // The sheet was opened with the old role, so it cannot show the new
+      // defaults honestly. Closing is better than showing stale ones.
+      onClose();
     }
   };
 
@@ -172,87 +194,94 @@ export function UserAccessSheet({
         title={who}
         subtitle={`Role: ${(user?.role ?? "breeder").toLowerCase()}`}
       >
-        <ButtonRow>
-          <Button
-            label="Change role"
-            tone="secondary"
-            icon="swap-horizontal-outline"
-            onPress={() => setChangingRole(true)}
-            full
-          />
-        </ButtonRow>
-
-        {user?.role === "SUPERADMIN" ? (
-          <Notice>
-            A superadmin bypasses every permission, so overrides below have no effect on them.
-          </Notice>
+        {mayEditAccount ? (
+          <ButtonRow>
+            <Button
+              label="Change role"
+              tone="secondary"
+              icon="swap-horizontal-outline"
+              onPress={() => setChangingRole(true)}
+              full
+            />
+          </ButtonRow>
         ) : null}
 
-        <View className="mt-3">
-          <SearchBar value={query} onChange={setQuery} placeholder="Find a permission" />
-        </View>
-
-        {loading ? (
-          <Loading />
-        ) : error ? (
-          <Notice>{error}</Notice>
+        {isSuper ? (
+          <Notice>
+            A super admin bypasses every permission, so there is nothing to override — the
+            server refuses to record one.
+          </Notice>
+        ) : !mayOverride ? (
+          <Notice>Granting and revoking individual permissions is not part of your access.</Notice>
         ) : (
-          rows.map((m) => (
-            <View key={m.key}>
-              <Text className="mb-1.5 mt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                {m.label}
-              </Text>
-              <Rows>
-                {m.permissions.map((p) => {
-                  const state = stateOf(p.code);
-                  return (
-                    <Row
-                      key={p.code}
-                      title={p.label}
-                      subtitle={
-                        state.from === "user"
-                          ? state.allowed
-                            ? "Granted to this person"
-                            : "Revoked from this person"
-                          : state.from === "role"
-                            ? "From their role"
-                            : "Not held"
-                      }
-                      right={state.allowed ? "on" : "off"}
-                      rightTone={
-                        state.from === "user"
-                          ? state.allowed
-                            ? "text-emerald-600"
-                            : "text-rose-600"
-                          : state.allowed
-                            ? "text-slate-600"
-                            : "text-slate-300"
-                      }
-                      badge={
-                        state.from === "user"
-                          ? { label: "override", bg: "bg-violet-100", text: "text-violet-700" }
-                          : null
-                      }
-                      onPress={() => {
-                        // Cycles through the three states an operator actually
-                        // needs: grant it, take it away, or stop having an
-                        // opinion and let the role answer.
-                        const next =
-                          state.from !== "user" ? true : state.allowed ? false : null;
-                        setPermission(p.code, next);
-                      }}
-                    />
-                  );
-                })}
-              </Rows>
+          <>
+            <View className="mt-3">
+              <SearchBar value={query} onChange={setQuery} placeholder="Find a permission" />
             </View>
-          ))
-        )}
 
-        <Text className="mt-4 text-xs text-slate-400">
-          Tap a permission to grant it, tap again to revoke it, once more to hand the decision
-          back to their role.
-        </Text>
+            {loading ? (
+              <Loading />
+            ) : error ? (
+              <Notice>{error}</Notice>
+            ) : (
+              rows.map((m) => (
+                <View key={m.key}>
+                  <Text className="mb-1.5 mt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    {m.label}
+                  </Text>
+                  <Rows>
+                    {m.permissions.map((p) => {
+                      const state = stateOf(p.code);
+                      return (
+                        <Row
+                          key={p.code}
+                          title={p.label}
+                          subtitle={
+                            (state.from === "user"
+                              ? state.allowed
+                                ? "Granted to this person"
+                                : "Revoked from this person"
+                              : state.from === "role"
+                                ? "From their role"
+                                : "Not held") + ` · ${p.code}`
+                          }
+                          right={state.allowed ? "on" : "off"}
+                          rightTone={
+                            state.from === "user"
+                              ? state.allowed
+                                ? "text-emerald-600"
+                                : "text-rose-600"
+                              : state.allowed
+                                ? "text-slate-600"
+                                : "text-slate-300"
+                          }
+                          badge={
+                            state.from === "user"
+                              ? { label: "override", bg: "bg-violet-100", text: "text-violet-700" }
+                              : null
+                          }
+                          onPress={() => {
+                            // Cycles through the three states an operator actually
+                            // needs: grant it, take it away, or stop having an
+                            // opinion and let the role answer.
+                            const next =
+                              state.from !== "user" ? true : state.allowed ? false : null;
+                            setPermission(p.code, next);
+                          }}
+                        />
+                      );
+                    })}
+                  </Rows>
+                </View>
+              ))
+            )}
+
+            <Text className="mt-4 text-xs text-slate-400">
+              Tap a permission to grant it, tap again to revoke it, once more to hand the
+              decision back to their role.
+            </Text>
+          </>
+        )}
 
         <ButtonRow>
           <Button label="Done" tone="secondary" onPress={onClose} full />

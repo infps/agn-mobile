@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Linking, Pressable, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import api from "@/service/api.service";
 import { useAdminData } from "@/hooks/useAdminData";
 import { useAdminAction } from "@/hooks/useAdminAction";
 import { usePermissions } from "@/context/PermissionContext";
@@ -15,7 +16,10 @@ import {
   Loading,
   NoAccess,
   Notice,
+  Row,
+  Rows,
   Screen,
+  SectionTitle,
   Sheet,
 } from "@/components/admin/ui";
 
@@ -27,48 +31,47 @@ interface Section {
   isPublished?: boolean | null;
 }
 
-/** Anything beyond paragraphs and line breaks came from the portal's editor. */
-const RICH = /<(?!\/?(p|br)\b)[a-z][^>]*>/i;
-
-/** HTML the portal wrote, shown as something readable rather than as tags. */
-function toPlain(html: string | null): string {
-  if (!html) return "";
-  return html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>\s*<p[^>]*>/gi, "\n\n")
-    .replace(/<\/?[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .trim();
+interface Video {
+  id: number;
+  title: string;
+  url: string;
+  description: string | null;
+  publishedAt: string | null;
+  isPublic: boolean;
+  race?: { name?: string | null; raceNumber?: number | null } | null;
 }
 
-/** Plain text back into the paragraph markup the portal renders. */
-function toHtml(text: string): string {
-  const escaped = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  return escaped
-    .split(/\n{2,}/)
-    .map((block) => `<p>${block.replace(/\n/g, "<br>")}</p>`)
-    .join("");
-}
+/** The headings AGN publishes, offered so an organizer starts from a shape. */
+const STARTER_SECTIONS = [
+  "Perch Fees",
+  "Entry Fees",
+  "Accepting Birds",
+  "Total Payout",
+  "Race Schedule",
+  "General Rules",
+  "Activation",
+  "Refunded Payments",
+  "Bird Management",
+  "Teams and Syndicates",
+  "Prize and Payout",
+  "Return and Shipping",
+];
 
 /**
- * The rules as breeders read them, and writing them.
+ * Published content for a season: the rules and fees page, and race videos.
  *
- * Long prose, so sections stay collapsed and open one at a time — the whole
- * document unrolled is the version nobody scrolls.
+ * Rules are long prose, so sections stay collapsed and open one at a time — the
+ * whole document unrolled is the version nobody scrolls. Fees are not a
+ * separate thing: they are sections ("Perch Fees", "Entry Fees") like any
+ * other, which is why changing one fee means editing one section.
  *
- * Editing is plain text, not rich text. The portal writes HTML with a proper
- * editor; this reads that back as readable text and writes paragraphs. That is
- * enough for the things actually done away from a desk — publishing a section,
- * fixing a date, adding a notice — and it is honest about the one thing it
- * cannot do: a section that came back with tables or styling in it says so, and
- * warns before flattening them, because losing somebody's formatting silently
- * is worse than refusing the edit.
+ * A section's text is Markdown, exactly as the portal stores it and the public
+ * page renders it. It is edited here as the same raw text the portal's box
+ * shows, so nothing is converted on the way in or out and a section can go
+ * back and forth between phone and desk without changing shape.
+ *
+ * Videos are links, not uploads — recordings of releases and arrivals that
+ * already live somewhere else.
  */
 export default function EventRules() {
   const { eventId, name } = useLocalSearchParams<{ eventId?: string; name?: string }>();
@@ -81,25 +84,31 @@ export default function EventRules() {
   const [form, setForm] = useState({ title: "", body: "", sortOrder: "" });
   const [removing, setRemoving] = useState<Section | null>(null);
 
+  const [addingVideo, setAddingVideo] = useState(false);
+  const [video, setVideo] = useState({ title: "", url: "" });
+  const [removingVideo, setRemovingVideo] = useState<Video | null>(null);
+
   const base = eventId ? `/admin/event/${eventId}/rules` : null;
+  const videosBase = eventId ? `/admin/event/${eventId}/videos` : null;
+
   const { data, loading, refreshing, forbidden, error, refresh, reload } = useAdminData<{
     sections?: Section[];
   }>(base, [eventId]);
+  const videosReq = useAdminData<{ videos?: Video[] }>(videosBase, [eventId]);
 
   const sections = data?.sections ?? [];
+  const videos = videosReq.data?.videos ?? [];
   const mayManage = can("content.manage");
 
-  const wouldFlatten = editing !== "new" && editing != null && RICH.test(editing.body ?? "");
-
   const startNew = () => {
-    setForm({ title: "", body: "", sortOrder: String(sections.length + 1) });
+    setForm({ title: "", body: "", sortOrder: String(sections.length) });
     setEditing("new");
   };
 
   const startEdit = (section: Section) => {
     setForm({
       title: section.title ?? "",
-      body: toPlain(section.body),
+      body: section.body ?? "",
       sortOrder: section.sortOrder != null ? String(section.sortOrder) : "",
     });
     setEditing(section);
@@ -107,7 +116,7 @@ export default function EventRules() {
 
   const save = async (publish: boolean) => {
     if (!form.title.trim()) {
-      toast.error("Give the section a title.");
+      toast.error("Give the section a heading.");
       return;
     }
     const order = form.sortOrder.trim() ? parseInt(form.sortOrder.trim(), 10) : 0;
@@ -117,7 +126,7 @@ export default function EventRules() {
       {
         ...(editing !== "new" && editing != null ? { id: editing.id } : {}),
         title: form.title.trim(),
-        body: toHtml(form.body),
+        body: form.body,
         sortOrder: isNaN(order) ? 0 : order,
         isPublished: publish,
       },
@@ -158,21 +167,64 @@ export default function EventRules() {
     }
   };
 
+  const saveVideo = async () => {
+    if (!video.title.trim() || !video.url.trim()) {
+      toast.error("A video needs a title and a URL.");
+      return;
+    }
+    const { ok } = await action.run(
+      "post",
+      videosBase!,
+      { title: video.title.trim(), url: video.url.trim() },
+      { success: "Video added." }
+    );
+    if (ok) {
+      setAddingVideo(false);
+      setVideo({ title: "", url: "" });
+      videosReq.reload();
+    }
+  };
+
+  const removeVideo = async () => {
+    if (!removingVideo) return;
+    const { ok } = await action.run(
+      "delete",
+      `${videosBase}?id=${removingVideo.id}`,
+      undefined,
+      { success: "Video removed." }
+    );
+    if (ok) {
+      setRemovingVideo(null);
+      videosReq.reload();
+    }
+  };
+
+  /** The page breeders read sits on the portal's own site, beside its API. */
+  const openPublicPage = () => {
+    const site = (api.defaults.baseURL ?? "").replace(/\/api\/?$/, "");
+    if (!site) {
+      toast.error("The app does not know where the portal is.");
+      return;
+    }
+    Linking.openURL(`${site}/events/${eventId}/rules`);
+  };
+
   if (forbidden) return <NoAccess what="Rules" />;
+
+  const starters =
+    editing === "new" ? STARTER_SECTIONS.filter((s) => !sections.some((x) => x.title === s)) : [];
 
   return (
     <Screen
-      title="Rules"
-      subtitle={name ? `${name} · ${sections.length} sections` : `${sections.length} sections`}
-      onRefresh={refresh}
-      refreshing={refreshing}
-      header={
-        mayManage ? (
-          <ButtonRow>
-            <Button label="New section" icon="add" onPress={startNew} />
-          </ButtonRow>
-        ) : null
+      title="Rules & videos"
+      subtitle={
+        `${name ? `${name} · ` : ""}${sections.length} sections · ${videos.length} videos`
       }
+      onRefresh={() => {
+        refresh();
+        videosReq.refresh();
+      }}
+      refreshing={refreshing || videosReq.refreshing}
     >
       {loading ? (
         <Loading />
@@ -180,9 +232,28 @@ export default function EventRules() {
         <>
           {error ? <Notice>{error}</Notice> : null}
 
-          <View className="mt-4" style={{ gap: 10 }}>
+          <SectionTitle>Rules & fees</SectionTitle>
+          <Text className="mb-2 text-xs text-slate-500">
+            Published sections are readable without an account — these are the terms a breeder
+            agrees to by entering. Markdown is supported.
+          </Text>
+          <View className="mb-3 flex-row flex-wrap" style={{ gap: 8 }}>
+            {mayManage ? <Button label="Add section" icon="add" onPress={startNew} /> : null}
+            <Button
+              label="View public page"
+              tone="secondary"
+              icon="open-outline"
+              onPress={openPublicPage}
+            />
+          </View>
+
+          <View style={{ gap: 10 }}>
             {sections.length === 0 ? (
-              <Empty>No rules have been published for this season.</Empty>
+              <Empty>
+                {mayManage
+                  ? "No sections yet. Add one — the form offers the headings AGN uses."
+                  : "No rules have been written for this season."}
+              </Empty>
             ) : (
               sections.map((s, index) => {
                 const isOpen = open === s.id;
@@ -214,7 +285,7 @@ export default function EventRules() {
                     {isOpen && (
                       <View className="border-t border-slate-100 px-4 py-3">
                         <Text className="text-sm leading-6 text-slate-700">
-                          {toPlain(s.body) || "This section is empty."}
+                          {(s.body ?? "").trim() || "This section is empty."}
                         </Text>
 
                         {mayManage ? (
@@ -230,6 +301,7 @@ export default function EventRules() {
                               tone="secondary"
                               icon={s.isPublished === false ? "eye-outline" : "eye-off-outline"}
                               onPress={() => togglePublished(s)}
+                              disabled={action.pending}
                             />
                             <Button
                               label="Delete"
@@ -246,28 +318,92 @@ export default function EventRules() {
               })
             )}
           </View>
+
+          <SectionTitle
+            action={
+              mayManage ? (
+                <Button
+                  label="Add video"
+                  icon="add"
+                  onPress={() => {
+                    setVideo({ title: "", url: "" });
+                    setAddingVideo(true);
+                  }}
+                />
+              ) : null
+            }
+          >
+            Videos
+          </SectionTitle>
+          <Text className="mb-2 text-xs text-slate-500">
+            Links to recordings — releases, arrivals, loft updates. Nothing is uploaded here.
+          </Text>
+
+          {videosReq.error ? <Notice>{videosReq.error}</Notice> : null}
+
+          {videosReq.loading ? (
+            <Loading />
+          ) : videos.length === 0 ? (
+            <Empty>No videos yet.</Empty>
+          ) : (
+            <Rows>
+              {videos.map((v) => {
+                const race = v.race
+                  ? v.race.name ?? (v.race.raceNumber != null ? `Race ${v.race.raceNumber}` : null)
+                  : null;
+                return (
+                  <Row
+                    key={v.id}
+                    title={v.title}
+                    subtitle={[race, v.description, v.url].filter(Boolean).join(" · ")}
+                    badge={
+                      v.isPublic
+                        ? null
+                        : { label: "private", bg: "bg-slate-100", text: "text-slate-600" }
+                    }
+                    leading={<Ionicons name="film-outline" size={18} color="#94a3b8" />}
+                    onPress={() => Linking.openURL(v.url)}
+                    onLongPress={mayManage ? () => setRemovingVideo(v) : undefined}
+                  />
+                );
+              })}
+            </Rows>
+          )}
+          {mayManage && videos.length > 0 ? (
+            <Text className="mt-2 text-center text-xs text-slate-400">
+              Tap to open a video. Press and hold to remove it.
+            </Text>
+          ) : null}
         </>
       )}
 
       <Sheet
         open={editing != null}
         onClose={() => setEditing(null)}
-        title={editing === "new" ? "New section" : "Edit section"}
-        subtitle="Plain text — a blank line starts a new paragraph"
+        title={editing === "new" ? "Add section" : "Edit section"}
+        subtitle="Markdown — a line starting with a dash is a bullet"
       >
-        {wouldFlatten ? (
-          <Notice tone="rose">
-            This section was written in the portal and has formatting this editor cannot keep —
-            lists, tables or styling. Saving here will flatten it to plain paragraphs.
-          </Notice>
-        ) : null}
-
         <Field
-          label="Title"
+          label="Heading"
           value={form.title}
           onChange={(v) => setForm({ ...form, title: v })}
-          autoFocus
+          placeholder="Perch Fees"
         />
+        {starters.length > 0 ? (
+          <View className="mt-2 flex-row flex-wrap" style={{ gap: 6 }}>
+            {starters.map((s) => (
+              <Pressable
+                key={s}
+                onPress={() => setForm({ ...form, title: s })}
+                className={`rounded-md border px-2 py-1 ${
+                  form.title === s ? "border-cyan-600 bg-cyan-50" : "border-slate-200 bg-white"
+                }`}
+              >
+                <Text className="text-[11px] text-slate-600">{s}</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
         <Field
           label="Order"
           value={form.sortOrder}
@@ -276,9 +412,10 @@ export default function EventRules() {
           hint="Lower numbers come first."
         />
         <Field
-          label="Text"
+          label="Body"
           value={form.body}
           onChange={(v) => setForm({ ...form, body: v })}
+          placeholder={"- Per Bird – $140.00\n  - Five Birds get One FREE!\n- Perch fee is non-refundable"}
           multiline
         />
 
@@ -297,6 +434,31 @@ export default function EventRules() {
         </ButtonRow>
       </Sheet>
 
+      <Sheet
+        open={addingVideo}
+        onClose={() => setAddingVideo(false)}
+        title="Add video"
+        subtitle="A link to where the recording already lives"
+      >
+        <Field
+          label="Title"
+          value={video.title}
+          onChange={(v) => setVideo({ ...video, title: v })}
+          placeholder="Hot Spot 1 release"
+        />
+        <Field
+          label="URL"
+          value={video.url}
+          onChange={(v) => setVideo({ ...video, url: v })}
+          placeholder="https://youtube.com/watch?v=…"
+          hint="The full address, starting with https://"
+        />
+        <ButtonRow>
+          <Button label="Cancel" tone="secondary" onPress={() => setAddingVideo(false)} full />
+          <Button label="Add video" onPress={saveVideo} pending={action.pending} full />
+        </ButtonRow>
+      </Sheet>
+
       <Confirm
         open={removing != null}
         title={`Delete "${removing?.title ?? "this section"}"?`}
@@ -305,6 +467,16 @@ export default function EventRules() {
         pending={action.pending}
         onConfirm={remove}
         onCancel={() => setRemoving(null)}
+      />
+
+      <Confirm
+        open={removingVideo != null}
+        title={`Remove "${removingVideo?.title ?? "this video"}"?`}
+        body="The link comes off the event. The recording itself is not touched."
+        confirmLabel="Remove"
+        pending={action.pending}
+        onConfirm={removeVideo}
+        onCancel={() => setRemovingVideo(null)}
       />
     </Screen>
   );

@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { usePermissions } from "@/context/PermissionContext";
 import { useResponsive } from "@/hooks/useResponsive";
 import { useAdminData } from "@/hooks/useAdminData";
+import { chooseSeason, useChosenSeason } from "@/service/season.service";
 import { Figure, FigureRow, Loading, NoAccess, money } from "@/components/admin/ui";
 
 /**
@@ -25,7 +26,8 @@ interface Section {
   label: string;
   hint: string;
   icon: keyof typeof Ionicons.glyphMap;
-  permission: string;
+  /** Any one is enough — the same pair the section's route accepts. */
+  permissions: string[];
   /** Sections not yet built on mobile route nowhere; they are simply absent. */
   route?: string;
 }
@@ -39,40 +41,46 @@ const GROUPS: Group[] = [
   {
     label: "Setup",
     sections: [
-      { key: "breeders", label: "Breeders", hint: "Who is entered", icon: "people-outline", permission: "breeders.view", route: "/(admin)/event-breeders" },
-      { key: "birds", label: "Birds", hint: "Every bird in the loft", icon: "egg-outline", permission: "birds.view", route: "/(admin)/event-birds" },
-      { key: "groups", label: "Groups", hint: "Sections and vaccinations", icon: "albums-outline", permission: "groups.view", route: "/(admin)/event-groups" },
-      { key: "baskets", label: "Baskets", hint: "Loft and race baskets", icon: "cube-outline", permission: "baskets.view", route: "/(admin)/event-baskets" },
-      { key: "stations", label: "Stations", hint: "Liberation points", icon: "location-outline", permission: "stations.view", route: "/(admin)/event-stations" },
-      { key: "scanners", label: "Scanners", hint: "Which reader feeds which section", icon: "radio-outline", permission: "scanners.view", route: "/(admin)/event-scanners" },
+      { key: "details", label: "Details", hint: "Dates, location, contact and schemes", icon: "information-circle-outline", permissions: ["events.view", "events.manage"], route: "/(admin)/event-settings" },
+      { key: "seasons", label: "Seasons", hint: "Open, clone and switch seasons", icon: "layers-outline", permissions: ["events.view", "events.manage"], route: "/(admin)/event-seasons" },
+      { key: "breeders", label: "Breeders", hint: "Who is entered", icon: "people-outline", permissions: ["breeders.view", "breeders.manage"], route: "/(admin)/event-breeders" },
+      // The bird list is served by the registrations route, so it answers to
+      // the breeders permission rather than the birds one.
+      { key: "birds", label: "Birds", hint: "Every bird in the loft", icon: "egg-outline", permissions: ["breeders.view", "breeders.manage"], route: "/(admin)/event-birds" },
+      { key: "groups", label: "Groups", hint: "Sections and vaccinations", icon: "albums-outline", permissions: ["groups.view", "groups.manage"], route: "/(admin)/event-groups" },
+      { key: "baskets", label: "Baskets", hint: "Loft and race baskets", icon: "cube-outline", permissions: ["baskets.view", "baskets.manage"], route: "/(admin)/event-baskets" },
+      { key: "stations", label: "Stations", hint: "Liberation points", icon: "location-outline", permissions: ["stations.manage"], route: "/(admin)/event-stations" },
+      { key: "checkin", label: "Check-in", hint: "Link tags and place arriving birds", icon: "scan-outline", permissions: ["checkin.view", "checkin.manage"], route: "/(admin)/checkin" },
+      { key: "scanners", label: "Scanners", hint: "Which reader feeds which section", icon: "radio-outline", permissions: ["scanners.view", "scanners.manage"], route: "/(admin)/event-scanners" },
+      { key: "presets", label: "Status presets", hint: "The statuses a race day uses", icon: "pricetag-outline", permissions: ["events.manage"], route: "/(admin)/status-presets" },
     ],
   },
   {
     label: "Racing",
     sections: [
-      { key: "races", label: "Races", hint: "Schedule and live control", icon: "flag-outline", permission: "races.view", route: "/(admin)/races" },
-      { key: "result", label: "Result", hint: "Positions and prizes", icon: "trophy-outline", permission: "races.view", route: "/(admin)/event-result" },
-      { key: "averages", label: "Averages", hint: "Multi-race standings", icon: "stats-chart-outline", permission: "races.view", route: "/(admin)/event-averages" },
-      { key: "tournaments", label: "Knockout", hint: "Rounds and cuts", icon: "git-branch-outline", permission: "tournaments.view", route: "/(admin)/event-knockout" },
-      { key: "classes", label: "Classes", hint: "Class entries and payouts", icon: "ribbon-outline", permission: "classes.view", route: "/(admin)/event-classes" },
+      { key: "races", label: "Races", hint: "Schedule and live control", icon: "flag-outline", permissions: ["races.view", "races.manage"], route: "/(admin)/races" },
+      { key: "result", label: "Result", hint: "Positions and prizes", icon: "trophy-outline", permissions: ["races.view", "races.manage"], route: "/(admin)/event-result" },
+      { key: "averages", label: "Averages", hint: "Multi-race standings", icon: "stats-chart-outline", permissions: ["races.view", "races.manage"], route: "/(admin)/event-averages" },
+      { key: "tournaments", label: "Knockout", hint: "Rounds and cuts", icon: "git-branch-outline", permissions: ["tournaments.view", "tournaments.manage"], route: "/(admin)/event-knockout" },
+      { key: "classes", label: "Classes", hint: "Class entries and payouts", icon: "ribbon-outline", permissions: ["classes.view", "classes.manage"], route: "/(admin)/event-classes" },
     ],
   },
   {
     label: "Money",
     sections: [
-      { key: "accounting", label: "Accounting", hint: "Ledger and statements", icon: "cash-outline", permission: "accounting.view", route: "/(admin)/accounting" },
-      { key: "defaulters", label: "Defaulters", hint: "Unpaid entries", icon: "alert-circle-outline", permission: "payments.view", route: "/(admin)/event-defaulters" },
-      { key: "betting", label: "Betting", hint: "Pools and cash bets", icon: "dice-outline", permission: "betting.view", route: "/(admin)/event-betting" },
-      { key: "calcutta", label: "Calcutta", hint: "Live auction", icon: "hammer-outline", permission: "calcutta.view", route: "/(admin)/event-calcutta" },
-      { key: "store", label: "Store", hint: "Defaulter birds for sale", icon: "storefront-outline", permission: "store.view", route: "/(admin)/event-store" },
+      { key: "accounting", label: "Accounting", hint: "Ledger and statements", icon: "cash-outline", permissions: ["accounting.view"], route: "/(admin)/accounting" },
+      { key: "defaulters", label: "Defaulters", hint: "Unpaid entries", icon: "alert-circle-outline", permissions: ["payments.view", "payments.manage"], route: "/(admin)/event-defaulters" },
+      { key: "betting", label: "Betting", hint: "Pools and cash bets", icon: "dice-outline", permissions: ["betting.view", "betting.manage"], route: "/(admin)/event-betting" },
+      { key: "calcutta", label: "Calcutta", hint: "Live auction", icon: "hammer-outline", permissions: ["calcutta.view", "calcutta.manage"], route: "/(admin)/event-calcutta" },
+      { key: "store", label: "Store", hint: "Defaulter birds for sale", icon: "storefront-outline", permissions: ["store.view", "store.manage"], route: "/(admin)/event-store" },
     ],
   },
   {
     label: "Publish",
     sections: [
-      { key: "messages", label: "Messages", hint: "Broadcast to breeders", icon: "chatbubbles-outline", permission: "messages.view", route: "/(admin)/event-messages" },
-      { key: "history", label: "History", hint: "What happened to each bird", icon: "time-outline", permission: "birds.view", route: "/(admin)/event-history" },
-      { key: "content", label: "Rules", hint: "Rules, fees and videos", icon: "document-text-outline", permission: "content.view", route: "/(admin)/event-rules" },
+      { key: "messages", label: "Messages", hint: "Broadcast to breeders", icon: "chatbubbles-outline", permissions: ["messages.view", "messages.manage"], route: "/(admin)/event-messages" },
+      { key: "history", label: "History", hint: "Archived races by year", icon: "time-outline", permissions: ["events.view", "events.manage"], route: "/(admin)/event-history" },
+      { key: "content", label: "Rules & videos", hint: "Rules, fees and videos", icon: "document-text-outline", permissions: ["content.view", "content.manage"], route: "/(admin)/event-rules" },
     ],
   },
 ];
@@ -90,13 +98,17 @@ interface Stats {
 
 export default function AdminEventDetail() {
   const { eventId, name } = useLocalSearchParams<{ eventId?: string; name?: string }>();
-  const { can } = usePermissions();
+  const { can, canAny } = usePermissions();
   const { isWide, isMedium, gutter } = useResponsive();
   const router = useRouter();
 
+  // Set from the Seasons section. While it is, every section below works in
+  // that season instead of the active one.
+  const season = useChosenSeason(eventId);
+
   const stats = useAdminData<Stats>(
     eventId ? `/admin/event/${eventId}/dashboard-stats` : null,
-    [eventId]
+    [eventId, season?.id]
   );
 
   if (!can("events.view") && !can("events.manage")) {
@@ -106,7 +118,7 @@ export default function AdminEventDetail() {
   const groups = GROUPS.map((group) => ({
     ...group,
     // A section with no mobile screen yet is left out rather than shown dead.
-    sections: group.sections.filter((s) => s.route && can(s.permission)),
+    sections: group.sections.filter((s) => s.route && canAny(...s.permissions)),
   })).filter((group) => group.sections.length > 0);
 
   const s = stats.data;
@@ -122,6 +134,20 @@ export default function AdminEventDetail() {
       <Text className="mt-1 text-sm text-slate-500">
         {[s?.seasonName, s?.displayStatus].filter(Boolean).join(" · ") || "Season not set"}
       </Text>
+
+      {season ? (
+        <Pressable
+          onPress={() => chooseSeason(String(eventId), null)}
+          className="mt-3 flex-row items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3"
+        >
+          <Ionicons name="layers-outline" size={16} color="#b45309" />
+          <Text className="flex-1 text-xs text-amber-800">
+            Working in {season.name || `season ${season.id}`}, not the active season. Everything
+            below reads and writes it.
+          </Text>
+          <Text className="text-xs font-semibold text-amber-800">Back to active</Text>
+        </Pressable>
+      ) : null}
 
       {stats.loading ? (
         <Loading />

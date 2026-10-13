@@ -1,15 +1,21 @@
+import {
+  bandOf,
+  bettingSchemeOf,
+  feeSchemeOf,
+  money,
+  poolKey,
+  racesOf,
+  registrationFees,
+  schemePools,
+  SchemePool,
+} from "@/components/EventShared";
 import Header from "@/components/header";
-import Modal from "@/components/Modal";
-import PayPalButton from "@/components/PayPalButton";
-import { SEX_OPTIONS, getSexLabel } from "@/constants/bird";
-import { useAuth, useBirds, useToast } from "@/context";
-import { BirdType } from "@/context/BirdContext";
-import { EventType, useEvents } from "@/context/EventContext";
+import { useToast } from "@/context/ToastContext";
 import api from "@/service/api.service";
-import { calculateFees } from "@/utils/fee-calculator";
-import { Picker } from "@react-native-picker/picker";
-import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -21,757 +27,528 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const FEDERATIONS = ["AU", "IF", "NPA", "CU", "BB", "ARPU", "IPB"];
-const COLORS = ["BB","BC","BBWF","BBPD","BCWF","BCPD","SPLA","CHOC","RC","SIL","RCSP","RR","BLK","OPAL","SLAT","PENC","WHIT","GRIZ","DC","DCWF"];
+/**
+ * Register for an event — the portal's Register tab.
+ *
+ * The order is the portal's: pick a loft (team) name, say how many perches to
+ * reserve, choose which of your birds fill them, optionally back those birds in
+ * the event's betting pools, then either pay now or commit to paying later.
+ *
+ * Everything is sent to POST /api/breeder/event/[eventId]/register, which
+ * prices the registration itself; the figures shown here are a preview built
+ * from the same fee scheme. The fee scheme, betting scheme and races live on
+ * the event's active season, not on the event.
+ *
+ * Paying now follows the portal's button: register with paymentIntent PAYPAL,
+ * open the `approveUrl` that create-order returns, poll, capture — and if the
+ * payment does not complete, take the unpaid registration back out again so a
+ * failed checkout does not leave a registration behind.
+ */
 
-function InlineDropdown({ label, value, options, onChange }: { label: string; value: string; options: { value: string; label: string }[] | string[]; onChange: (v: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const normalized = options.map((o) => typeof o === "string" ? { value: o, label: o } : o);
-  const selected = normalized.find((o) => o.value === value)?.label || "Select";
-  return (
-    <View style={{ flex: 1 }}>
-      <Text style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>{label}</Text>
-      <TouchableOpacity
-        style={{ borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, padding: 10, backgroundColor: "#fff" }}
-        onPress={() => setOpen(!open)}
-      >
-        <Text style={{ color: value ? "#000" : "#9ca3af" }}>{selected}</Text>
-      </TouchableOpacity>
-      {open && (
-        <View style={{ position: "absolute", top: 60, left: 0, right: 0, backgroundColor: "#fff", borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, zIndex: 100, maxHeight: 200 }}>
-          <ScrollView>
-            {normalized.map((opt) => (
-              <TouchableOpacity
-                key={opt.value}
-                style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: "#f3f4f6", backgroundColor: value === opt.value ? "#e0f2fe" : "#fff" }}
-                onPress={() => { onChange(opt.value); setOpen(false); }}
-              >
-                <Text style={{ color: value === opt.value ? "#189AB4" : "#000" }}>{opt.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-    </View>
-  );
+const POLL_MS = 3000;
+const MAX_POLLS = 100; // five minutes
+const CATEGORY_LABEL: Record<string, string> = { BELGIAN: "Belgian", STANDARD: "Standard", WTA: "WTA" };
+
+interface MyBird {
+  id: number;
+  birdName?: string | null;
+  band?: string | null;
+  band1?: string | null;
+  band2?: string | null;
+  band3?: string | null;
+  band4?: string | null;
+  color?: string | null;
+  sex?: number | null;
+  isActive?: number | boolean | null;
+  isLost?: number | boolean | null;
 }
 
 const RegisterInEvent = () => {
-  const { eventId } = useLocalSearchParams();
-  const { currentEvent, getEvent, getMyEventInventories, loading } = useEvents();
-  const [selectedTeam, setSelectedTeam] = useState("");
-  const [selectedBirds, setSelectedBirds] = useState<BirdType[]>([]);
-  const [alreadyRegistered, setAlreadyRegistered] = useState(false);
-  const [checkingRegistration, setCheckingRegistration] = useState(true);
-  const { user } = useAuth();
+  const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const toast = useToast();
 
+  const [event, setEvent] = useState<any>(null);
+  const [birds, setBirds] = useState<MyBird[]>([]);
+  const [teams, setTeams] = useState<{ id: number; name: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [loftName, setLoftName] = useState("");
+  const [reservedBirds, setReservedBirds] = useState(0);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [bets, setBets] = useState<Record<number, string[]>>({});
+  const [note, setNote] = useState("");
+  const [search, setSearch] = useState("");
+  const [busy, setBusy] = useState<null | "paypal" | "later">(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
-    getEvent(eventId.toString());
+    if (!eventId) return;
+    let alive = true;
+    Promise.all([
+      api.get(`/breeder/events/${eventId}`),
+      api.get("/breeder/teams").catch(() => null),
+    ])
+      .then(([ev, tm]) => {
+        if (!alive) return;
+        setEvent(ev.data?.event ?? null);
+        const list = tm?.data?.teams ?? [];
+        setTeams(list);
+        // The breeder's default team name pre-fills the loft, as on the portal.
+        setLoftName((prev) => prev || tm?.data?.defaultTeamName || list[0]?.name || "");
+      })
+      .catch((e) => toast.error(e?.response?.data?.message ?? "Could not load the event"))
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
-  useEffect(() => {
-    const checkRegistration = async () => {
-      try {
-        const inventories = await getMyEventInventories();
-        const registered = inventories.some(
-          (inv: any) => String(inv.eventId) === eventId.toString()
-        );
-        setAlreadyRegistered(registered);
-      } catch {
-        // ignore - allow registration attempt
-      } finally {
-        setCheckingRegistration(false);
-      }
-    };
-    if (user) checkRegistration();
-  }, [eventId, user]);
+  // Birds are re-read on focus so one added from here shows up on return.
+  useFocusEffect(
+    useCallback(() => {
+      api
+        .get("/breeder/birds")
+        .then((r) => setBirds(r.data?.birds ?? []))
+        .catch(() => {});
+    }, [])
+  );
 
-  if (loading || checkingRegistration) {
+  const feeScheme = feeSchemeOf(event);
+  const races = racesOf(event);
+  const pools: SchemePool[] = useMemo(() => schemePools(bettingSchemeOf(event)), [event]);
+  const maxBirds: number = feeScheme?.maxBirdCount || 0;
+  const requiresPayment = !!feeScheme?.requirePaymentToRegister;
+  const isOpen = event?.isOpen === 1 || event?.isOpen === true;
+
+  const fees = useMemo(
+    () => registrationFees(feeScheme, races, reservedBirds),
+    [feeScheme, races, reservedBirds]
+  );
+
+  // One stake per chosen pool, per bird, in every race of the season.
+  const betStakes = useMemo(() => {
+    let perRace = 0;
+    for (const birdId of selected) {
+      for (const key of bets[birdId] ?? []) {
+        perRace += pools.find((p) => poolKey(p) === key)?.amount ?? 0;
+      }
+    }
+    return perRace * races.length;
+  }, [selected, bets, pools, races.length]);
+
+  const total = (fees?.total ?? 0) + betStakes;
+
+  const availableBirds = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return birds.filter((b) => {
+      if (b.isLost === 1 || b.isLost === true) return false;
+      if (b.isActive === 0 || b.isActive === false) return false;
+      if (!q) return true;
+      return bandOf(b).toLowerCase().includes(q) || String(b.birdName ?? "").toLowerCase().includes(q);
+    });
+  }, [birds, search]);
+
+  const setReserved = (n: number) => {
+    const capped = Math.max(0, maxBirds > 0 ? Math.min(n, maxBirds) : n);
+    setReservedBirds(capped);
+    // Fewer perches than chosen birds drops the extra birds.
+    setSelected((prev) => (prev.length > capped ? prev.slice(0, capped) : prev));
+  };
+
+  const toggleBird = (id: number) => {
+    if (selected.includes(id)) {
+      setSelected((prev) => prev.filter((b) => b !== id));
+      return;
+    }
+    if (reservedBirds <= 0) {
+      toast.error("Choose how many perches to reserve first");
+      return;
+    }
+    if (selected.length >= reservedBirds) {
+      toast.error(`Maximum ${reservedBirds} birds for this registration`);
+      return;
+    }
+    setSelected((prev) => [...prev, id]);
+  };
+
+  const togglePool = (birdId: number, key: string) =>
+    setBets((prev) => {
+      const current = prev[birdId] ?? [];
+      return {
+        ...prev,
+        [birdId]: current.includes(key) ? current.filter((k) => k !== key) : [...current, key],
+      };
+    });
+
+  const validate = (): boolean => {
+    if (!loftName.trim()) {
+      toast.error("Loft name is required");
+      return false;
+    }
+    if (reservedBirds <= 0) {
+      toast.error("Reserve at least one perch");
+      return false;
+    }
+    return true;
+  };
+
+  const payload = (paymentIntent?: "PAYPAL" | "CASH") => ({
+    loftName: loftName.trim(),
+    reservedBirds,
+    birds: selected.map((birdId) => ({ birdId })),
+    bets: selected
+      .filter((birdId) => (bets[birdId] ?? []).length > 0)
+      .map((birdId) => ({
+        birdId,
+        pools: (bets[birdId] ?? []).map((key) => {
+          const [category, tierIndex] = key.split(":");
+          return { category, tierIndex: Number(tierIndex) };
+        }),
+      })),
+    ...(note.trim() ? { note: note.trim() } : {}),
+    ...(paymentIntent ? { paymentIntent } : {}),
+  });
+
+  const registerLater = async () => {
+    if (!validate()) return;
+    setBusy("later");
+    try {
+      // Where payment is required, "later" is a promise to pay cash.
+      await api.post(`/breeder/event/${eventId}/register`, payload(requiresPayment ? "CASH" : undefined));
+      Alert.alert(
+        "Registered",
+        requiresPayment
+          ? "Registration recorded with a commitment to pay cash. It takes part once the organizer approves it."
+          : "Registration successful. You can pay from the Payments screen. It takes part once the organizer approves it."
+      );
+      router.back();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Registration failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const rollback = async (inventoryId: number) => {
+    try {
+      await api.delete(`/breeder/event/${eventId}/registration/${inventoryId}`);
+    } catch {
+      // The route refuses once anything was captured, which is the right outcome.
+    }
+  };
+
+  const registerAndPay = async () => {
+    if (!validate()) return;
+    setBusy("paypal");
+    let inventoryId: number | null = null;
+    try {
+      const reg = await api.post(`/breeder/event/${eventId}/register`, payload("PAYPAL"));
+      inventoryId = reg.data?.data?.eventInventory?.id ?? null;
+      if (!inventoryId) throw new Error("The registration did not come back with an id");
+
+      const order = await api.post("/payment/paypal/create-order", {
+        eventInventoryId: inventoryId,
+        currency: "USD",
+      });
+      const { orderID, approveUrl } = order.data as { orderID: string; approveUrl?: string };
+      if (!approveUrl) throw new Error("PayPal did not return an approval link");
+
+      WebBrowser.openBrowserAsync(approveUrl);
+
+      const id = inventoryId;
+      let polls = 0;
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = setInterval(async () => {
+        polls += 1;
+        if (polls > MAX_POLLS) {
+          if (pollRef.current) clearInterval(pollRef.current);
+          pollRef.current = null;
+          await rollback(id);
+          setBusy(null);
+          toast.error("Timed out waiting for PayPal. Nothing was charged and the registration was not kept.");
+          return;
+        }
+        try {
+          const status = await api.post("/payment/paypal/check-status", { orderID });
+          if (!status.data?.isApproved && !status.data?.isCompleted) return;
+
+          if (pollRef.current) clearInterval(pollRef.current);
+          pollRef.current = null;
+          try {
+            await api.post("/payment/paypal/capture-order", { orderID, eventInventoryId: id });
+            Alert.alert("Success", "Payment confirmed. Your registration takes part once the organizer approves it.");
+            router.back();
+          } catch (captureErr: any) {
+            await rollback(id);
+            toast.error(captureErr?.response?.data?.message || "Failed to capture payment");
+          } finally {
+            setBusy(null);
+          }
+        } catch {
+          // One failed check is not a failed payment. Keep polling until the cap.
+        }
+      }, POLL_MS);
+    } catch (err: any) {
+      if (inventoryId) await rollback(inventoryId);
+      toast.error(err?.response?.data?.message || err?.message || "Could not start the payment");
+      setBusy(null);
+    }
+  };
+
+  if (loading) {
     return (
-      <View className="flex-1 items-center justify-center">
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
-  if (!currentEvent) {
-    return <Text>No event selected</Text>;
-  }
-  const liveRace = currentEvent.races?.find(r => !!r.startTime && r.isClosed !== 1);
-  if (liveRace) {
-    return (
-      <SafeAreaView className="flex-1 bg-[#f5f5f5]">
-        <Header title="Register In Event" />
-        <View className="flex-1 items-center justify-center p-6">
-          <Text className="text-2xl font-bold text-red-600 mb-4">Race is Live</Text>
-          <Text className="text-gray-600 text-center text-base mb-6">
-            Registration is closed because a race is currently live for this event.
-          </Text>
-          <TouchableOpacity
-            className="bg-red-500 px-6 py-3 rounded-lg"
-            onPress={() => router.push({ pathname: "/live-race", params: { raceId: String(liveRace.id) } })}
-          >
-            <Text className="text-white font-semibold text-base">Watch Live</Text>
-          </TouchableOpacity>
+      <SafeAreaView className="flex-1 bg-white">
+        <Header title="Register" />
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#189AB4" />
         </View>
       </SafeAreaView>
     );
   }
-  if (alreadyRegistered) {
+
+  if (!event) {
     return (
-      <SafeAreaView className="flex-1 bg-[#f5f5f5]">
-        <Header title="Register In Event" />
-        <View className="flex-1 items-center justify-center p-6">
-          <Text className="text-2xl font-bold text-primary mb-4">Already Registered</Text>
-          <Text className="text-gray-600 text-center text-base">
-            You have already registered for this event. Check "My Events" to view your registration.
-          </Text>
-        </View>
+      <SafeAreaView className="flex-1 bg-white">
+        <Header title="Register" />
+        <Text className="text-center text-red-500 mt-10">Event not found or unavailable.</Text>
       </SafeAreaView>
     );
   }
+
   return (
     <SafeAreaView className="flex-1 bg-[#f5f5f5]">
-      <ScrollView>
-        <Header title="Register In Event" />
-        <EventCount event={currentEvent} />
-        <View className="p-4">
-          <Text className="font-bold text-xl mt-6 text-primary">
-            Owner Information
-          </Text>
-          <View className="flex-row justify-between">
-            <View className="w-[31%]">
-              <Text className="mt-6 text-gray-500 text-xs">First Name</Text>
-              <Text className="text-sm text-black mt-1">{user?.name?.split(" ")[0] ?? "—"}</Text>
-            </View>
-            <View className="w-[31%]">
-              <Text className="mt-6 text-gray-500 text-xs">Last Name</Text>
-              <Text className="text-sm text-black mt-1">{user?.lastName ?? user?.name?.split(" ").slice(1).join(" ") ?? "—"}</Text>
-            </View>
-            <View className="w-[31%]">
-              <Text className="mt-6 text-gray-500 text-xs">Email</Text>
-              <Text className="text-sm text-black mt-1">{user?.email ?? "—"}</Text>
-            </View>
+      <Header title={`Register · ${event.name ?? ""}`} />
+      <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
+        {!isOpen ? (
+          <View className="rounded-lg border border-red-200 bg-red-50 p-3 mb-3">
+            <Text className="text-sm text-red-700">Registration for this event is closed.</Text>
           </View>
-          <Text className="font-bold text-xl mt-6 text-primary">
-            Team / Loft Information
-          </Text>
-          <Text className="mt-6">Select Team (Optional)</Text>
-          <TeamSelect
-            selectedValue={selectedTeam}
-            onValueChange={(itemValue: any) => setSelectedTeam(itemValue)}
+        ) : null}
+        {requiresPayment ? (
+          <View className="rounded-lg border border-amber-200 bg-amber-50 p-3 mb-3">
+            <Text className="text-xs text-amber-800">
+              This event requires payment to register. Pay now with PayPal, or commit to paying cash.
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Loft */}
+        <View className="bg-white rounded-xl p-3 mb-3">
+          <Text className="text-sm font-bold text-gray-800 mb-2">Loft / Team name</Text>
+          <TextInput
+            className="border border-gray-300 rounded-lg px-3 py-2 text-black"
+            value={loftName}
+            onChangeText={setLoftName}
+            placeholder="Enter loft name"
+            placeholderTextColor="#9ca3af"
           />
-          <SelectBirds
-            event={currentEvent}
-            setSelectedBirds={setSelectedBirds}
-            selectedBirds={selectedBirds}
-            toast={toast}
+          {teams.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
+              {teams.map((t) => {
+                const active = loftName.trim() === t.name;
+                return (
+                  <TouchableOpacity
+                    key={t.id}
+                    onPress={() => setLoftName(t.name)}
+                    className={`px-3 py-1.5 rounded-full mr-2 border ${
+                      active ? "bg-primary border-primary" : "bg-white border-gray-200"
+                    }`}
+                  >
+                    <Text className={`text-xs font-semibold ${active ? "text-white" : "text-gray-700"}`}>{t.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          ) : null}
+          <Text className="text-[11px] text-gray-500 mt-2">
+            A new name creates a team. One registration per loft name per season.
+          </Text>
+        </View>
+
+        {/* Perches */}
+        <View className="bg-white rounded-xl p-3 mb-3">
+          <Text className="text-sm font-bold text-gray-800">Perches to reserve</Text>
+          <Text className="text-[11px] text-gray-500">
+            {maxBirds > 0 ? `Up to ${maxBirds} per registration. ` : ""}Birds can be named now or later.
+          </Text>
+          <View className="flex-row items-center mt-2">
+            <TouchableOpacity
+              onPress={() => setReserved(reservedBirds - 1)}
+              className="w-10 h-10 rounded-lg border border-gray-300 items-center justify-center"
+            >
+              <Ionicons name="remove" size={20} color="#374151" />
+            </TouchableOpacity>
+            <TextInput
+              className="mx-3 w-16 text-center text-lg font-bold text-black border-b border-gray-300"
+              keyboardType="number-pad"
+              value={String(reservedBirds)}
+              onChangeText={(t) => setReserved(parseInt(t.replace(/\D/g, ""), 10) || 0)}
+            />
+            <TouchableOpacity
+              onPress={() => setReserved(reservedBirds + 1)}
+              className="w-10 h-10 rounded-lg border border-gray-300 items-center justify-center"
+            >
+              <Ionicons name="add" size={20} color="#374151" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Birds */}
+        <View className="bg-white rounded-xl p-3 mb-3">
+          <View className="flex-row items-center justify-between">
+            <Text className="text-sm font-bold text-gray-800">
+              Birds ({selected.length}/{reservedBirds})
+            </Text>
+            <TouchableOpacity onPress={() => router.push("/bird-new" as any)} className="flex-row items-center">
+              <Ionicons name="add-circle-outline" size={16} color="#189AB4" />
+              <Text className="text-xs font-semibold text-primary ml-1">Add a bird</Text>
+            </TouchableOpacity>
+          </View>
+          <View className="flex-row items-center border border-gray-200 rounded-lg px-3 mt-2">
+            <Ionicons name="search" size={16} color="#9ca3af" />
+            <TextInput
+              className="flex-1 py-2 ml-2 text-sm text-black"
+              placeholder="Search band or name"
+              placeholderTextColor="#9ca3af"
+              value={search}
+              onChangeText={setSearch}
+              autoCapitalize="none"
+            />
+          </View>
+          {availableBirds.length === 0 ? (
+            <Text className="text-xs text-gray-500 text-center py-6">
+              {birds.length === 0 ? "You have no birds yet. Add one to enter it." : "No birds match your search."}
+            </Text>
+          ) : (
+            availableBirds.map((b) => {
+              const on = selected.includes(b.id);
+              return (
+                <View key={b.id} className="border-t border-gray-100 mt-2 pt-2">
+                  <TouchableOpacity onPress={() => toggleBird(b.id)} className="flex-row items-center">
+                    <Ionicons
+                      name={on ? "checkbox" : "square-outline"}
+                      size={20}
+                      color={on ? "#189AB4" : "#9ca3af"}
+                    />
+                    <View className="ml-2 flex-1">
+                      <Text className="text-sm font-semibold text-gray-800">{bandOf(b) || "No band"}</Text>
+                      <Text className="text-xs text-gray-500">
+                        {b.birdName || "Unnamed"} · {b.color || "-"} ·{" "}
+                        {b.sex === 1 ? "Cock" : b.sex === 2 ? "Hen" : "Unknown"}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                  {on && pools.length > 0 ? (
+                    <View className="flex-row flex-wrap mt-2 ml-7">
+                      {pools.map((p) => {
+                        const key = poolKey(p);
+                        const picked = (bets[b.id] ?? []).includes(key);
+                        return (
+                          <TouchableOpacity
+                            key={key}
+                            onPress={() => togglePool(b.id, key)}
+                            className={`px-2 py-1 rounded-md mr-1.5 mb-1.5 border ${
+                              picked ? "bg-emerald-600 border-emerald-600" : "bg-white border-gray-300"
+                            }`}
+                          >
+                            <Text className={`text-[11px] font-semibold ${picked ? "text-white" : "text-gray-700"}`}>
+                              {CATEGORY_LABEL[p.category] ?? p.category} {p.tierIndex} · {money(p.amount)}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })
+          )}
+          {pools.length > 0 ? (
+            <Text className="text-[11px] text-gray-500 mt-3">
+              Betting pools are optional. A chosen pool is staked for that bird in each of the season&apos;s{" "}
+              {races.length} race{races.length === 1 ? "" : "s"}.
+            </Text>
+          ) : null}
+        </View>
+
+        {/* Note */}
+        <View className="bg-white rounded-xl p-3 mb-3">
+          <Text className="text-sm font-bold text-gray-800 mb-2">Note to the organizer (optional)</Text>
+          <TextInput
+            className="border border-gray-300 rounded-lg px-3 py-2 text-black"
+            style={{ minHeight: 64, textAlignVertical: "top" }}
+            multiline
+            value={note}
+            onChangeText={setNote}
+            placeholder="Anything the organizer should know"
+            placeholderTextColor="#9ca3af"
           />
         </View>
-        {selectedBirds.length > 0 && (
-          <PaymentInformation
-            event={currentEvent}
-            selectedBirds={selectedBirds}
-            selectedTeam={selectedTeam}
-          />
-        )}
+
+        {/* Fees */}
+        <View className="bg-white rounded-xl p-3 mb-3">
+          <Text className="text-sm font-bold text-gray-800 mb-2">Fee summary</Text>
+          {!feeScheme ? (
+            <Text className="text-xs text-gray-500">This season has no fee scheme set.</Text>
+          ) : !fees ? (
+            <Text className="text-xs text-gray-500">Reserve perches to see the fees.</Text>
+          ) : (
+            <>
+              <FeeLine label="Entry fee" value={fees.purgeFee} />
+              <FeeLine label={`Perch fees (${reservedBirds})`} value={fees.perchFees} />
+              <FeeLine label="Race fees" value={fees.raceFees} />
+              <FeeLine label="Hot spot" value={fees.hotspotBilled} />
+              <FeeLine label="Bet stakes" value={betStakes} />
+              <View className="flex-row justify-between pt-2 mt-2 border-t border-gray-200">
+                <Text className="text-base font-bold text-gray-900">Estimated total</Text>
+                <Text className="text-base font-bold text-primary">{money(total)}</Text>
+              </View>
+              <Text className="text-[11px] text-gray-500 mt-1">
+                The portal works out the final amount when the registration is made.
+              </Text>
+            </>
+          )}
+        </View>
+
+        <TouchableOpacity
+          onPress={registerAndPay}
+          disabled={busy !== null || !isOpen}
+          className={`py-4 rounded-lg items-center ${busy !== null || !isOpen ? "bg-gray-300" : "bg-[#FFC439]"}`}
+        >
+          {busy === "paypal" ? (
+            <ActivityIndicator color="#000" />
+          ) : (
+            <Text className="text-black font-bold text-base">Register & Pay with PayPal</Text>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={registerLater}
+          disabled={busy !== null || !isOpen}
+          className="border-2 border-primary py-4 rounded-lg items-center mt-3"
+        >
+          {busy === "later" ? (
+            <ActivityIndicator color="#189AB4" />
+          ) : (
+            <Text className="text-primary font-bold text-base">
+              {requiresPayment ? "Register & Pay Cash" : "Register & Pay Later"}
+            </Text>
+          )}
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-export default RegisterInEvent;
-
-const EventCount = ({ event }: { event: EventType }) => {
-  const [timeRemaining, setTimeRemaining] = useState({
-    hours: 0,
-    minutes: 0,
-    seconds: 0,
-  });
-  useEffect(() => {
-    if (!event?.eventDate) return;
-
-    const updateCountdown = () => {
-      const now = new Date().getTime();
-      const eventTime = new Date(event.eventDate).getTime();
-      const difference = eventTime - now;
-
-      if (difference > 0) {
-        const hours = Math.floor(difference / (1000 * 60 * 60));
-        const minutes = Math.floor(
-          (difference % (1000 * 60 * 60)) / (1000 * 60)
-        );
-        const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-
-        setTimeRemaining({ hours, minutes, seconds });
-      } else {
-        setTimeRemaining({ hours: 0, minutes: 0, seconds: 0 });
-      }
-    };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-
-    return () => clearInterval(interval);
-  }, [event?.eventDate]);
-
+function FeeLine({ label, value }: { label: string; value: number }) {
+  if (!value) return null;
   return (
-    <View className="flex-row justify-between mt-4">
-      <View className="border-r border-gray-400 px-2 w-[25%]">
-        <Text className="text-lg font-bold mb-2 text-center">
-          {event._count?.eventInventories ?? event.eventInventories?.length ?? 0}
-        </Text>
-        <Text className="text-xs text-gray-600 text-center">
-          Total Registrations
-        </Text>
-      </View>
-      <View className="border-r border-gray-400 px-2 w-[25%]">
-        <Text className="text-lg font-bold mb-2 text-center">
-          {timeRemaining.hours}
-        </Text>
-        <Text className="text-xs text-gray-600 text-center">Hours</Text>
-      </View>
-      <View className="border-r border-gray-400 px-2 w-[25%]">
-        <Text className="text-lg font-bold mb-2 text-center">
-          {timeRemaining.minutes}
-        </Text>
-        <Text className="text-xs text-gray-600 text-center">Minutes</Text>
-      </View>
-      <View className="px-2 border-gray-400 w-[25%]">
-        <Text className="text-lg font-bold mb-2 text-center">
-          {timeRemaining.seconds}
-        </Text>
-        <Text className="text-xs text-gray-600 text-center">Seconds</Text>
-      </View>
-    </View>
-  );
-};
-const TeamSelect = ({ selectedValue, onValueChange }: any) => {
-  const [teams, setTeams] = useState([]);
-  useEffect(() => {
-    const getTeams = async () => {
-      try {
-        const res = await api.get("/breeder/teams");
-        setTeams(res.data.teams);
-      } catch (err: any) {
-        console.log(err.message);
-      }
-    };
-    getTeams();
-  }, []);
-  return (
-    <View className="mt-1 border-2 border-cyan-600 rounded-xl bg-gray-50">
-      <Picker
-        selectedValue={selectedValue}
-        onValueChange={onValueChange}
-        style={{ height: 50 }}
-        dropdownIconColor="#000"
-      >
-        <Picker.Item label="Main Loft (Default)" value="" />
-        {teams?.map((team: any) => (
-          <Picker.Item
-            key={team.id}
-            label={team.name}
-            value={team.id}
-          />
-        ))}
-      </Picker>
-    </View>
-  );
-};
-
-const EMPTY_BIRD = { birdName: "", color: "", sex: "0", band1: "", band2: new Date().getFullYear().toString(), band3: "", band4: "" };
-
-const SelectBirds = ({
-  event,
-  setSelectedBirds,
-  selectedBirds,
-  toast,
-}: any) => {
-  const { birds, fetchBirds, addBird } = useBirds();
-  const maxBirdCount = event?.feeScheme?.maxBirdCount || 0;
-  const [addOpen, setAddOpen] = useState(false);
-  const [newBird, setNewBird] = useState(EMPTY_BIRD);
-  const [addLoading, setAddLoading] = useState(false);
-
-  useEffect(() => { fetchBirds(); }, []);
-
-  const handleAddNew = async () => {
-    if (!newBird.band1 || !newBird.band3 || !newBird.band4 || !newBird.color) {
-      Alert.alert("Missing fields", "Fill federation, letters, band number and color.");
-      return;
-    }
-    setAddLoading(true);
-    try {
-      const added = await addBird({ ...newBird, sex: parseInt(newBird.sex, 10) || 0 });
-      if (added) {
-        setNewBird(EMPTY_BIRD);
-        setAddOpen(false);
-        await fetchBirds();
-        toast.success("Bird added! Select it below to register.");
-      }
-    } catch {
-      toast.error("Failed to add bird.");
-    } finally {
-      setAddLoading(false);
-    }
-  };
-  const handleAddBird = (bird: BirdType) => {
-    if (maxBirdCount > 0 && selectedBirds.length >= maxBirdCount) {
-      toast.error(`Maximum ${maxBirdCount} birds allowed for this event`);
-      return;
-    }
-
-    if (!selectedBirds.find((b: BirdType) => b.id === bird.id)) {
-      setSelectedBirds([...selectedBirds, bird]);
-      toast.success(`${bird.birdName} added to registration`);
-    } else {
-      toast.info(`${bird.birdName} is already selected`);
-    }
-  };
-
-  const handleRemoveBird = (birdId: number) => {
-    const bird = selectedBirds.find((b: BirdType) => b.id === birdId);
-    setSelectedBirds(
-      selectedBirds.filter((bird: BirdType) => bird.id !== birdId)
-    );
-    if (bird) {
-      toast.success(`${bird.birdName} removed from registration`);
-    }
-  };
-
-  const handleClearAll = () => {
-    setSelectedBirds([]);
-    toast.success("All birds removed from registration");
-  };
-  return (
-    <View>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 24 }}>
-        <Text className="font-bold text-xl text-primary">Bird Information</Text>
-        <TouchableOpacity
-          style={{ backgroundColor: "#189AB4", flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, gap: 4 }}
-          onPress={() => setAddOpen(true)}
-        >
-          <Text style={{ color: "white", fontWeight: "700", fontSize: 13 }}>+ Add New Bird</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Add Bird Modal */}
-      <Modal open={addOpen} setOpen={setAddOpen}>
-        <Text style={{ fontSize: 20, fontWeight: "700", marginBottom: 12 }}>Add New Bird</Text>
-
-        <Text style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>Bird Name</Text>
-        <TextInput
-          style={{ borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, padding: 10, marginBottom: 12, color: "#000" }}
-          placeholder="Enter bird name"
-          value={newBird.birdName}
-          onChangeText={(t) => setNewBird({ ...newBird, birdName: t })}
-        />
-
-        <Text style={{ fontSize: 15, fontWeight: "600", marginBottom: 8 }}>Band Details</Text>
-
-        <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
-          <InlineDropdown label="Federation" value={newBird.band1} options={FEDERATIONS} onChange={(v) => setNewBird({ ...newBird, band1: v })} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>Year</Text>
-            <TextInput
-              style={{ borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, padding: 10, color: "#000" }}
-              placeholder="2024" keyboardType="numeric" value={newBird.band2}
-              onChangeText={(t) => setNewBird({ ...newBird, band2: t.replace(/[^0-9]/g, "") })}
-            />
-          </View>
-        </View>
-
-        <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>Letters</Text>
-            <TextInput
-              style={{ borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, padding: 10, color: "#000" }}
-              placeholder="ABC" autoCapitalize="characters" value={newBird.band3}
-              onChangeText={(t) => setNewBird({ ...newBird, band3: t.toUpperCase() })}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>Band Number</Text>
-            <TextInput
-              style={{ borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, padding: 10, color: "#000" }}
-              placeholder="12345" value={newBird.band4}
-              onChangeText={(t) => setNewBird({ ...newBird, band4: t })}
-            />
-          </View>
-        </View>
-
-        <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
-          <InlineDropdown label="Color" value={newBird.color} options={COLORS} onChange={(v) => setNewBird({ ...newBird, color: v })} />
-          <InlineDropdown label="Sex" value={newBird.sex} options={SEX_OPTIONS} onChange={(v) => setNewBird({ ...newBird, sex: v })} />
-        </View>
-
-        <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
-          <TouchableOpacity
-            style={{ backgroundColor: "#e5e7eb", paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10 }}
-            onPress={() => { setAddOpen(false); setNewBird(EMPTY_BIRD); }}
-          >
-            <Text style={{ color: "#374151", fontWeight: "600" }}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={{ backgroundColor: "#189AB4", paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10, minWidth: 80, alignItems: "center" }}
-            onPress={handleAddNew}
-            disabled={addLoading}
-          >
-            {addLoading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: "white", fontWeight: "700" }}>Save Bird</Text>}
-          </TouchableOpacity>
-        </View>
-      </Modal>
-
-      {maxBirdCount > 0 && (
-        <View className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <Text className="text-sm text-blue-800">
-            <Text className="font-semibold">Note:</Text> You can register a
-            maximum of <Text className="font-bold">{maxBirdCount}</Text> birds
-            for this event.
-            {selectedBirds.length > 0 && (
-              <Text className="ml-2">
-                ({selectedBirds.length} / {maxBirdCount} selected)
-              </Text>
-            )}
-          </Text>
-        </View>
-      )}
-      <View className="mb-8">
-        <Text className="text-lg font-semibold mb-4">
-          Select Birds to Register
-        </Text>
-        {birds.length === 0 ? (
-          <Text className="text-gray-500">
-            No birds available. Please add birds to your account first.
-          </Text>
-        ) : (
-          <View className="flex-row flex-wrap gap-4 justify-between">
-            {birds.map((bird) => {
-              const isSelected = selectedBirds.find(
-                (b: BirdType) => b.id === bird.id
-              );
-              const isDisabled =
-                !isSelected && maxBirdCount > 0 && selectedBirds.length >= maxBirdCount;
-
-              return (
-                <TouchableOpacity
-                  key={bird.id}
-                  className={`border w-[48%] rounded-lg p-4 transition-all ${
-                    isSelected
-                      ? "border-primary bg-primary/5 cursor-pointer"
-                      : isDisabled
-                        ? "border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed"
-                        : "border-gray-200 hover:border-primary/50 cursor-pointer"
-                  }`}
-                  onPress={() => !isDisabled && handleAddBird(bird)}
-                >
-                  <View className="flex-row justify-between items-start">
-                    <View>
-                      <Text className="font-medium text-gray-900">
-                        {bird.birdName}
-                      </Text>
-                      <Text className="text-sm text-gray-600">
-                        Color: {bird.color}
-                      </Text>
-                      <Text className="text-sm text-gray-600">
-                        Sex: {getSexLabel(bird.sex)}
-                      </Text>
-                    </View>
-                    {!isSelected && <View className="w-14 h-4" />}
-                    {isSelected && (
-                      <Text className="text-primary text-sm font-medium">
-                        ✓ Selected
-                      </Text>
-                    )}
-                    {isDisabled && (
-                      <Text className="text-gray-400 text-xs font-medium">
-                        Limit reached
-                      </Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
-      </View>
-
-      {/* Selected Birds Section */}
-      {selectedBirds.length > 0 && (
-        <View>
-          <View className="flex-row justify-between items-center mb-4">
-            <Text className="text-lg font-semibold">
-              Selected Birds ({selectedBirds.length})
-            </Text>
-            <TouchableOpacity
-              onPress={handleClearAll}
-              className="text-red-600 hover:text-red-800 text-sm font-medium px-3 py-1 border border-red-200 rounded hover:bg-red-50 transition-colors"
-            >
-              <Text>Clear All</Text>
-            </TouchableOpacity>
-          </View>
-          <View className="space-y-3">
-            {selectedBirds.map((bird: BirdType) => (
-              <View
-                key={bird.id}
-                className="flex-row items-center justify-between p-4 bg-gray-50 rounded-lg border mb-2"
-              >
-                <View className="flex-1">
-                  <Text className="font-medium text-gray-900">
-                    {bird.birdName}
-                  </Text>
-                  <View className="flex gap-4 text-sm text-gray-600">
-                    <Text>Color: {bird.color}</Text>
-                    <Text>Sex: {getSexLabel(bird.sex)}</Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  onPress={() => bird.id != null && handleRemoveBird(bird.id)}
-                  className="text-red-600 hover:text-red-800 text-sm font-medium px-3 py-1 border border-red-200 rounded hover:bg-red-50 transition-colors ml-4"
-                >
-                  <Text>Remove</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
-    </View>
-  );
-};
-
-function PaymentInformation({
-  event,
-  selectedBirds,
-  selectedTeam,
-}: {
-  event: EventType;
-  selectedBirds: BirdType[];
-  selectedTeam: string;
-}) {
-  const toast = useToast();
-  const [payLaterLoading, setPayLaterLoading] = useState(false);
-
-  const fees = useMemo(() => {
-    if (!event?.feeScheme || selectedBirds.length === 0) return null;
-    const fs = event.feeScheme;
-    // Use birdFeeItems if available, fall back to perchFeeItems (legacy)
-    const birdFeeItems = fs.birdFeeItems?.length
-      ? fs.birdFeeItems.map((b: any) => ({ birdNo: b.birdNo, birdFee: b.birdFee }))
-      : (fs.perchFeeItems || []).map((p: any) => ({ birdNo: p.birdNo, birdFee: p.perchFee }));
-    return calculateFees({
-      numBirds: selectedBirds.length,
-      feeScheme: {
-        entryFee: fs.entryFee ?? 0,
-        raceFeeMode: fs.raceFeeMode ?? "PER_BIRD_PER_RACE",
-        hotSpot1Fee: fs.hotSpot1Fee ?? null,
-        hotSpot2Fee: fs.hotSpot2Fee ?? null,
-        hotSpot3Fee: fs.hotSpot3Fee ?? null,
-        hotSpotFinalFee: fs.hotSpotFinalFee ?? null,
-        birdFeeItems,
-        raceTypeFees: (fs.raceTypeFees || []).map((rt: any) => ({
-          raceTypeId: rt.raceTypeId,
-          fee: rt.fee,
-        })),
-      },
-      races: (event.races || []).map((r: any) => ({ raceTypeId: r.raceTypeId })),
-    });
-  }, [event?.feeScheme, event?.races, selectedBirds.length]);
-  const onApprove = async () => {
-    try {
-      if (selectedBirds.length === 0) {
-        return toast.error("No birds selected for registration");
-      }
-      const birds: number[] = selectedBirds.map((bird) => {
-        if (!bird.id) {
-          toast.error("Bird ID is required for registration");
-          return 0;
-        }
-        return bird.id;
-      });
-      const res = await api.post("/event-inventory", {
-        eventId: event.id,
-        birds,
-        selectedTeam,
-      });
-      const orderId: string = res?.data?.data?.orderId;
-      if (!orderId) {
-        return toast.error("No order ID received");
-      }
-      toast.success("Event registered successfully");
-    } catch (err) {
-      console.log(err);
-      toast.error("Failed to register event");
-    }
-  };
-  const onCancel = async (data: Record<string, unknown>) => {
-    try {
-      const orderID = data.orderID as string;
-      if(!orderID){
-        return toast.error("No order ID received");
-      }
-      toast.info("Cancelling registration...");
-      const res = await api.post(`/payments/cancel`, { orderID });
-      const orderId = res?.data?.data?.orderId;
-      if (!orderId) {
-        return toast.error("No order ID received");
-      }
-      toast.success("Registration cancelled successfully");
-    } catch (err) {
-      console.log(err);
-      toast.error("Failed to cancel registration");
-    }
-  };
-  const handlePayLater = async () => {
-    if (selectedBirds.length === 0) {
-      return toast.error("No birds selected for registration");
-    }
-    setPayLaterLoading(true);
-    try {
-      const birds = selectedBirds.map((b) => ({
-        name: b.birdName,
-        color: b.color,
-        sex: b.sex ?? 0,
-        band1: b.band1 || "",
-        band2: b.band2 || "",
-        band3: b.band3 || "",
-        band4: b.band4 || "",
-      }));
-      await api.post(`/breeder/event/${event.id}/register`, {
-        loftName: selectedTeam || "Default",
-        reservedBirds: birds.length,
-        birds,
-        payments: [],
-      });
-      Alert.alert(
-        "Registered",
-        "Registration successful! You can pay later from the Payments screen."
-      );
-      router.back();
-    } catch (err: any) {
-      const msg =
-        err.response?.data?.message || err.message || "Registration failed";
-      toast.error(msg);
-    } finally {
-      setPayLaterLoading(false);
-    }
-  };
-
-  const totalAmount = fees?.total ?? 0;
-
-  return (
-    <View className="p-4 sm:p-6 lg:p-8 xl:p-10 w-full border-t bg-gray-50">
-      <Text className="font-bold text-secondary mb-6 text-xl sm:text-2xl md:text-3xl lg:text-4xl">
-        Payment Information
-      </Text>
-
-      <View className="bg-white rounded-lg p-4 sm:p-6 shadow-sm">
-        <View className="space-y-4 mb-6">
-          <View className="flex-row justify-between items-center py-2 border-b">
-            <Text className="text-gray-600 text-sm sm:text-base">
-              Number of Birds:
-            </Text>
-            <Text className="font-medium text-sm sm:text-base">
-              {selectedBirds.length}{event.feeScheme?.maxBirdCount ? ` / ${event.feeScheme.maxBirdCount}` : ""}
-            </Text>
-          </View>
-        </View>
-
-        {/* Fee Breakdown */}
-        {fees && (
-          <View className="space-y-2 mb-4">
-            <View className="flex-row justify-between items-center py-1">
-              <Text className="text-gray-600 text-sm">Purge Fee:</Text>
-              <Text className="font-medium text-sm">${fees.purgeFee.toFixed(2)}</Text>
-            </View>
-            <View className="flex-row justify-between items-center py-1">
-              <Text className="text-gray-600 text-sm">Perch Fees ({selectedBirds.length} birds):</Text>
-              <Text className="font-medium text-sm">${fees.perchFees.toFixed(2)}</Text>
-            </View>
-            <View className="flex-row justify-between items-center py-1">
-              <Text className="text-gray-600 text-sm">Race Fees:</Text>
-              <Text className="font-medium text-sm">${fees.raceFees.toFixed(2)}</Text>
-            </View>
-            <View className="flex-row justify-between items-center py-1">
-              <Text className="text-gray-600 text-sm">Hotspot Fees:</Text>
-              <Text className="font-medium text-sm">${fees.hotspotFees.toFixed(2)}</Text>
-            </View>
-          </View>
-        )}
-
-        <View className="space-y-3">
-          <Text className="font-medium text-gray-700 mb-3 text-sm sm:text-base">
-            Registered Birds:
-          </Text>
-          <View className="max-h-48 overflow-y-auto space-y-2">
-            {selectedBirds.map((bird, index) => {
-              const perchFee = fees?.perBirdBreakdown[index]?.perchFee ?? 0;
-
-              return (
-                <View
-                  key={bird.id}
-                  className="flex-row justify-between items-center py-2 px-3 bg-gray-50 rounded text-sm"
-                >
-                  <Text
-                    className="text-black"
-                    style={{ color: "black", fontSize: 14 }}
-                  >
-                    Bird #{index + 1}: {bird.birdName || "Unknown"} - (
-                    {bird.color || "Unknown"})
-                  </Text>
-                  <Text className="font-medium text-green-600 ml-2">
-                    ${perchFee.toFixed(2)}
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-        <View className="flex-row justify-between items-center py-3 border-b-2 border-t mt-2 border-secondary">
-          <Text className="text-base sm:text-lg font-semibold text-secondary">
-            Total Amount:
-          </Text>
-          <Text className="text-lg sm:text-xl font-bold text-secondary">
-            ${totalAmount.toFixed(2)}
-          </Text>
-        </View>
-        <View className="mt-8 flex w-full justify-center">
-          <View className="w-full max-w-md gap-3">
-            <PayPalButton
-              eventId={event.id}
-              selectedBirds={selectedBirds}
-              selectedTeam={selectedTeam}
-              totalAmount={totalAmount}
-              onConfirm={onApprove}
-              onSuccess={onApprove}
-              onCancel={onCancel}
-              onError={(error: string) => {
-                toast.error(error);
-              }}
-            />
-            <TouchableOpacity
-              onPress={handlePayLater}
-              disabled={payLaterLoading}
-              className="border-2 border-primary py-4 rounded-lg items-center"
-            >
-              {payLaterLoading ? (
-                <ActivityIndicator color="#189AB4" />
-              ) : (
-                <Text className="text-primary font-bold text-lg">
-                  Register & Pay Later
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View className="mt-4 text-center">
-          <Text className="text-xs text-gray-500">
-            Pay later option available • View pending payments in Payments tab
-          </Text>
-        </View>
-      </View>
+    <View className="flex-row justify-between py-1">
+      <Text className="text-xs text-gray-600">{label}</Text>
+      <Text className="text-xs text-gray-800">{money(value)}</Text>
     </View>
   );
 }
+
+export default RegisterInEvent;

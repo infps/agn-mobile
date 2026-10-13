@@ -1,7 +1,9 @@
 import Header from "@/components/header";
 import api from "@/service/api.service";
 import { Ionicons } from "@expo/vector-icons";
+import { htmlToText } from "@/components/EventShared";
 import { format } from "date-fns";
+import { router } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -59,7 +61,7 @@ export default function Messages() {
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-white">
-        <Header title="Messages" />
+        <Header title="News & Updates" />
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" />
         </View>
@@ -69,7 +71,7 @@ export default function Messages() {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <Header title="Messages" />
+      <Header title="News & Updates" />
       <FlatList
         data={messages}
         keyExtractor={(item) => String(item.id)}
@@ -99,7 +101,17 @@ export default function Messages() {
           ) : null
         }
         renderItem={({ item }) => (
-          <View className="bg-white border border-gray-200 rounded-xl p-4">
+          <TouchableOpacity
+            activeOpacity={0.7}
+            disabled={!item.event?.id}
+            onPress={() =>
+              router.push({
+                pathname: "/event-detail",
+                params: { id: String(item.event.id), tab: "messages" },
+              } as any)
+            }
+            className="bg-white border border-gray-200 rounded-xl p-4"
+          >
             <View className="flex-row items-center gap-2 mb-2">
               <View className="bg-cyan-50 border border-cyan-200 rounded-full px-2 py-0.5">
                 <Text className="text-cyan-700 text-[10px] font-medium">
@@ -108,7 +120,7 @@ export default function Messages() {
               </View>
             </View>
             <Text className="font-bold text-gray-900 text-base">{item.title}</Text>
-            <Text className="text-gray-600 text-sm mt-1" numberOfLines={2}>{item.body}</Text>
+            <Text className="text-gray-600 text-sm mt-1" numberOfLines={3}>{htmlToText(item.body)}</Text>
             <View className="flex-row items-center justify-between mt-3">
               <Text className="text-gray-400 text-xs">
                 {item.author?.name}{item.author?.lastName ? ` ${item.author.lastName}` : ""}
@@ -120,7 +132,8 @@ export default function Messages() {
                 </Text>
               </View>
             </View>
-          </View>
+            <Text className="text-xs text-cyan-700 font-semibold mt-2">Read more →</Text>
+          </TouchableOpacity>
         )}
       />
     </SafeAreaView>

@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAdminData } from "@/hooks/useAdminData";
 import { useAdminAction } from "@/hooks/useAdminAction";
@@ -9,13 +9,9 @@ import { useToast } from "@/context/ToastContext";
 import {
   Button,
   ButtonRow,
-  type Choice,
-  ChoiceList,
   Confirm,
   Empty,
   Field,
-  Figure,
-  FigureRow,
   Loading,
   NoAccess,
   Notice,
@@ -23,17 +19,31 @@ import {
   Rows,
   Screen,
   Sheet,
+  tabular,
 } from "@/components/admin/ui";
+import { BasketEntries, type StatusData } from "@/components/admin/BasketEntries";
+import { Caption, Pill, Segments, sexLabel, shortBand } from "@/components/admin/scan";
 
 interface Assignment {
   id: number;
+  assignedAt: string | null;
   inventoryItem?: {
     id: number;
-    bird?: { id: number; band: string | null; birdName: string | null; rfid: string | null } | null;
-    eventInventory?: {
-      loft: string | null;
-      breeder?: { firstName: string | null; lastName: string | null } | null;
+    bird?: {
+      id: number;
+      band: string | null;
+      birdName: string | null;
+      rfid: string | null;
+      color: string | null;
+      sex: number | null;
+      attention: boolean | null;
+      note: string | null;
     } | null;
+    eventInventory?: {
+      breeder?: { id: number; firstName: string | null; lastName: string | null } | null;
+    } | null;
+    /** The first time it was ever basketed, when the history has it. */
+    birdEventHistory?: { createdAt: string }[];
   } | null;
 }
 
@@ -55,13 +65,20 @@ interface Race {
   status: string;
 }
 
-/** What the assigner says it would do, before it is allowed to do it. */
-interface Plan {
-  preview: boolean;
-  heldBack?: number;
-  assigned?: { label: string | null; basketNo: number; birdCount: number }[];
-  unassigned?: { label: string | null; birdCount: number }[];
+/** What the loft assigner says it would do, before it is allowed to do it. */
+interface LoftPlan {
+  message?: string;
+  heldBack?: { inventoryItemId: number; band: string; reason: string }[];
+  assigned?: {
+    groupKey: number;
+    label: string;
+    basketNo: number;
+    basketLabel: string | null;
+    birdCount: number;
+  }[];
+  unassigned?: { groupKey: number; label: string; birdCount: number }[];
   summary?: {
+    totalGroups: number;
     assignedGroups: number;
     unassignedGroups: number;
     totalBirds: number;
@@ -69,118 +86,179 @@ interface Plan {
   };
 }
 
+/** The race assigner answers by basket rather than by breeder. */
+interface RacePlan {
+  message?: string;
+  baskets?: {
+    basketId: number;
+    basketNo: number;
+    basketLabel: string | null;
+    capacity: number;
+    birdCount: number;
+    breeders: string[];
+  }[];
+  unassigned?: number;
+  summary?: {
+    totalBirds: number;
+    totalCapacity: number;
+    assignedBirds: number;
+    unassignedBirds: number;
+    basketCount: number;
+  };
+}
+
+type Tab = "loft" | "race" | "prescan";
+type LoftMode = "shuffle" | "assign";
+type RaceMode = "reset" | "incremental";
+
+type Plan =
+  | { kind: "loft"; mode: LoftMode; data: LoftPlan }
+  | { kind: "race"; mode: RaceMode; data: RacePlan };
+
+const filled = (b: Basket) => b._count?.assignments ?? b.assignments?.length ?? 0;
+const labelOf = (b: { label: string | null; basketNo: number }) => b.label || `Basket #${b.basketNo}`;
+
 /**
  * Baskets, and how full they are.
  *
- * A basket is really a number and a fill level, which is what the row shows.
- * The two phases are kept apart because a loft basket and a race basket can
- * share a number without being the same thing — the database allows it, and
- * mixing them on one list would make a real basket look double-booked.
+ * Three tabs, because the portal has three and they are different jobs. Loft
+ * baskets belong to the season and are filled by breeder, so a breeder's birds
+ * travel together. Race baskets belong to one race and are filled at random, so
+ * nobody's birds sit beside each other on the truck. Prescan identifies a bird
+ * and changes nothing.
  *
- * Filling them is the work. Three ways, because the portal has three and they
- * are not interchangeable: fill everything at once by breeder, drop one bird in
- * by scanning its tag, or clear a basket and start it again.
+ * The two kinds of basket are kept apart everywhere — different tabs, different
+ * requests — because a loft basket and a race basket can share a number without
+ * being the same thing, and one list would make a real basket look
+ * double-booked.
  *
- * The bulk assigner always previews first. It can move every bird in the season
+ * Both assigners always preview first. Either can move every bird in the season
  * in one press, and an operator is entitled to see that plan before it becomes
- * the truth — the portal works this way and the phone must not be the looser
- * of the two.
+ * the truth; when baskets already hold birds there is a stop before even the
+ * preview, as in the portal. The phone must not be the looser of the two.
+ *
+ * Scanning happens on its own screen: it needs the whole display, and it is
+ * what somebody does with a bird in the other hand.
  */
 export default function EventBaskets() {
   const { eventId, name } = useLocalSearchParams<{ eventId?: string; name?: string }>();
-  const { can } = usePermissions();
+  const { can, canAny } = usePermissions();
   const toast = useToast();
+  const router = useRouter();
   const action = useAdminAction();
 
-  const [phase, setPhase] = useState<"LOFT" | "RACE">("LOFT");
+  const [tab, setTab] = useState<Tab>("loft");
+  const [view, setView] = useState<"baskets" | "entries">("baskets");
   const [open, setOpen] = useState<number | null>(null);
+  const [raceId, setRaceId] = useState<number | null>(null);
+  const [tick, setTick] = useState(0);
 
+  const mayManage = can("baskets.manage");
+  const mayStatus = canAny("checkin.view", "checkin.manage");
   const base = eventId ? `/admin/event/${eventId}/baskets` : null;
+
+  // Race baskets belong to a race, so the list comes first.
+  const racesReq = useAdminData<{ races?: Race[] }>(
+    eventId && canAny("races.view", "races.manage") ? `/admin/race?eventId=${eventId}` : null,
+    [eventId]
+  );
+  const races = useMemo(() => racesReq.data?.races ?? [], [racesReq.data]);
+
+  // The first race is selected for you, as the portal does.
+  useEffect(() => {
+    if (raceId == null && races.length > 0) setRaceId(races[0].id);
+  }, [races, raceId]);
+
+  const phase = tab === "race" ? "RACE" : "LOFT";
+  const listPath = !base
+    ? null
+    : phase === "LOFT"
+      ? `${base}?phase=LOFT`
+      : raceId != null
+        ? `${base}?phase=RACE&raceId=${raceId}`
+        : null;
+
   const { data, loading, refreshing, forbidden, error, refresh, reload } = useAdminData<{
     baskets?: Basket[];
-  }>(base, [eventId]);
+  }>(listPath, [eventId, phase, raceId]);
 
-  // Race baskets belong to a race, so creating or filling one needs the list.
-  const racesReq = useAdminData<{ races?: Race[] }>(
-    eventId ? `/admin/race?eventId=${eventId}` : null,
+  // "Active" in the capacity line is every approved bird of the season.
+  const statusReq = useAdminData<StatusData>(
+    eventId && mayStatus ? `/admin/event/${eventId}/checkin-status` : null,
     [eventId]
   );
 
-  const all = useMemo(() => data?.baskets ?? [], [data]);
   const baskets = useMemo(
-    () => all.filter((b) => b.phase === phase).sort((a, b) => a.basketNo - b.basketNo),
-    [all, phase]
+    () => (listPath ? (data?.baskets ?? []) : []).slice().sort((a, b) => a.basketNo - b.basketNo),
+    [data, listPath]
   );
-  const races = useMemo(() => racesReq.data?.races ?? [], [racesReq.data]);
-  const mayManage = can("baskets.manage");
+  const race = races.find((r) => r.id === raceId) ?? null;
+  const raceLabel = (r: Race) => r.name || `Race #${r.raceNumber ?? r.id}`;
+
+  const capacity = baskets.reduce((s, b) => s + b.capacity, 0);
+  const occupancy = baskets.reduce((s, b) => s + filled(b), 0);
+  const active = statusReq.data?.summary?.total ?? null;
+  const insufficient = active != null && capacity < active;
+  const hasAssignments = baskets.some((b) => filled(b) > 0);
+  const nextNo = baskets.length > 0 ? Math.max(...baskets.map((b) => b.basketNo)) + 1 : 1;
 
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ capacity: "", label: "", raceId: null as number | null });
-
-  const [renaming, setRenaming] = useState<Basket | null>(null);
-  const [newLabel, setNewLabel] = useState("");
-
+  const [newCapacity, setNewCapacity] = useState("");
+  const [editing, setEditing] = useState<Basket | null>(null);
+  const [form, setForm] = useState({ label: "", capacity: "" });
   const [clearing, setClearing] = useState<Basket | null>(null);
   const [removing, setRemoving] = useState<Basket | null>(null);
 
-  const [scanning, setScanning] = useState(false);
-  const [tag, setTag] = useState("");
-  const [log, setLog] = useState<{ key: string; text: string; ok: boolean }[]>([]);
-  const tagRef = useRef<TextInput>(null);
-  const seq = useRef(0);
-
-  // The bulk assigner: a chosen mode, then the plan it returns, then the commit.
-  const [planning, setPlanning] = useState(false);
-  const [mode, setMode] = useState<string | number | null>(null);
+  // The assigner: a stop when birds are already placed, then the plan, then the commit.
+  const [redoing, setRedoing] = useState<LoftMode | RaceMode | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
-  const [planRaceId, setPlanRaceId] = useState<number | null>(null);
 
-  const filled = (b: Basket) => b._count?.assignments ?? b.assignments?.length ?? 0;
-  const placed = baskets.reduce((s, b) => s + filled(b), 0);
-  const space = baskets.reduce((s, b) => s + b.capacity, 0);
+  const done = () => {
+    reload();
+    setTick((t) => t + 1);
+  };
 
-  const raceLabel = (r: Race) => r.name ?? `Race ${r.raceNumber ?? r.id}`;
-
-  const create = async () => {
-    const capacity = parseInt(form.capacity.trim(), 10);
-    if (!form.capacity.trim() || isNaN(capacity) || capacity <= 0) {
-      toast.error("Capacity has to be a whole number above zero.");
+  const create = async (keepOpen: boolean) => {
+    const cap = parseInt(newCapacity.trim(), 10);
+    if (isNaN(cap) || cap < 1) {
+      toast.error("Capacity must be a positive number.");
       return;
     }
-    if (phase === "RACE" && form.raceId == null) {
-      toast.error("A race basket has to belong to a race.");
+    if (phase === "RACE" && raceId == null) {
+      toast.error("Select a race first.");
       return;
     }
-
-    const { ok } = await action.run(
-      "post",
-      base!,
-      {
-        capacity,
-        phase,
-        label: form.label.trim() || undefined,
-        ...(phase === "RACE" ? { raceId: form.raceId } : {}),
-      },
-      { success: "Basket created." }
-    );
+    const { ok, data: said } = await action.run<{ basket?: Basket }>("post", base!, {
+      capacity: cap,
+      phase,
+      ...(phase === "RACE" ? { raceId } : {}),
+    });
     if (ok) {
-      setCreating(false);
-      setForm({ capacity: "", label: "", raceId: null });
-      reload();
+      toast.success(
+        `${phase === "RACE" ? "Race basket" : "Basket"} #${said?.basket?.basketNo ?? nextNo} created.`
+      );
+      setNewCapacity("");
+      if (!keepOpen) setCreating(false);
+      done();
     }
   };
 
-  const rename = async () => {
-    if (!renaming) return;
+  const saveEdit = async () => {
+    if (!editing) return;
+    const cap = parseInt(form.capacity.trim(), 10);
+    if (isNaN(cap) || cap < 1) {
+      toast.error("Capacity must be a positive number.");
+      return;
+    }
     const { ok } = await action.run(
       "patch",
       base!,
-      { basketId: renaming.id, label: newLabel.trim() },
-      { success: "Basket renamed." }
+      { basketId: editing.id, label: form.label.trim(), capacity: cap },
+      { success: "Basket updated." }
     );
     if (ok) {
-      setRenaming(null);
-      reload();
+      setEditing(null);
+      done();
     }
   };
 
@@ -190,505 +268,605 @@ export default function EventBaskets() {
       "patch",
       base!,
       { basketId: clearing.id, action: "clear" },
-      { success: "Basket emptied." }
+      { success: `Basket #${clearing.basketNo} cleared.` }
     );
     if (ok) {
       setClearing(null);
-      reload();
+      done();
     }
   };
 
   const remove = async () => {
     if (!removing) return;
     const { ok } = await action.run("delete", base!, { basketId: removing.id }, {
-      success: "Basket deleted.",
+      success: `Basket #${removing.basketNo} deleted.`,
     });
     if (ok) {
       setRemoving(null);
-      reload();
+      done();
     }
   };
 
-  /**
-   * A tag read into a loft basket.
-   *
-   * The endpoint answers 200 for outcomes that are not failures — a bird
-   * already placed, a tag it had to link first — so the response is read rather
-   * than assumed. The running list is the only way to notice a scanner that has
-   * started repeating itself.
-   */
-  const scanIn = async () => {
-    const rfid = tag.trim();
-    if (!rfid || action.pending) return;
-
-    const { ok, data: said } = await action.run<{ message?: string; alreadyAssigned?: boolean }>(
-      "post",
-      `${base}/scan-loft`,
-      { rfid }
-    );
-
-    if (ok) {
-      seq.current += 1;
-      setLog((prev) =>
-        [
-          {
-            key: String(seq.current),
-            text: `${rfid} · ${said?.message ?? "placed"}`,
-            ok: said?.alreadyAssigned !== true,
-          },
-          ...prev,
-        ].slice(0, 25)
-      );
-      reload();
-    }
-    setTag("");
-    tagRef.current?.focus();
-  };
-
-  const MODES: Choice[] =
-    phase === "LOFT"
-      ? [
-          {
-            key: "shuffle",
-            label: "Reshuffle everything",
-            hint: "Clears every loft basket and redistributes all birds by breeder",
-          },
-          {
-            key: "assign",
-            label: "Place the unbasketed only",
-            hint: "Leaves birds already in a basket where they are",
-          },
-        ]
-      : [
-          {
-            key: "reset",
-            label: "Rebuild for this race",
-            hint: "Clears the race baskets and fills them again",
-          },
-          {
-            key: "incremental",
-            label: "Top up",
-            hint: "Adds birds that are not yet in a race basket",
-          },
-        ];
-
-  const assignPath = phase === "LOFT" ? `${base}/assign` : `${base}/assign-race`;
-
-  const buildPlan = async (picked: string | number) => {
-    setMode(picked);
-    if (phase === "RACE" && planRaceId == null) {
-      toast.error("Pick the race first.");
+  /** Ask the server what it would do. Nothing is written. */
+  const preview = async (mode: LoftMode | RaceMode) => {
+    if (phase === "LOFT") {
+      const { ok, data: got } = await action.run<LoftPlan>("post", `${base}/assign`, {
+        preview: true,
+        mode,
+      });
+      if (!ok || !got) return;
+      // The route answers 200 with only a sentence when there are no birds.
+      if (!got.assigned?.length && !got.unassigned?.length) {
+        toast.info(got.message || "No birds to assign.");
+        return;
+      }
+      setPlan({ kind: "loft", mode: mode as LoftMode, data: got });
       return;
     }
-    const { ok, data: got } = await action.run<Plan>("post", assignPath, {
+
+    if (raceId == null) {
+      toast.error("Select a race first.");
+      return;
+    }
+    const { ok, data: got } = await action.run<RacePlan>("post", `${base}/assign-race`, {
       preview: true,
-      mode: picked,
-      ...(phase === "RACE" ? { raceId: planRaceId } : {}),
+      raceId,
+      mode,
     });
-    if (ok && got) setPlan(got);
+    if (!ok || !got) return;
+    if (!got.baskets?.length) {
+      toast.info(got.message || "No birds to assign.");
+      return;
+    }
+    setPlan({ kind: "race", mode: mode as RaceMode, data: got });
   };
 
-  const applyPlan = async () => {
-    if (mode == null) return;
-    const { ok, data: got } = await action.run<Plan>("post", assignPath, {
-      preview: false,
-      mode,
-      ...(phase === "RACE" ? { raceId: planRaceId } : {}),
-    });
+  const apply = async () => {
+    if (!plan) return;
+    const { ok } =
+      plan.kind === "loft"
+        ? await action.run("post", `${base}/assign`, { preview: false, mode: plan.mode })
+        : await action.run("post", `${base}/assign-race`, {
+            preview: false,
+            raceId,
+            mode: plan.mode,
+          });
     if (ok) {
-      toast.success(`${got?.summary?.assignedBirds ?? 0} birds basketed.`);
+      toast.success(
+        plan.kind === "race" && plan.mode === "incremental"
+          ? "New birds added to race baskets."
+          : plan.kind === "race"
+            ? "Birds assigned to race baskets."
+            : "Birds assigned to baskets."
+      );
       setPlan(null);
-      setMode(null);
-      setPlanning(false);
-      reload();
+      done();
     }
   };
 
-  const closePlanner = () => {
-    setPlanning(false);
-    setPlan(null);
-    setMode(null);
+  /** Rebuilding wipes what is there, so it stops first when there is something to wipe. */
+  const startFull = () => {
+    const mode = phase === "LOFT" ? "shuffle" : "reset";
+    if (hasAssignments) setRedoing(mode);
+    else preview(mode);
+  };
+
+  const scan = (mode: "loft" | "race" | "identify") => {
+    const q = [
+      `eventId=${eventId}`,
+      `name=${encodeURIComponent(String(name ?? ""))}`,
+      `mode=${mode}`,
+      raceId != null ? `raceId=${raceId}` : null,
+      race ? `raceName=${encodeURIComponent(raceLabel(race))}` : null,
+    ]
+      .filter(Boolean)
+      .join("&");
+    router.push(`/(admin)/event-scan?${q}` as never);
   };
 
   if (forbidden) return <NoAccess what="Baskets" />;
+
+  const racePicker = (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
+    >
+      {races.map((r) => {
+        const on = r.id === raceId;
+        return (
+          <Pressable
+            key={r.id}
+            onPress={() => {
+              setRaceId(r.id);
+              setOpen(null);
+              setPlan(null);
+            }}
+            className={`rounded-full border px-3.5 py-2 ${
+              on ? "border-blue-600 bg-blue-600" : "border-slate-200 bg-white"
+            }`}
+          >
+            <Text className={`text-xs font-medium ${on ? "text-white" : "text-slate-600"}`}>
+              {raceLabel(r)}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+
+  const assigning = action.pending && plan == null;
 
   return (
     <Screen
       title="Baskets"
       subtitle={name ?? undefined}
-      onRefresh={refresh}
+      onRefresh={() => {
+        refresh();
+        statusReq.reload();
+        setTick((t) => t + 1);
+      }}
       refreshing={refreshing}
       header={
         <>
-          <View className="flex-row rounded-xl border border-slate-200 bg-white p-1">
-            {(["LOFT", "RACE"] as const).map((p) => {
-              const active = p === phase;
-              return (
-                <Pressable
-                  key={p}
-                  onPress={() => {
-                    setPhase(p);
-                    setOpen(null);
-                  }}
-                  className={`flex-1 rounded-lg py-2 ${active ? "bg-blue-600" : ""}`}
-                >
-                  <Text
-                    className={`text-center text-sm font-medium ${
-                      active ? "text-white" : "text-slate-600"
-                    }`}
-                  >
-                    {p === "LOFT" ? "Loft baskets" : "Race baskets"}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <Segments
+            options={[
+              { key: "loft", label: "Loft" },
+              { key: "race", label: "Race" },
+              { key: "prescan", label: "Prescan" },
+            ]}
+            value={tab}
+            onChange={(next) => {
+              setTab(next);
+              setOpen(null);
+              setPlan(null);
+            }}
+          />
 
-          {mayManage ? (
+          {tab !== "loft" ? (
+            <View className="mt-3">
+              {races.length === 0 ? (
+                <Text className="text-xs text-slate-500">
+                  {racesReq.loading
+                    ? "Loading races…"
+                    : racesReq.forbidden || !canAny("races.view", "races.manage")
+                      ? "The race list is not part of your access."
+                      : "No races yet."}
+                </Text>
+              ) : (
+                racePicker
+              )}
+            </View>
+          ) : null}
+
+          {tab !== "prescan" && mayManage ? (
             <View className="mt-3 flex-row flex-wrap" style={{ gap: 8 }}>
-              <Button label="Fill baskets" icon="shuffle-outline" onPress={() => setPlanning(true)} />
-              {phase === "LOFT" ? (
-                <Button
-                  label="Scan in"
-                  tone="secondary"
-                  icon="scan-outline"
-                  onPress={() => {
-                    setScanning(true);
-                    setTag("");
-                  }}
-                />
-              ) : null}
               <Button
-                label="New basket"
+                label={phase === "LOFT" ? "Set baskets" : "Reset & reassign"}
+                icon="color-wand-outline"
+                onPress={startFull}
+                pending={assigning}
+                disabled={
+                  baskets.length === 0 ||
+                  insufficient ||
+                  (phase === "RACE" && (raceId == null || active === 0))
+                }
+              />
+              <Button
+                label={phase === "LOFT" ? "Assign" : "Add new birds only"}
                 tone="secondary"
                 icon="add"
+                onPress={() => preview(phase === "LOFT" ? "assign" : "incremental")}
+                disabled={
+                  action.pending ||
+                  baskets.length === 0 ||
+                  (phase === "RACE" && (raceId == null || active === 0))
+                }
+              />
+              <Button
+                label="Add basket"
+                tone="secondary"
+                icon="add-circle-outline"
+                disabled={phase === "RACE" && raceId == null}
                 onPress={() => {
-                  setForm({ capacity: "", label: "", raceId: null });
+                  setNewCapacity("");
                   setCreating(true);
                 }}
+              />
+              <Button
+                label={phase === "LOFT" ? "Scan to place" : "Prescan"}
+                tone="secondary"
+                icon="scan-outline"
+                disabled={!hasAssignments || (phase === "RACE" && raceId == null)}
+                onPress={() => scan(phase === "LOFT" ? "loft" : "race")}
               />
             </View>
           ) : null}
         </>
       }
     >
-      {loading ? (
+      {tab === "prescan" ? (
+        <View className="mt-4">
+          <Text className="text-sm text-slate-600">
+            Scan any tag to identify the bird and its breeder. Read-only — no assignments are made.
+          </Text>
+          <View className="mt-3 flex-row">
+            <Button label="Start scanning" icon="scan-outline" onPress={() => scan("identify")} />
+          </View>
+          <Caption>Entries</Caption>
+          {eventId ? <BasketEntries eventId={eventId} raceId={raceId} refreshKey={tick} /> : null}
+        </View>
+      ) : loading && listPath ? (
         <Loading />
       ) : (
         <>
           {error ? <Notice>{error}</Notice> : null}
 
-          <FigureRow>
-            <Figure label="Baskets" value={baskets.length} basis="31%" />
-            <Figure label="Birds placed" value={placed} basis="31%" />
-            <Figure
-              label="Spaces left"
-              value={Math.max(0, space - placed)}
-              tone={space - placed <= 0 ? "text-rose-600" : "text-slate-900"}
-              basis="31%"
-            />
-          </FigureRow>
-
-          <View className="mt-4" style={{ gap: 10 }}>
-            {baskets.length === 0 ? (
-              <Empty>
-                No {phase === "LOFT" ? "loft" : "race"} baskets have been created for this season.
-              </Empty>
-            ) : (
-              baskets.map((basket) => {
-                const count = filled(basket);
-                const isFull = count >= basket.capacity;
-                const isOpen = open === basket.id;
-                return (
-                  <View
-                    key={basket.id}
-                    className="overflow-hidden rounded-xl border border-slate-200 bg-white"
-                  >
-                    <Pressable
-                      onPress={() => setOpen(isOpen ? null : basket.id)}
-                      className="flex-row items-center gap-3 px-4 py-3"
-                    >
-                      <View className="h-9 w-9 items-center justify-center rounded-lg bg-slate-100">
-                        <Text className="text-sm font-bold text-slate-700">{basket.basketNo}</Text>
-                      </View>
-                      <View className="flex-1">
-                        <Text className="font-medium text-slate-900">
-                          {basket.label ?? `Basket ${basket.basketNo}`}
-                        </Text>
-                        <Text className={`text-xs ${isFull ? "text-rose-600" : "text-slate-500"}`}>
-                          {count} of {basket.capacity}
-                          {isFull ? " · full" : ""}
-                        </Text>
-                      </View>
-                      <Ionicons
-                        name={isOpen ? "chevron-up" : "chevron-down"}
-                        size={16}
-                        color="#94a3b8"
-                      />
-                    </Pressable>
-
-                    {isOpen && (
-                      <View className="border-t border-slate-100 p-3">
-                        {mayManage ? (
-                          <View className="mb-3 flex-row flex-wrap" style={{ gap: 8 }}>
-                            <Button
-                              label="Rename"
-                              tone="secondary"
-                              icon="create-outline"
-                              onPress={() => {
-                                setNewLabel(basket.label ?? "");
-                                setRenaming(basket);
-                              }}
-                            />
-                            <Button
-                              label="Empty"
-                              tone="secondary"
-                              icon="remove-circle-outline"
-                              onPress={() => setClearing(basket)}
-                              disabled={count === 0}
-                            />
-                            <Button
-                              label="Delete"
-                              tone="secondary"
-                              icon="trash-outline"
-                              onPress={() => setRemoving(basket)}
-                            />
-                          </View>
-                        ) : null}
-
-                        {(basket.assignments ?? []).length === 0 ? (
-                          <Text className="px-1 text-xs text-slate-500">Empty.</Text>
-                        ) : (
-                          <Rows>
-                            {(basket.assignments ?? []).slice(0, 40).map((a) => {
-                              const b = a.inventoryItem?.bird;
-                              const who = `${
-                                a.inventoryItem?.eventInventory?.breeder?.firstName ?? ""
-                              } ${a.inventoryItem?.eventInventory?.breeder?.lastName ?? ""}`.trim();
-                              return (
-                                <Row
-                                  key={a.id}
-                                  title={b?.band ?? "No band"}
-                                  subtitle={
-                                    who || a.inventoryItem?.eventInventory?.loft || undefined
-                                  }
-                                  leading={
-                                    <Ionicons
-                                      name={b?.rfid ? "radio" : "radio-outline"}
-                                      size={14}
-                                      color={b?.rfid ? "#059669" : "#cbd5e1"}
-                                    />
-                                  }
-                                />
-                              );
-                            })}
-                          </Rows>
-                        )}
-                      </View>
-                    )}
-                  </View>
-                );
-              })
-            )}
+          {/* Capacity against the birds that have to fit — the portal's badge. */}
+          <View className="mt-4 flex-row flex-wrap items-center" style={{ gap: 8 }}>
+            <View className={`rounded-full px-3 py-1 ${insufficient ? "bg-rose-100" : "bg-slate-100"}`}>
+              <Text
+                className={`text-xs font-medium ${insufficient ? "text-rose-700" : "text-slate-700"}`}
+                style={tabular}
+              >
+                Capacity {capacity} / Active {active ?? "—"}
+              </Text>
+            </View>
+            {insufficient ? (
+              <Text className="text-xs text-rose-600">
+                Need {(active ?? 0) - capacity} more {phase === "LOFT" ? "loft" : "race"} slot(s)
+              </Text>
+            ) : null}
           </View>
+          {mayManage && !hasAssignments && baskets.length > 0 ? (
+            <Text className="mt-2 text-xs text-slate-400">
+              {phase === "LOFT"
+                ? "Run Set baskets first; scanning says where each bird was put."
+                : "Run Reset & reassign first; the prescan says which basket each bird goes in."}
+            </Text>
+          ) : null}
+
+          <View className="mt-3">
+            <Segments
+              options={[
+                { key: "baskets", label: `${phase === "LOFT" ? "Loft" : "Race"} baskets (${baskets.length})` },
+                { key: "entries", label: "Entries" },
+              ]}
+              value={view}
+              onChange={setView}
+            />
+          </View>
+
+          {view === "entries" ? (
+            <View className="mt-3">
+              {eventId ? (
+                <BasketEntries
+                  eventId={eventId}
+                  raceId={raceId}
+                  capacity={capacity}
+                  occupancy={occupancy}
+                  refreshKey={tick}
+                />
+              ) : null}
+            </View>
+          ) : (
+            <View className="mt-3" style={{ gap: 10 }}>
+              {phase === "RACE" && raceId == null ? (
+                <Empty>Pick a race to see its baskets.</Empty>
+              ) : baskets.length === 0 ? (
+                <Empty>No {phase === "LOFT" ? "loft" : "race"} baskets yet.</Empty>
+              ) : (
+                baskets.map((basket) => {
+                  const count = filled(basket);
+                  const over = count > basket.capacity;
+                  const isFull = count >= basket.capacity;
+                  const isOpen = open === basket.id;
+                  const breeders = [
+                    ...new Set(
+                      (basket.assignments ?? [])
+                        .map((a) => a.inventoryItem?.eventInventory?.breeder?.lastName)
+                        .filter(Boolean)
+                    ),
+                  ];
+                  return (
+                    <View
+                      key={basket.id}
+                      className={`overflow-hidden rounded-xl border bg-white ${
+                        over ? "border-rose-300" : "border-slate-200"
+                      }`}
+                    >
+                      <Pressable
+                        onPress={() => setOpen(isOpen ? null : basket.id)}
+                        className="flex-row items-center gap-3 px-4 py-3"
+                      >
+                        <View className="h-9 w-9 items-center justify-center rounded-lg bg-slate-100">
+                          <Text className="text-sm font-bold text-slate-700">{basket.basketNo}</Text>
+                        </View>
+                        <View className="min-w-0 flex-1">
+                          <Text className="font-medium text-slate-900" numberOfLines={1}>
+                            {labelOf(basket)}
+                          </Text>
+                          <Text className="text-xs text-slate-500" numberOfLines={1}>
+                            {breeders.join(", ") || "Empty"}
+                          </Text>
+                        </View>
+                        <Text
+                          className={`text-sm font-semibold ${isFull ? "text-rose-600" : "text-slate-700"}`}
+                          style={tabular}
+                        >
+                          {count}/{basket.capacity}
+                        </Text>
+                        <Ionicons
+                          name={isOpen ? "chevron-up" : "chevron-down"}
+                          size={16}
+                          color="#94a3b8"
+                        />
+                      </Pressable>
+
+                      {isOpen && (
+                        <View className="border-t border-slate-100 p-3">
+                          {mayManage ? (
+                            <View className="mb-3 flex-row flex-wrap" style={{ gap: 8 }}>
+                              <Button
+                                label="Edit"
+                                tone="secondary"
+                                icon="create-outline"
+                                onPress={() => {
+                                  setForm({
+                                    label: basket.label ?? "",
+                                    capacity: String(basket.capacity),
+                                  });
+                                  setEditing(basket);
+                                }}
+                              />
+                              {/* The portal offers clearing on loft baskets only. */}
+                              {phase === "LOFT" ? (
+                                <Button
+                                  label="Clear"
+                                  tone="secondary"
+                                  icon="swap-horizontal-outline"
+                                  onPress={() => setClearing(basket)}
+                                  disabled={count === 0}
+                                />
+                              ) : null}
+                              <Button
+                                label="Delete"
+                                tone="secondary"
+                                icon="trash-outline"
+                                onPress={() => setRemoving(basket)}
+                              />
+                            </View>
+                          ) : null}
+
+                          {(basket.assignments ?? []).length === 0 ? (
+                            <Text className="px-1 text-xs text-slate-500">Empty.</Text>
+                          ) : (
+                            <View className="overflow-hidden rounded-xl border border-slate-200">
+                              {[...(basket.assignments ?? [])]
+                                .sort(
+                                  (a, b) =>
+                                    new Date(a.assignedAt ?? 0).getTime() -
+                                    new Date(b.assignedAt ?? 0).getTime()
+                                )
+                                .map((a, index) => {
+                                  const b = a.inventoryItem?.bird;
+                                  const who = a.inventoryItem?.eventInventory?.breeder?.lastName;
+                                  const at =
+                                    a.inventoryItem?.birdEventHistory?.[0]?.createdAt ?? a.assignedAt;
+                                  return (
+                                    <View
+                                      key={a.id}
+                                      className={`flex-row items-center gap-3 px-3 py-2 ${
+                                        index > 0 ? "border-t border-slate-100" : ""
+                                      } ${b?.attention ? "bg-rose-50" : ""}`}
+                                    >
+                                      <View className="min-w-0 flex-1">
+                                        <Text
+                                          className="text-sm font-medium text-slate-900"
+                                          numberOfLines={1}
+                                        >
+                                          {shortBand(b?.band) || "No band"}
+                                          {b?.birdName ? ` · ${b.birdName}` : ""}
+                                        </Text>
+                                        <Text className="text-xs text-slate-500" numberOfLines={1}>
+                                          {[who, b?.color, sexLabel(b?.sex)].filter(Boolean).join(" · ") ||
+                                            "—"}
+                                          {b?.note ? ` · ${b.note}` : ""}
+                                        </Text>
+                                      </View>
+                                      {b?.attention ? <Pill label="!" tone="rose" /> : null}
+                                      <Text className="text-[11px] text-slate-400" style={tabular}>
+                                        {at ? new Date(at).toLocaleTimeString() : "—"}
+                                      </Text>
+                                    </View>
+                                  );
+                                })}
+                            </View>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          )}
         </>
       )}
 
+      {/* The plan, before it becomes the truth. */}
       <Sheet
-        open={planning}
-        onClose={closePlanner}
-        title={plan ? "This is what it would do" : "Fill baskets"}
-        subtitle={
-          plan
-            ? "Nothing has changed yet"
-            : phase === "LOFT"
-              ? "Birds are grouped by breeder"
-              : "Pick the race, then how to fill it"
-        }
+        open={plan != null}
+        onClose={() => setPlan(null)}
+        title="Assignment preview"
+        subtitle="Nothing has changed yet"
       >
-        {plan ? (
+        {plan?.kind === "loft" ? (
           <View className="mt-2">
-            <FigureRow>
-              <Figure label="Birds placed" value={plan.summary?.assignedBirds ?? 0} basis="47%" />
-              <Figure
-                label="Left over"
-                value={(plan.summary?.totalBirds ?? 0) - (plan.summary?.assignedBirds ?? 0)}
-                tone={
-                  (plan.summary?.totalBirds ?? 0) - (plan.summary?.assignedBirds ?? 0) > 0
-                    ? "text-amber-600"
-                    : "text-slate-900"
-                }
-                basis="47%"
-              />
-            </FigureRow>
-
-            {plan.heldBack ? (
-              <Notice>
-                {plan.heldBack} birds are held back — unpaid, or not fit to fly.
-              </Notice>
+            {plan.data.summary ? (
+              <Text className="text-xs text-slate-500">
+                {plan.data.summary.assignedGroups}/{plan.data.summary.totalGroups} breeders ·{" "}
+                {plan.data.summary.assignedBirds} of {plan.data.summary.totalBirds} birds
+              </Text>
             ) : null}
 
-            {(plan.unassigned ?? []).length > 0 ? (
+            {(plan.data.unassigned ?? []).length > 0 ? (
               <Notice tone="rose">
-                {(plan.unassigned ?? []).length} breeders would get no basket:{" "}
-                {(plan.unassigned ?? [])
-                  .slice(0, 4)
-                  .map((u) => u.label ?? "unnamed")
-                  .join(", ")}
-                {(plan.unassigned ?? []).length > 4 ? "…" : ""}
+                {(plan.data.unassigned ?? []).length} breeder(s) could not be assigned — no basket has
+                enough space:{" "}
+                {(plan.data.unassigned ?? []).map((u) => `${u.label} (${u.birdCount})`).join(", ")}
               </Notice>
             ) : null}
 
-            <Text className="mb-1.5 mt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-              Baskets that would fill
-            </Text>
+            {(plan.data.heldBack ?? []).length > 0 ? (
+              <Notice>
+                {(plan.data.heldBack ?? []).length} bird(s) held back as not fit to fly:{" "}
+                {(plan.data.heldBack ?? [])
+                  .slice(0, 12)
+                  .map((h) => `${shortBand(h.band)} (${h.reason})`)
+                  .join(", ")}
+                {(plan.data.heldBack ?? []).length > 12 ? "…" : ""}
+              </Notice>
+            ) : null}
+
+            <Caption>Who goes where</Caption>
             <Rows>
-              {(plan.assigned ?? []).slice(0, 30).map((a, i) => (
+              {(plan.data.assigned ?? []).map((a) => (
                 <Row
-                  key={`${a.basketNo}-${i}`}
-                  title={a.label ?? "Unnamed breeder"}
-                  subtitle={`Basket ${a.basketNo}`}
-                  right={`${a.birdCount}`}
+                  key={a.groupKey}
+                  title={a.label}
+                  subtitle={`${a.birdCount} birds`}
+                  right={a.basketLabel ?? `Basket #${a.basketNo}`}
                 />
               ))}
             </Rows>
-
-            <ButtonRow>
-              <Button label="Back" tone="secondary" onPress={() => setPlan(null)} full />
-              <Button label="Apply it" onPress={applyPlan} pending={action.pending} full />
-            </ButtonRow>
           </View>
-        ) : (
+        ) : plan?.kind === "race" ? (
           <View className="mt-2">
-            {phase === "RACE" ? (
-              <>
-                <Text className="mb-1 text-xs font-medium text-slate-600">Race</Text>
-                <ChoiceList
-                  choices={races.map((r) => ({
-                    key: r.id,
-                    label: raceLabel(r),
-                    hint: r.status.toLowerCase(),
-                  }))}
-                  selected={planRaceId}
-                  onPick={(k) => setPlanRaceId(Number(k))}
-                  empty="This event has no races yet."
-                />
-                <View className="h-3" />
-              </>
-            ) : null}
-            <Text className="mb-1 text-xs font-medium text-slate-600">How</Text>
-            <ChoiceList choices={MODES} onPick={buildPlan} selected={mode} />
-            {action.pending ? (
-              <Text className="mt-3 text-center text-xs text-slate-400">Working out the plan…</Text>
-            ) : null}
-          </View>
-        )}
-      </Sheet>
-
-      <Sheet
-        open={scanning}
-        onClose={() => setScanning(false)}
-        title="Scan birds into baskets"
-        subtitle="Each tag goes to its breeder's basket"
-      >
-        <View className="mt-2">
-          <TextInput
-            ref={tagRef}
-            value={tag}
-            onChangeText={setTag}
-            onSubmitEditing={scanIn}
-            placeholder="Hold the scanner over a tag"
-            placeholderTextColor="#94a3b8"
-            autoFocus
-            autoCapitalize="none"
-            autoCorrect={false}
-            blurOnSubmit={false}
-            className="rounded-lg border-2 border-cyan-600 bg-white px-3 py-3 text-base text-slate-900"
-          />
-          <ButtonRow>
-            <Button
-              label="Place it"
-              onPress={scanIn}
-              pending={action.pending}
-              disabled={!tag.trim()}
-              full
-            />
-          </ButtonRow>
-
-          {log.length > 0 ? (
-            <View className="mt-4">
-              <Text className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                Last reads
+            {plan.data.summary ? (
+              <Text className="text-xs text-slate-500">
+                {plan.data.summary.assignedBirds}/{plan.data.summary.totalBirds} birds ·{" "}
+                {plan.data.summary.basketCount} baskets
               </Text>
-              {log.map((line) => (
-                <Text
-                  key={line.key}
-                  className={`text-xs ${line.ok ? "text-slate-600" : "text-amber-700"}`}
-                  numberOfLines={1}
-                >
-                  {line.text}
-                </Text>
+            ) : null}
+
+            {(plan.data.summary?.unassignedBirds ?? 0) > 0 ? (
+              <Notice tone="rose">
+                {plan.data.summary?.unassignedBirds} bird(s) could not be assigned — capacity
+                exhausted.
+              </Notice>
+            ) : null}
+
+            <Caption>Baskets</Caption>
+            <Rows>
+              {(plan.data.baskets ?? []).map((b) => (
+                <Row
+                  key={b.basketId}
+                  title={b.basketLabel ?? `Basket #${b.basketNo}`}
+                  subtitle={b.breeders.join(", ") || undefined}
+                  right={`${b.birdCount}/${b.capacity}`}
+                />
               ))}
-            </View>
-          ) : null}
-        </View>
+            </Rows>
+          </View>
+        ) : null}
+
+        <ButtonRow>
+          <Button label="Discard" tone="secondary" onPress={() => setPlan(null)} full />
+          <Button label="Confirm & save" onPress={apply} pending={action.pending} full />
+        </ButtonRow>
       </Sheet>
 
       <Sheet
         open={creating}
         onClose={() => setCreating(false)}
-        title={phase === "LOFT" ? "New loft basket" : "New race basket"}
+        title={phase === "LOFT" ? "Add new loft basket" : "Add new race basket"}
+        subtitle={
+          phase === "RACE" && race
+            ? `For ${raceLabel(race)} · it will be No. ${nextNo}`
+            : `It will be No. ${nextNo}`
+        }
       >
-        {phase === "RACE" ? (
-          <>
-            <Text className="mb-1 mt-3 text-xs font-medium text-slate-600">Race</Text>
-            <ChoiceList
-              choices={races.map((r) => ({ key: r.id, label: raceLabel(r) }))}
-              selected={form.raceId}
-              onPick={(k) => setForm({ ...form, raceId: Number(k) })}
-              empty="This event has no races yet."
-            />
-          </>
-        ) : null}
+        <Field
+          label="Capacity"
+          value={newCapacity}
+          onChange={setNewCapacity}
+          placeholder="Enter capacity"
+          keyboard="numeric"
+          autoFocus
+          hint="The number is given by the server. A name can be added afterwards with Edit."
+        />
+        <ButtonRow>
+          <Button
+            label="Save and new"
+            tone="secondary"
+            onPress={() => create(true)}
+            disabled={action.pending || !newCapacity.trim()}
+            full
+          />
+          <Button
+            label="Save and close"
+            onPress={() => create(false)}
+            pending={action.pending}
+            disabled={!newCapacity.trim()}
+            full
+          />
+        </ButtonRow>
+      </Sheet>
+
+      <Sheet
+        open={editing != null}
+        onClose={() => setEditing(null)}
+        title={`Edit basket #${editing?.basketNo ?? ""}`}
+      >
+        <Field
+          label="Name / label"
+          value={form.label}
+          onChange={(v) => setForm({ ...form, label: v })}
+          placeholder={phase === "LOFT" ? "e.g. LB-SMITH-1" : "e.g. RB-1"}
+          hint="Leave it empty to go back to the number."
+        />
         <Field
           label="Capacity"
           value={form.capacity}
           onChange={(v) => setForm({ ...form, capacity: v })}
-          placeholder="25"
           keyboard="numeric"
-        />
-        <Field
-          label="Label"
-          value={form.label}
-          onChange={(v) => setForm({ ...form, label: v })}
-          placeholder="Optional — the number is used otherwise"
+          hint="Cannot go below the number of birds already in it."
         />
         <ButtonRow>
-          <Button label="Cancel" tone="secondary" onPress={() => setCreating(false)} full />
-          <Button label="Create" onPress={create} pending={action.pending} full />
-        </ButtonRow>
-      </Sheet>
-
-      <Sheet open={renaming != null} onClose={() => setRenaming(null)} title="Rename basket">
-        <Field
-          label="Label"
-          value={newLabel}
-          onChange={setNewLabel}
-          placeholder={`Basket ${renaming?.basketNo ?? ""}`}
-          autoFocus
-          hint="Leave it empty to go back to the number."
-        />
-        <ButtonRow>
-          <Button label="Cancel" tone="secondary" onPress={() => setRenaming(null)} full />
-          <Button label="Save" onPress={rename} pending={action.pending} full />
+          <Button label="Cancel" tone="secondary" onPress={() => setEditing(null)} full />
+          <Button label="Save" onPress={saveEdit} pending={action.pending} full />
         </ButtonRow>
       </Sheet>
 
       <Confirm
+        open={redoing != null}
+        title={phase === "LOFT" ? "Re-assign all baskets?" : "Re-assign all race baskets?"}
+        body={
+          phase === "LOFT"
+            ? "Birds are already assigned to loft baskets. Running Set baskets will clear all existing assignments and re-assign them by breeder. This cannot be undone. You will see the plan before anything is saved."
+            : "Birds are already assigned to race baskets. This will clear all existing race assignments and redistribute randomly. This cannot be undone. You will see the plan before anything is saved."
+        }
+        confirmLabel="Preview"
+        tone="primary"
+        pending={action.pending}
+        onConfirm={() => {
+          const mode = redoing;
+          setRedoing(null);
+          if (mode) preview(mode);
+        }}
+        onCancel={() => setRedoing(null)}
+      />
+
+      <Confirm
         open={clearing != null}
-        title={`Empty basket ${clearing?.basketNo ?? ""}?`}
-        body={`The ${clearing ? filled(clearing) : 0} birds in it go back to unbasketed. The basket itself stays.`}
-        confirmLabel="Empty it"
+        title={`Clear basket #${clearing?.basketNo ?? ""}?`}
+        body={
+          clearing && filled(clearing) > 0
+            ? `${filled(clearing)} bird(s) will be unassigned and need to be reassigned. The basket itself stays.`
+            : "Basket is empty."
+        }
+        confirmLabel="Clear basket"
         pending={action.pending}
         onConfirm={clear}
         onCancel={() => setClearing(null)}
@@ -696,13 +874,13 @@ export default function EventBaskets() {
 
       <Confirm
         open={removing != null}
-        title={`Delete basket ${removing?.basketNo ?? ""}?`}
-        body={
+        title={`Delete basket #${removing?.basketNo ?? ""}?`}
+        body={`${
           removing && filled(removing) > 0
-            ? `It still holds ${filled(removing)} birds. They go back to unbasketed.`
-            : "The basket is removed from this season."
-        }
-        confirmLabel="Delete"
+            ? `${filled(removing)} bird(s) will be unassigned and need to be reassigned. `
+            : ""
+        }This cannot be undone.`}
+        confirmLabel="Delete basket"
         pending={action.pending}
         onConfirm={remove}
         onCancel={() => setRemoving(null)}

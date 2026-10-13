@@ -71,7 +71,7 @@ function Stat({
 }
 
 export default function AdminDashboard() {
-  const { can } = usePermissions();
+  const { can, canAny } = usePermissions();
   const { isWide, isMedium, gutter } = useResponsive();
   const router = useRouter();
 
@@ -207,8 +207,17 @@ export default function AdminDashboard() {
 
       <View className={isWide || isMedium ? "flex-row flex-wrap" : ""} style={{ gap: 10 }}>
         {events.map((event) => (
-          <View
+          <Pressable
             key={event.id}
+            // A card that names an event and goes nowhere reads as broken.
+            disabled={!canAny("events.view", "events.manage")}
+            onPress={() =>
+              router.push(
+                `/(admin)/event-detail?eventId=${event.id}&name=${encodeURIComponent(
+                  event.name ?? ""
+                )}` as never
+              )
+            }
             className="rounded-xl border border-slate-200 bg-white p-4"
             style={{ flexGrow: 1, flexBasis: isWide ? "31%" : isMedium ? "47%" : "100%" }}
           >
@@ -216,7 +225,7 @@ export default function AdminDashboard() {
             <Text className="mt-0.5 text-xs text-slate-500">
               {event.isOpen === 1 ? "Open for entries" : "Closed"}
             </Text>
-          </View>
+          </Pressable>
         ))}
       </View>
 

@@ -23,11 +23,12 @@ const NAV_ITEMS: { title: string; icon: IoniconName; link: string }[] = [
   { title: "Teams",           icon: "people-outline",              link: "/teams" },
   { title: "My Birds",        icon: "egg-outline",                 link: "/birds" },
   { title: "Notifications",   icon: "notifications-outline",       link: "/notifications" },
-  { title: "Messages",        icon: "chatbubble-ellipses-outline", link: "/messages" },
+  { title: "News & Updates",  icon: "newspaper-outline",           link: "/messages" },
 ];
 
 const OTHER_ITEMS: { title: string; icon: IoniconName; link: string }[] = [
   { title: "Payments",            icon: "card-outline",               link: "/payments" },
+  { title: "Profile",             icon: "person-circle-outline",      link: "/profile" },
   { title: "About Us",            icon: "information-circle-outline",  link: "/about-us" },
   { title: "Privacy Policy",      icon: "shield-checkmark-outline",   link: "/privacy-policy" },
   { title: "Contact Us",          icon: "call-outline",               link: "/contact-us" },

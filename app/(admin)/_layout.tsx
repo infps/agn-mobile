@@ -50,7 +50,7 @@ const NAV: NavItem[] = [
     short: "Scan",
     href: "/(admin)/checkin",
     icon: "scan-outline",
-    permissions: ["checkin.manage"],
+    permissions: ["checkin.view", "checkin.manage"],
   },
   {
     label: "Breeders",

@@ -3,13 +3,14 @@ import SkeletonCard from "@/components/skeletonCard";
 import { EventType, useEvents } from "@/context/EventContext";
 import { format } from "date-fns";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   FlatList,
   Image,
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View
 } from "react-native";
@@ -45,7 +46,23 @@ const EventsList = () => {
     isSkeleton: true,
   }));
 
-  const displayData = loading ? skeletonData : events;
+  // Search and open/closed filter, as on the portal's events page.
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "closed">("all");
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return events.filter((e) => {
+      if (statusFilter === "open" && e.isOpen !== 1) return false;
+      if (statusFilter === "closed" && e.isOpen === 1) return false;
+      if (!q) return true;
+      return (
+        (e.name ?? "").toLowerCase().includes(q) ||
+        (e.shortName ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [events, search, statusFilter]);
+
+  const displayData = loading ? skeletonData : filtered;
   const renderEventItem = ({
     item,
   }: {
@@ -177,8 +194,33 @@ const EventsList = () => {
   }
 
   return (
-    <SafeAreaView>
+    <SafeAreaView style={{ flex: 1 }}>
       <Header title="Events" />
+      <View className="px-2 pt-2">
+        <TextInput
+          className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-black"
+          placeholder="Search events"
+          placeholderTextColor="#9ca3af"
+          value={search}
+          onChangeText={setSearch}
+          autoCapitalize="none"
+        />
+        <View className="flex-row mt-2">
+          {(["all", "open", "closed"] as const).map((f) => (
+            <TouchableOpacity
+              key={f}
+              onPress={() => setStatusFilter(f)}
+              className={`px-3 py-1.5 rounded-full mr-2 border ${
+                statusFilter === f ? "bg-primary border-primary" : "bg-white border-gray-200"
+              }`}
+            >
+              <Text className={`text-xs font-semibold ${statusFilter === f ? "text-white" : "text-gray-700"}`}>
+                {f === "all" ? "All" : f === "open" ? "Open" : "Closed"}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
       <FlatList
         data={displayData}
         renderItem={renderEventItem}
@@ -195,7 +237,9 @@ const EventsList = () => {
         onRefresh={handleRefresh}
         ListEmptyComponent={
           <View style={styles.centered}>
-            <Text>No events found</Text>
+            <Text>
+              {search || statusFilter !== "all" ? "No events match your filters." : "No events available."}
+            </Text>
           </View>
         }
       />

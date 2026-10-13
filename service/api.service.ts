@@ -1,6 +1,7 @@
 import axios from 'axios';
 import Constants from "expo-constants";
 import SecureStorageService from './secureStorage.service';
+import { withChosenSeason } from './season.service';
 
 // Where the deployed portal lives. Overridable per build profile so a staging
 // APK can be pointed somewhere else without touching code.
@@ -99,6 +100,7 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    config.url = withChosenSeason(config.url, config.params);
     return config;
   },
   (error) => Promise.reject(error)
@@ -116,11 +118,36 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && !(await sessionStillValid(error.config))) {
       await SecureStorageService.clearTokens();
     }
     return Promise.reject(error);
   }
 );
+
+/**
+ * Whether a 401 was a refusal rather than an expired session.
+ *
+ * Several portal routes answer 401 when the caller is signed in but lacks the
+ * role — "not a superadmin" comes back the same as "not signed in". Clearing
+ * the tokens on those logged an admin out for tapping a button that was not
+ * theirs. So before throwing the session away, the server is asked whether it
+ * still recognises it. If that question cannot be asked at all, the tokens are
+ * kept: a dropped connection is not a reason to sign somebody out.
+ */
+async function sessionStillValid(failed?: { url?: string; headers?: any }): Promise<boolean> {
+  if (failed?.url?.includes("/auth/")) return false;
+  const authorization = failed?.headers?.Authorization;
+  if (!authorization) return false;
+  try {
+    const res = await axios.get(`${apiUrl}/auth/get-session`, {
+      timeout: REQUEST_TIMEOUT_MS,
+      headers: { Authorization: authorization, 'ngrok-skip-browser-warning': 'true' },
+    });
+    return Boolean(res.data?.user ?? res.data?.session);
+  } catch (probe: any) {
+    return !probe?.response;
+  }
+}
 
 export default api;

@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from "react";
-import { Text, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Pressable, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
+import api from "@/service/api.service";
 import { useAdminData } from "@/hooks/useAdminData";
 import { useAdminAction } from "@/hooks/useAdminAction";
 import { usePermissions } from "@/context/PermissionContext";
@@ -21,17 +23,24 @@ import {
   SearchBar,
   Screen,
   Sheet,
-  Truncated,
   money,
 } from "@/components/admin/ui";
+import { Caption, Segments, fullName, parseAmount } from "@/components/admin/MoneyBits";
+import { RegistrationMoneySheet } from "@/components/admin/RegistrationMoneySheet";
+
+interface DefaulterBird {
+  id: number;
+  birdNo: number | null;
+}
 
 interface Defaulter {
   eventInventoryId: number;
+  breederId: number | null;
   breederName: string;
   loft: string | null;
   cashPromised: boolean | null;
   balanceOwed: number;
-  birds: { id: number }[];
+  birds: DefaulterBird[];
 }
 
 interface AssessmentRow {
@@ -68,12 +77,18 @@ interface Penalty {
   } | null;
 }
 
+interface PenaltyData {
+  assessment?: Assessment;
+  existing?: Penalty[];
+}
+
 interface Refund {
   id: number;
   amount: number;
   reason: string | null;
   method: string | null;
   issuedAt: string;
+  status: string;
   eventInventory?: {
     id: number;
     loft: string | null;
@@ -84,12 +99,17 @@ interface Refund {
 type Tab = "owing" | "penalties" | "refunds";
 
 /**
- * Entries that have not paid, and the two things done about them.
+ * Entries that have not paid, and what gets done about them.
  *
  * The server decides who counts as a defaulter — it is tied to a specific race
  * date, not to "owes money today" — so this only lists people while that window
  * is open and says so plainly when it is not. Guessing the rule here and having
  * it disagree with the portal would be worse than showing nothing.
+ *
+ * A defaulter can be dealt with three ways, and all three are on the row: take
+ * their word that cash is coming, take the money, or put their birds in the
+ * store. The first is a promise and is reversible; the other two change who
+ * owes what, so they ask first and name the figure.
  *
  * Penalties and refunds live on the same screen because they are the two ends
  * of the same conversation: one charges somebody for being late, the other
@@ -101,8 +121,8 @@ type Tab = "owing" | "penalties" | "refunds";
  * produce a different set of charges depending on the order somebody tapped.
  */
 export default function EventDefaulters() {
-  const { eventId, name } = useLocalSearchParams<{ eventId?: string; name?: string }>();
-  const { can } = usePermissions();
+  const { eventId } = useLocalSearchParams<{ eventId?: string; name?: string }>();
+  const { can, canAny } = usePermissions();
   const toast = useToast();
   const action = useAdminAction();
 
@@ -111,12 +131,21 @@ export default function EventDefaulters() {
   const [charging, setCharging] = useState(false);
   const [waiving, setWaiving] = useState<Penalty | null>(null);
   const [waiverReason, setWaiverReason] = useState("");
-  const [refunding, setRefunding] = useState<Defaulter | null>(null);
-  const [refund, setRefund] = useState({ amount: "", reason: "", method: "" });
+  const [confirmingWaive, setConfirmingWaive] = useState(false);
+
+  /** The defaulter whose sheet is open, and what is staged on it. */
+  const [acting, setActing] = useState<Defaulter | null>(null);
+  const [price, setPrice] = useState("");
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const [listing, setListing] = useState<number[] | null>(null);
+  const [paying, setPaying] = useState<Defaulter | null>(null);
 
   const mayPenalise = can("penalties.manage");
   const mayWaive = can("penalties.waive");
-  const mayRefund = can("refunds.manage");
+  const maySeeRefunds = canAny("refunds.view", "refunds.manage");
+  const mayPromise = can("breeders.manage");
+  const mayList = can("store.manage");
+  const mayMoney = canAny("payments.manage", "refunds.manage", "breeders.view", "breeders.manage");
 
   const base = eventId ? `/admin/event/${eventId}` : null;
 
@@ -128,16 +157,57 @@ export default function EventDefaulters() {
 
   // Each tab pays for its own fetch, so somebody who only ever looks at who
   // owes money never loads the penalty ledger.
-  const penaltiesReq = useAdminData<{ assessment?: Assessment; existing?: Penalty[] }>(
-    tab === "penalties" && base ? `${base}/penalties` : null,
-    [tab, eventId]
-  );
-  const refundsReq = useAdminData<{ refunds?: Refund[]; total?: number }>(
-    tab === "refunds" && base ? `${base}/refunds` : null,
+  //
+  // Penalties are fetched by hand rather than through useAdminData because one
+  // answer has to be told apart from the rest: a bare 404 with no message means
+  // the portal this app is talking to does not have the penalties route at all,
+  // which is a statement about the server, not a fault and not an empty season.
+  const [penalties, setPenalties] = useState<{
+    loading: boolean;
+    data: PenaltyData | null;
+    missing: boolean;
+    refused: boolean;
+    error: string | null;
+  }>({ loading: false, data: null, missing: false, refused: false, error: null });
+
+  const loadPenalties = useCallback(async () => {
+    if (!base) return;
+    setPenalties((p) => ({ ...p, loading: true, error: null }));
+    try {
+      const res = await api.get(`${base}/penalties`);
+      setPenalties({ loading: false, data: res.data ?? null, missing: false, refused: false, error: null });
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const said = err?.response?.data?.message;
+      // The routes that do exist answer a 404 in words ("No active season for
+      // this event"). A 404 with nothing to say is the route itself missing.
+      const missing = status === 404 && typeof said !== "string";
+      const refused = status === 401 || status === 403;
+      setPenalties({
+        loading: false,
+        data: null,
+        missing,
+        refused,
+        error:
+          missing || refused
+            ? null
+            : typeof said === "string"
+              ? said
+              : "Could not load penalties just now.",
+      });
+    }
+  }, [base]);
+
+  useEffect(() => {
+    if (tab === "penalties") loadPenalties();
+  }, [tab, loadPenalties]);
+
+  const refundsReq = useAdminData<{ refunds?: Refund[]; total?: number; owed?: number }>(
+    tab === "refunds" && base && maySeeRefunds ? `${base}/refunds` : null,
     [tab, eventId]
   );
 
-  const rows = data?.defaulters ?? [];
+  const rows = useMemo(() => data?.defaulters ?? [], [data]);
   const open = data?.isInDefaulterWindow ?? false;
 
   const results = useMemo(() => {
@@ -148,16 +218,73 @@ export default function EventDefaulters() {
     );
   }, [rows, query]);
 
-  const assessment = penaltiesReq.data?.assessment ?? null;
-  const existing = penaltiesReq.data?.existing ?? [];
+  // The portal's two groups: somebody who has promised cash is still a
+  // defaulter, but is not somebody to chase.
+  const actionable = results.filter((d) => !d.cashPromised);
+  const promised = results.filter((d) => d.cashPromised);
+
+  const assessment = penalties.data?.assessment ?? null;
+  const existing = penalties.data?.existing ?? [];
   const refunds = refundsReq.data?.refunds ?? [];
 
   const who = (p: Penalty | Refund) =>
-    `${p.eventInventory?.breeder?.firstName ?? ""} ${
-      p.eventInventory?.breeder?.lastName ?? ""
-    }`.trim() ||
-    p.eventInventory?.loft ||
-    "Unnamed";
+    fullName(p.eventInventory?.breeder, p.eventInventory?.loft || "Unnamed");
+
+  const openDefaulter = (d: Defaulter) => {
+    setPrice("");
+    setPicked(new Set());
+    setActing(d);
+  };
+
+  const togglePromise = async () => {
+    if (!acting || !base) return;
+    const { ok } = await action.run(
+      "post",
+      `${base}/event-inventory/${acting.eventInventoryId}/cash-promise`,
+      {},
+      { success: acting.cashPromised ? "Cash promise removed." : "Marked as promising cash." }
+    );
+    if (ok) {
+      setActing(null);
+      reload();
+    }
+  };
+
+  const listingPrice = parseAmount(price);
+
+  /** Stage a move to the store; nothing is sent until it is confirmed. */
+  const askToList = (itemIds: number[]) => {
+    if (listingPrice == null || listingPrice <= 0) {
+      toast.error("Set a listing price first.");
+      return;
+    }
+    if (itemIds.length === 0) {
+      toast.error("Select at least one bird.");
+      return;
+    }
+    setListing(itemIds);
+  };
+
+  const moveToStore = async () => {
+    if (!acting || !base || !listing || listingPrice == null) return;
+    if (acting.breederId == null) {
+      setListing(null);
+      toast.error("This registration has no breeder attached, so it cannot be listed.");
+      return;
+    }
+    const count = listing.length;
+    const { ok } = await action.run(
+      "post",
+      `${base}/store`,
+      { breederId: acting.breederId, itemIds: listing, listingPrice },
+      { success: `${count} bird${count === 1 ? "" : "s"} moved to the store.` }
+    );
+    setListing(null);
+    if (ok) {
+      setActing(null);
+      reload();
+    }
+  };
 
   const charge = async () => {
     const { ok, data: said } = await action.run<{ message?: string }>(
@@ -167,53 +294,32 @@ export default function EventDefaulters() {
     if (ok) {
       toast.success(said?.message ?? "Penalties charged.");
       setCharging(false);
-      penaltiesReq.reload();
+      loadPenalties();
       reload();
     }
   };
 
-  const waive = async () => {
-    if (!waiving) return;
+  const askWaive = () => {
     if (!waiverReason.trim()) {
       toast.error("A waiver needs a reason on record.");
       return;
     }
-    const { ok } = await action.run(
-      "post",
-      `/admin/penalty/${waiving.id}/waive`,
-      { reason: waiverReason.trim() },
-      { success: "Penalty waived." }
-    );
-    if (ok) {
-      setWaiving(null);
-      setWaiverReason("");
-      penaltiesReq.reload();
-    }
+    setConfirmingWaive(true);
   };
 
-  const issueRefund = async () => {
-    if (!refunding) return;
-    const amount = parseFloat(refund.amount.trim());
-    if (!refund.amount.trim() || isNaN(amount) || amount <= 0) {
-      toast.error("Give an amount above zero.");
-      return;
-    }
-    const { ok } = await action.run(
+  const waive = async () => {
+    if (!waiving) return;
+    const { ok, data: said } = await action.run<{ message?: string }>(
       "post",
-      `${base}/refunds`,
-      {
-        eventInventoryId: refunding.eventInventoryId,
-        amount,
-        reason: refund.reason.trim() || null,
-        method: refund.method.trim() || null,
-      },
-      { success: `${money(amount)} refunded.` }
+      `/admin/penalty/${waiving.id}/waive`,
+      { reason: waiverReason.trim() }
     );
+    setConfirmingWaive(false);
     if (ok) {
-      setRefunding(null);
-      setRefund({ amount: "", reason: "", method: "" });
-      refundsReq.reload();
-      reload();
+      toast.success(said?.message ?? "Penalty waived.");
+      setWaiving(null);
+      setWaiverReason("");
+      loadPenalties();
     }
   };
 
@@ -225,12 +331,28 @@ export default function EventDefaulters() {
     ? new Date(data.paymentRaceDate).toLocaleDateString()
     : null;
 
-  const TABS: { key: Tab; label: string; show: boolean }[] = [
-    { key: "owing", label: "Owing", show: true },
-    { key: "penalties", label: "Penalties", show: mayPenalise || mayWaive },
-    { key: "refunds", label: "Refunds", show: mayRefund },
+  const tabs: { key: Tab; label: string }[] = [
+    { key: "owing", label: "Owing" },
+    ...(mayPenalise || mayWaive ? [{ key: "penalties" as const, label: "Penalties" }] : []),
+    ...(maySeeRefunds ? [{ key: "refunds" as const, label: "Refunds" }] : []),
   ];
-  const visibleTabs = TABS.filter((t) => t.show);
+
+  const chargeable = (assessment?.rows ?? []).filter((r) => !r.cashPromised);
+  const chargeTotal = chargeable.reduce((s, r) => s + r.penalty, 0);
+
+  const defaulterRow = (d: Defaulter) => (
+    <Row
+      key={d.eventInventoryId}
+      title={d.breederName || "Unnamed"}
+      subtitle={`${d.loft ?? "No loft"} · ${d.birds?.length ?? 0} bird${
+        (d.birds?.length ?? 0) === 1 ? "" : "s"
+      }`}
+      right={money(d.balanceOwed)}
+      rightTone="text-rose-600"
+      rightSub="owed"
+      onPress={() => openDefaulter(d)}
+    />
+  );
 
   return (
     <Screen
@@ -238,25 +360,17 @@ export default function EventDefaulters() {
       subtitle={
         open
           ? `${rows.length} entr${rows.length === 1 ? "y" : "ies"} past the deadline`
-          : "The deadline has not passed yet"
+          : "The defaulter window is not open"
       }
-      onRefresh={refresh}
+      onRefresh={() => {
+        refresh();
+        if (tab === "penalties") loadPenalties();
+        if (tab === "refunds") refundsReq.refresh();
+      }}
       refreshing={refreshing}
       header={
         <>
-          {visibleTabs.length > 1 ? (
-            <View className="flex-row rounded-xl border border-slate-200 bg-white p-1">
-              {visibleTabs.map((t) => (
-                <Button
-                  key={t.key}
-                  label={t.label}
-                  tone={tab === t.key ? "primary" : "secondary"}
-                  onPress={() => setTab(t.key)}
-                  full
-                />
-              ))}
-            </View>
-          ) : null}
+          {tabs.length > 1 ? <Segments<Tab> options={tabs} value={tab} onChange={setTab} /> : null}
           {tab === "owing" && rows.length > 0 ? (
             <View className="mt-3">
               <SearchBar value={query} onChange={setQuery} placeholder="Breeder or loft" />
@@ -275,8 +389,9 @@ export default function EventDefaulters() {
             !open ? (
               <View className="mt-4">
                 <Empty>
-                  Nobody counts as a defaulter until the payment race has run
-                  {deadline ? `, which is set for ${deadline}.` : "."}
+                  {deadline
+                    ? `Nobody counts as a defaulter yet. The window opens seven days before the first race that requires payment, which is set for ${deadline}.`
+                    : "No race on this season requires payment, so nobody can be a defaulter."}
                 </Empty>
               </View>
             ) : (
@@ -287,46 +402,46 @@ export default function EventDefaulters() {
                   <Figure label="Owed" value={money(owed)} tone="text-rose-600" basis="31%" />
                 </FigureRow>
 
-                <View className="mt-4">
-                  {results.length === 0 ? (
+                {results.length === 0 ? (
+                  <View className="mt-4">
                     <Empty>
                       {rows.length === 0 ? "Everybody has paid." : "No breeder matches that search."}
                     </Empty>
-                  ) : (
-                    <Rows>
-                      {results.map((d) => (
-                        <Row
-                          key={d.eventInventoryId}
-                          title={d.breederName || "Unnamed"}
-                          subtitle={`${d.loft ?? "No loft"} · ${d.birds?.length ?? 0} birds${
-                            d.cashPromised ? " · cash promised" : ""
-                          }`}
-                          right={money(d.balanceOwed)}
-                          rightTone="text-rose-600"
-                          rightSub={mayRefund ? "refund" : undefined}
-                          onPress={
-                            mayRefund
-                              ? () => {
-                                  setRefund({ amount: "", reason: "", method: "" });
-                                  setRefunding(d);
-                                }
-                              : undefined
-                          }
-                        />
-                      ))}
-                    </Rows>
-                  )}
-                  <Truncated shown={results.length} total={results.length} />
-                </View>
+                  </View>
+                ) : (
+                  <>
+                    {actionable.length > 0 ? (
+                      <>
+                        <Caption>Actionable ({actionable.length})</Caption>
+                        <Rows>{actionable.map(defaulterRow)}</Rows>
+                      </>
+                    ) : null}
+                    {promised.length > 0 ? (
+                      <>
+                        <Caption>Cash promised ({promised.length})</Caption>
+                        <Rows>{promised.map(defaulterRow)}</Rows>
+                      </>
+                    ) : null}
+                  </>
+                )}
               </>
             )
           ) : null}
 
           {tab === "penalties" ? (
-            penaltiesReq.loading ? (
+            penalties.loading && !penalties.data ? (
               <Loading />
-            ) : penaltiesReq.error ? (
-              <Notice>{penaltiesReq.error}</Notice>
+            ) : penalties.missing ? (
+              <Notice>
+                Late-payment penalties cannot be listed or charged from here yet. The portal this
+                app is connected to does not have the penalties service installed, so there is
+                nothing to show — this is not a fault with your account or with this season.
+                Nothing has been charged or changed.
+              </Notice>
+            ) : penalties.refused ? (
+              <Notice>Penalties are not part of your access.</Notice>
+            ) : penalties.error ? (
+              <Notice>{penalties.error}</Notice>
             ) : (
               <>
                 <FigureRow>
@@ -335,11 +450,7 @@ export default function EventDefaulters() {
                     value={(assessment?.rows ?? []).length}
                     basis="31%"
                   />
-                  <Figure
-                    label="Days late"
-                    value={assessment?.daysLate ?? 0}
-                    basis="31%"
-                  />
+                  <Figure label="Days late" value={assessment?.daysLate ?? 0} basis="31%" />
                   <Figure
                     label="On the books"
                     value={existing.filter((p) => !p.waivedAt).length}
@@ -355,7 +466,7 @@ export default function EventDefaulters() {
                   </Notice>
                 ) : null}
                 {(assessment?.warnings ?? []).length > 0 ? (
-                  <Notice>{(assessment?.warnings ?? []).slice(0, 2).join(" · ")}</Notice>
+                  <Notice>{(assessment?.warnings ?? []).join(" · ")}</Notice>
                 ) : null}
 
                 {mayPenalise && (assessment?.rows ?? []).length > 0 ? (
@@ -373,11 +484,9 @@ export default function EventDefaulters() {
 
                 {(assessment?.rows ?? []).length > 0 ? (
                   <>
-                    <Text className="mb-1.5 mt-5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                      Would be charged
-                    </Text>
+                    <Caption>Would be charged</Caption>
                     <Rows>
-                      {(assessment?.rows ?? []).slice(0, 40).map((r) => (
+                      {(assessment?.rows ?? []).map((r) => (
                         <Row
                           key={r.eventInventoryId}
                           title={r.breederName || "Unnamed"}
@@ -392,14 +501,12 @@ export default function EventDefaulters() {
                   </>
                 ) : null}
 
-                <Text className="mb-1.5 mt-5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                  Already charged
-                </Text>
+                <Caption>Already charged</Caption>
                 {existing.length === 0 ? (
                   <Empty>No penalty has been charged this season.</Empty>
                 ) : (
                   <Rows>
-                    {existing.slice(0, 60).map((p) => (
+                    {existing.map((p) => (
                       <Row
                         key={p.id}
                         title={who(p)}
@@ -437,23 +544,30 @@ export default function EventDefaulters() {
           {tab === "refunds" ? (
             refundsReq.loading ? (
               <Loading />
+            ) : refundsReq.forbidden ? (
+              <Notice>Refunds are not part of your access.</Notice>
             ) : refundsReq.error ? (
               <Notice>{refundsReq.error}</Notice>
             ) : (
               <>
                 <FigureRow>
-                  <Figure label="Refunds" value={refunds.length} basis="47%" />
+                  <Figure label="Refunds" value={refunds.length} basis="31%" />
                   <Figure
                     label="Given back"
                     value={money(refundsReq.data?.total ?? 0)}
                     tone="text-blue-600"
-                    basis="47%"
+                    basis="31%"
+                  />
+                  <Figure
+                    label="Still due back"
+                    value={money(refundsReq.data?.owed ?? 0)}
+                    basis="31%"
                   />
                 </FigureRow>
 
                 <Text className="mt-4 text-xs text-slate-400">
-                  A refund is issued against a registration. Open a breeder on the Owing tab to
-                  give money back.
+                  A refund is issued against a registration. Open a breeder on the Owing tab, or a
+                  line in Accounting, to give money back or to mark an owed refund as paid.
                 </Text>
 
                 <View className="mt-3">
@@ -461,7 +575,7 @@ export default function EventDefaulters() {
                     <Empty>Nothing has been refunded this season.</Empty>
                   ) : (
                     <Rows>
-                      {refunds.slice(0, 60).map((r) => (
+                      {refunds.map((r) => (
                         <Row
                           key={r.id}
                           title={who(r)}
@@ -471,7 +585,12 @@ export default function EventDefaulters() {
                               .join(" · ") || undefined
                           }
                           right={money(r.amount)}
-                          rightTone="text-blue-600"
+                          rightTone={r.status === "OWED" ? "text-rose-600" : "text-blue-600"}
+                          badge={
+                            r.status === "OWED"
+                              ? { label: "still due", bg: "bg-rose-100", text: "text-rose-700" }
+                              : null
+                          }
                         />
                       ))}
                     </Rows>
@@ -483,36 +602,140 @@ export default function EventDefaulters() {
         </>
       )}
 
+      {/* One defaulter: the promise, the money, or the store. */}
       <Sheet
-        open={refunding != null}
-        onClose={() => setRefunding(null)}
-        title={`Refund ${refunding?.breederName ?? ""}`}
-        subtitle={`They owe ${money(refunding?.balanceOwed)} — a refund cannot exceed what was paid`}
+        open={acting != null}
+        onClose={() => setActing(null)}
+        title={acting?.breederName || "Defaulter"}
+        subtitle={`${acting?.loft ?? "No loft"} · owes ${money(acting?.balanceOwed)}${
+          acting?.cashPromised ? " · cash promised" : ""
+        }`}
       >
-        <Field
-          label="Amount"
-          value={refund.amount}
-          onChange={(v) => setRefund({ ...refund, amount: v })}
-          keyboard="decimal-pad"
-          autoFocus
+        {mayMoney || mayPromise ? (
+          <View className="mt-3" style={{ gap: 8 }}>
+            {mayMoney ? (
+              <Button
+                label="Payments and refunds"
+                icon="cash-outline"
+                onPress={() => {
+                  setPaying(acting);
+                  setActing(null);
+                }}
+              />
+            ) : null}
+            {mayPromise ? (
+              <Button
+                label={acting?.cashPromised ? "Unmark cash promise" : "Mark cash promise"}
+                tone="secondary"
+                icon="hand-left-outline"
+                onPress={togglePromise}
+                pending={action.pending && listing == null}
+              />
+            ) : null}
+          </View>
+        ) : null}
+
+        <Caption>Birds ({acting?.birds?.length ?? 0})</Caption>
+        {(acting?.birds ?? []).length === 0 ? (
+          <Empty>No birds are entered on this registration.</Empty>
+        ) : (
+          <View className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            {(acting?.birds ?? []).map((b, index) => {
+              const on = picked.has(b.id);
+              return (
+                <Pressable
+                  key={b.id}
+                  disabled={!mayList}
+                  onPress={() =>
+                    setPicked((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(b.id)) next.delete(b.id);
+                      else next.add(b.id);
+                      return next;
+                    })
+                  }
+                  className={`flex-row items-center gap-3 px-4 py-3 ${
+                    index > 0 ? "border-t border-slate-100" : ""
+                  } ${on ? "bg-cyan-50" : ""}`}
+                >
+                  {mayList ? (
+                    <Ionicons
+                      name={on ? "checkbox" : "square-outline"}
+                      size={18}
+                      color={on ? "#0891b2" : "#94a3b8"}
+                    />
+                  ) : null}
+                  <Text className="text-sm text-slate-900">Bird #{b.birdNo ?? "?"}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
+        {mayList && (acting?.birds ?? []).length > 0 ? (
+          <>
+            <Field
+              label="Listing price"
+              value={price}
+              onChange={setPrice}
+              keyboard="decimal-pad"
+              placeholder="0.00"
+              hint="One price for the whole listing, whichever birds go into it."
+            />
+            <ButtonRow>
+              <Button
+                label="Move all to store"
+                tone="secondary"
+                onPress={() => askToList((acting?.birds ?? []).map((b) => b.id))}
+                full
+              />
+              <Button
+                label={`Move ${picked.size} selected`}
+                onPress={() => askToList([...picked])}
+                disabled={picked.size === 0}
+                full
+              />
+            </ButtonRow>
+          </>
+        ) : null}
+
+        <Confirm
+          open={listing != null}
+          title={`List ${listing?.length ?? 0} bird${(listing?.length ?? 0) === 1 ? "" : "s"} for ${money(
+            listingPrice ?? 0
+          )}?`}
+          body={`${listing?.length ?? 0} of ${acting?.breederName || "this breeder"}'s birds go into the event store as one listing at ${money(
+            listingPrice ?? 0
+          )}. Whoever buys the listing takes the birds. It can be removed from the store again until it sells.`}
+          confirmLabel="Move to store"
+          tone="primary"
+          pending={action.pending}
+          onConfirm={moveToStore}
+          onCancel={() => setListing(null)}
         />
-        <Field
-          label="Reason"
-          value={refund.reason}
-          onChange={(v) => setRefund({ ...refund, reason: v })}
-          placeholder="Withdrawn before basketing"
-        />
-        <Field
-          label="Method"
-          value={refund.method}
-          onChange={(v) => setRefund({ ...refund, method: v })}
-          placeholder="Cash, cheque, PayPal"
-        />
-        <ButtonRow>
-          <Button label="Cancel" tone="secondary" onPress={() => setRefunding(null)} full />
-          <Button label="Refund" onPress={issueRefund} pending={action.pending} full />
-        </ButtonRow>
       </Sheet>
+
+      <RegistrationMoneySheet
+        open={paying != null}
+        onClose={() => setPaying(null)}
+        eventId={eventId}
+        registration={
+          paying
+            ? {
+                eventInventoryId: paying.eventInventoryId,
+                breederId: paying.breederId,
+                breederName: paying.breederName,
+                loft: paying.loft,
+                balance: paying.balanceOwed,
+                cashPromised: paying.cashPromised,
+              }
+            : null
+        }
+        onChanged={() => {
+          setPaying(null);
+          reload();
+        }}
+      />
 
       <Sheet
         open={waiving != null}
@@ -531,14 +754,28 @@ export default function EventDefaulters() {
         />
         <ButtonRow>
           <Button label="Cancel" tone="secondary" onPress={() => setWaiving(null)} full />
-          <Button label="Waive it" onPress={waive} pending={action.pending} full />
+          <Button label="Waive it" tone="danger" onPress={askWaive} full />
         </ButtonRow>
+
+        <Confirm
+          open={confirmingWaive}
+          title={`Waive the ${money(waiving?.amount)} penalty?`}
+          body={`${waiving ? who(waiving) : "This breeder"} stops owing ${money(
+            waiving?.amount
+          )}. The charge stays on record as waived, with your reason, and cannot be reinstated from here.`}
+          confirmLabel="Waive it"
+          pending={action.pending}
+          onConfirm={waive}
+          onCancel={() => setConfirmingWaive(false)}
+        />
       </Sheet>
 
       <Confirm
         open={charging}
-        title="Charge the late entries?"
-        body={`${(assessment?.rows ?? []).length} registrations are past the deadline and grace period${
+        title={`Charge ${money(chargeTotal)} in penalties?`}
+        body={`${chargeable.length} registration${
+          chargeable.length === 1 ? " is" : "s are"
+        } past the deadline and grace period, for ${money(chargeTotal)} in total${
           (assessment?.skippedCashPromised ?? 0) > 0
             ? `, and ${assessment?.skippedCashPromised} are skipped for having promised cash`
             : ""

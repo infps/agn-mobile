@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useAdminData } from "@/hooks/useAdminData";
 import { useAdminAction } from "@/hooks/useAdminAction";
@@ -8,6 +8,7 @@ import {
   ButtonRow,
   type Choice,
   ChoiceList,
+  Confirm,
   Empty,
   Loading,
   Notice,
@@ -15,61 +16,85 @@ import {
   Rows,
   SearchBar,
   Sheet,
+  money,
 } from "@/components/admin/ui";
-
-interface Bettor {
-  id: string;
-  name: string | null;
-  lastName: string | null;
-  email: string | null;
-  role: string | null;
-}
-
-interface RaceItem {
-  id: number;
-  bird?: {
-    band?: string | null;
-    birdName?: string | null;
-    breeder?: { firstName?: string | null; lastName?: string | null } | null;
-  };
-}
+import { Caption, fullName } from "@/components/admin/MoneyBits";
 
 type Category = "BELGIAN" | "STANDARD" | "WTA";
 
-/** How many tiers each pool shape has, per the server's own bounds. */
-const TIERS: Record<Category, number> = { BELGIAN: 7, STANDARD: 6, WTA: 5 };
+/** A pool the season's betting scheme actually prices — a tier at zero is not offered. */
+interface Pool {
+  category: Category;
+  tierIndex: number;
+  amount: number;
+}
 
-const CATEGORIES: { key: Category; label: string; hint: string }[] = [
-  { key: "BELGIAN", label: "Belgian", hint: "Seven tiers" },
-  { key: "STANDARD", label: "Standard", hint: "Six tiers" },
-  { key: "WTA", label: "Winner takes all", hint: "Five tiers" },
-];
+interface PlacedBet {
+  category: string;
+  tierIndex: number;
+  bettorId: string;
+  stakePaid: boolean;
+}
+
+interface Bird {
+  raceItemId: number;
+  band: string | null;
+  ownerUserId: string | null;
+  ownerName: string | null;
+  bets: PlacedBet[];
+}
+
+interface BetBoard {
+  birds?: Bird[];
+  pools?: Pool[];
+  bettingOpen?: boolean;
+  raceStatus?: string;
+}
+
+interface Breeder {
+  userId: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+}
 
 interface Selection {
   raceItemId: number;
   band: string;
   category: Category;
   tierIndex: number;
+  amount: number;
 }
+
+type Mode = "slip" | "pools" | "payer";
+
+export const POOL_LABEL: Record<string, string> = {
+  BELGIAN: "Belgian",
+  STANDARD: "Standard",
+  WTA: "WTA",
+};
+
+export const poolName = (p: { category: string; tierIndex: number }) =>
+  `${POOL_LABEL[p.category] ?? p.category} #${p.tierIndex}`;
 
 /**
  * Taking a cash bet at the rail.
  *
- * Four things have to agree for a bet to exist — who is betting, on which bird,
- * in which pool, at which tier — and they are asked in that order because that
- * is the order somebody says them out loud. A name, then a bird, then "Belgian
- * three".
+ * The portal does this on a grid — every bird down the side, every pool across
+ * the top. A phone cannot show that grid, so it is walked instead: pick a bird,
+ * then tick the pools it goes into. The order is the portal's, though: the bets
+ * are chosen first and the person paying is named last, because one person
+ * usually backs three or four birds and then hands over a single amount.
  *
- * Several bets are staged before anything is sent. One person usually backs
- * three or four birds in one go, and sending each as its own request means a
- * half-placed set when the fourth is refused — the endpoint takes them together
- * and prices them together, so this does too.
+ * The pools and their stakes come from the same board the portal reads, so the
+ * price shown is the price the server will charge, and a pool a bird is already
+ * in is shown as taken rather than being offered and then refused.
  *
- * Stake amounts are not shown, and deliberately. They live on the season's
- * betting scheme, which this app has no honest way to read; guessing one and
- * displaying it would be worse than showing none, because somebody would repeat
- * it to the person paying. The server prices the bet and says so if a tier has
- * no amount set.
+ * Nothing is sent until the slip is complete. The endpoint takes the whole slip
+ * at once and records one cash payment for the lot — sending each bet on its
+ * own would leave a half-placed set, and two payments, when the fourth is
+ * refused. Because that payment is recorded as already paid, the total is read
+ * back before it goes.
  */
 export function CashBetSheet({
   open,
@@ -87,240 +112,355 @@ export function CashBetSheet({
   const toast = useToast();
   const action = useAdminAction();
 
-  const [bettor, setBettor] = useState<Bettor | null>(null);
-  const [query, setQuery] = useState("");
+  const [mode, setMode] = useState<Mode>("slip");
   const [birdQuery, setBirdQuery] = useState("");
-  const [picking, setPicking] = useState<RaceItem | null>(null);
-  const [category, setCategory] = useState<Category | null>(null);
+  const [payerQuery, setPayerQuery] = useState("");
+  const [picking, setPicking] = useState<Bird | null>(null);
   const [selections, setSelections] = useState<Selection[]>([]);
+  const [payer, setPayer] = useState<{ userId: string; name: string } | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
-  const bettorsReq = useAdminData<{ users?: Bettor[] }>(open ? "/admin/users" : null, [open]);
-  const itemsReq = useAdminData<{ raceItems?: RaceItem[] }>(
-    open && bettor ? `/admin/race-item?raceId=${raceId}` : null,
-    [open, bettor?.id, raceId]
+  const boardReq = useAdminData<BetBoard>(open && raceId ? `/breeder/race/${raceId}/bet` : null, [
+    open,
+    raceId,
+  ]);
+  // Only when somebody gets as far as naming who is paying.
+  const breedersReq = useAdminData<{ breeders?: Breeder[] }>(
+    open && mode === "payer" ? "/admin/breeders" : null,
+    [open, mode]
   );
 
-  const who = (b: Bettor) =>
-    `${b.name ?? ""} ${b.lastName ?? ""}`.trim() || b.email || "Unnamed";
+  const reset = () => {
+    setMode("slip");
+    setBirdQuery("");
+    setPayerQuery("");
+    setPicking(null);
+    setSelections([]);
+    setPayer(null);
+    setConfirming(false);
+  };
 
-  const bettorChoices: Choice[] = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const all = bettorsReq.data?.users ?? [];
-    const matched = q
-      ? all.filter((b) => `${who(b)} ${b.email ?? ""}`.toLowerCase().includes(q))
-      : all;
-    return matched.slice(0, 40).map((b) => ({
-      key: b.id,
-      label: who(b),
-      hint: b.role === "BETTOR" ? "bettor account" : b.email,
-    }));
-  }, [bettorsReq.data, query]);
+  // A slip never survives into another race.
+  useEffect(() => {
+    if (open) reset();
+  }, [open, raceId]);
+
+  const birds = useMemo(() => boardReq.data?.birds ?? [], [boardReq.data]);
+  const pools = useMemo(() => boardReq.data?.pools ?? [], [boardReq.data]);
+  const raceStatus = boardReq.data?.raceStatus ?? "";
+  const registering = raceStatus === "REGISTERING";
+
+  const total = selections.reduce((s, x) => s + x.amount, 0);
+  const staged = (raceItemId: number, p: Pool) =>
+    selections.some(
+      (s) => s.raceItemId === raceItemId && s.category === p.category && s.tierIndex === p.tierIndex
+    );
 
   const birdChoices: Choice[] = useMemo(() => {
     const q = birdQuery.trim().toLowerCase();
-    const all = itemsReq.data?.raceItems ?? [];
-    const taken = new Set(selections.map((s) => `${s.raceItemId}`));
     const matched = q
-      ? all.filter((i) => {
-          const owner = `${i.bird?.breeder?.firstName ?? ""} ${i.bird?.breeder?.lastName ?? ""}`;
-          return `${i.bird?.band ?? ""} ${i.bird?.birdName ?? ""} ${owner}`
-            .toLowerCase()
-            .includes(q);
-        })
-      : all;
-    return matched.slice(0, 60).map((i) => ({
-      key: i.id,
-      label: i.bird?.band ?? `Entry ${i.id}`,
-      hint:
-        `${i.bird?.breeder?.firstName ?? ""} ${i.bird?.breeder?.lastName ?? ""}`.trim() ||
-        i.bird?.birdName ||
-        null,
-      // A bird can be backed in more than one pool, so this only marks the ones
-      // already staged rather than blocking them.
-      disabled: false,
-      disabledReason: taken.has(String(i.id)) ? "already staged" : null,
-    }));
-  }, [itemsReq.data, birdQuery, selections]);
+      ? birds.filter((b) => `${b.band ?? ""} ${b.ownerName ?? ""}`.toLowerCase().includes(q))
+      : birds;
+    return matched.map((b) => {
+      const mine = selections.filter((s) => s.raceItemId === b.raceItemId).length;
+      const free = pools.length - b.bets.length;
+      return {
+        key: b.raceItemId,
+        label: b.band ?? `Entry ${b.raceItemId}`,
+        hint: [
+          b.ownerName,
+          mine > 0 ? `${mine} on the slip` : null,
+          b.bets.length > 0 ? `${b.bets.length} pool${b.bets.length === 1 ? "" : "s"} taken` : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        disabled: free <= 0,
+        disabledReason: "every pool is taken",
+      };
+    });
+  }, [birds, birdQuery, selections, pools.length]);
 
-  const addSelection = (tierIndex: number) => {
-    if (!picking || !category) return;
-    const band = picking.bird?.band ?? `Entry ${picking.id}`;
-    const duplicate = selections.some(
-      (s) => s.raceItemId === picking.id && s.category === category && s.tierIndex === tierIndex
+  // Any breeder with a linked account can be the one paying, as in the portal.
+  const payerChoices: Choice[] = useMemo(() => {
+    const q = payerQuery.trim().toLowerCase();
+    const all = (breedersReq.data?.breeders ?? []).filter((b) => !!b.userId);
+    const matched = q
+      ? all.filter((b) => `${fullName(b, "")} ${b.email ?? ""}`.toLowerCase().includes(q))
+      : all;
+    return matched.slice(0, 60).map((b) => ({
+      key: b.userId as string,
+      label: fullName(b, b.email || (b.userId as string)),
+      hint: b.email,
+    }));
+  }, [breedersReq.data, payerQuery]);
+
+  const togglePool = (p: Pool) => {
+    if (!picking) return;
+    const band = picking.band ?? `Entry ${picking.raceItemId}`;
+    setSelections((prev) =>
+      staged(picking.raceItemId, p)
+        ? prev.filter(
+            (s) =>
+              !(
+                s.raceItemId === picking.raceItemId &&
+                s.category === p.category &&
+                s.tierIndex === p.tierIndex
+              )
+          )
+        : [
+            ...prev,
+            {
+              raceItemId: picking.raceItemId,
+              band,
+              category: p.category,
+              tierIndex: p.tierIndex,
+              amount: p.amount,
+            },
+          ]
     );
-    if (duplicate) {
-      toast.error(`${band} is already in ${category.toLowerCase()} tier ${tierIndex}.`);
-      return;
-    }
-    setSelections((prev) => [...prev, { raceItemId: picking.id, band, category, tierIndex }]);
-    setPicking(null);
-    setCategory(null);
-    setBirdQuery("");
   };
 
   const place = async () => {
-    if (!bettor || selections.length === 0) return;
-    const { ok } = await action.run(
+    if (!payer || selections.length === 0) return;
+    const { ok, data } = await action.run<{ betsCreated?: number; totalPaid?: number }>(
       "post",
       `/admin/race/${raceId}/betting/place-cash-bet`,
       {
-        bettorUserId: bettor.id,
+        bettorUserId: payer.userId,
         selections: selections.map((s) => ({
           raceItemId: s.raceItemId,
           category: s.category,
           tierIndex: s.tierIndex,
         })),
-      },
-      { success: `${selections.length} bet${selections.length === 1 ? "" : "s"} registered.` }
+      }
     );
+    setConfirming(false);
     if (ok) {
+      const made = data?.betsCreated ?? selections.length;
+      toast.success(
+        `Cash bets registered — ${made} bet${made === 1 ? "" : "s"}, ${money(data?.totalPaid ?? total)}.`
+      );
       reset();
       onClose();
       onPlaced();
+    } else {
+      // A refusal usually means somebody else took a pool in the meantime.
+      boardReq.reload();
     }
   };
 
-  const reset = () => {
-    setBettor(null);
-    setSelections([]);
-    setPicking(null);
-    setCategory(null);
-    setQuery("");
-    setBirdQuery("");
-  };
+  const title =
+    mode === "pools"
+      ? (picking?.band ?? "Bird")
+      : mode === "payer"
+        ? "Who is paying cash?"
+        : "Take a cash bet";
 
-  const close = () => {
-    reset();
-    onClose();
-  };
+  const subtitle =
+    mode === "pools"
+      ? `${picking?.ownerName ?? "No owner on record"} — tick the pools to enter`
+      : mode === "payer"
+        ? `${selections.length} bet${selections.length === 1 ? "" : "s"} · ${money(total)}`
+        : selections.length === 0
+          ? `On ${raceName} — pick the bets first, then who pays`
+          : `${selections.length} staged · ${money(total)} — nothing is placed until you register it`;
 
   return (
-    <>
-      {/* Step one: whose bet is this. */}
-      <Sheet
-        open={open && bettor == null}
-        onClose={close}
-        title="Take a cash bet"
-        subtitle={`On ${raceName} — who is betting?`}
-      >
-        <View className="mt-2">
-          <SearchBar value={query} onChange={setQuery} placeholder="Name or email" />
-        </View>
-        {bettorsReq.loading ? (
-          <Loading />
-        ) : (
-          <ChoiceList
-            choices={bettorChoices}
-            onPick={(k) => {
-              const found = (bettorsReq.data?.users ?? []).find((b) => b.id === k);
-              if (found) setBettor(found);
-            }}
-            empty={query ? "Nobody matches that." : "No accounts to bet for."}
-          />
-        )}
-      </Sheet>
-
-      {/* Step two: the running slip. */}
-      <Sheet
-        open={open && bettor != null && picking == null}
-        onClose={close}
-        title={bettor ? who(bettor) : "Cash bet"}
-        subtitle={
-          selections.length === 0
-            ? "Nothing staged yet"
-            : `${selections.length} staged — nothing is placed until you send it`
-        }
-      >
-        {selections.length > 0 ? (
-          <View className="mt-2">
-            <Rows>
-              {selections.map((s, i) => (
-                <Row
-                  key={`${s.raceItemId}-${s.category}-${s.tierIndex}-${i}`}
-                  title={s.band}
-                  subtitle={`${s.category.toLowerCase()} · tier ${s.tierIndex}`}
-                  right="remove"
-                  rightTone="text-rose-600"
-                  onPress={() => setSelections((prev) => prev.filter((_, idx) => idx !== i))}
-                />
-              ))}
-            </Rows>
-          </View>
-        ) : null}
-
+    <Sheet open={open} onClose={onClose} title={title} subtitle={subtitle}>
+      {boardReq.loading ? (
+        <Loading />
+      ) : boardReq.forbidden ? (
         <Notice>
-          The stake comes from this season&apos;s betting scheme. It is priced when the bet is
-          sent, and refused if the tier has no amount set.
+          The list of birds and pools for this race is only given to admin accounts, so a cash bet
+          cannot be taken from this sign-in.
         </Notice>
+      ) : boardReq.error ? (
+        <Notice>{boardReq.error}</Notice>
+      ) : !registering ? (
+        <Notice>
+          This race is {raceStatus ? raceStatus.toLowerCase() : "not open"} — cash bets can only be
+          taken while a race is still registering.
+        </Notice>
+      ) : birds.length === 0 ? (
+        <Empty>No birds are in this race yet.</Empty>
+      ) : pools.length === 0 ? (
+        <Notice>
+          This season has no betting scheme, or the scheme prices no pool tiers, so there is
+          nothing to bet into.
+        </Notice>
+      ) : mode === "slip" ? (
+        <>
+          {selections.length > 0 ? (
+            <>
+              <Caption>The slip</Caption>
+              <Rows>
+                {selections.map((s, i) => (
+                  <Row
+                    key={`${s.raceItemId}-${s.category}-${s.tierIndex}`}
+                    title={s.band}
+                    subtitle={poolName(s)}
+                    right={money(s.amount)}
+                    rightSub="remove"
+                    onPress={() => setSelections((prev) => prev.filter((_, idx) => idx !== i))}
+                  />
+                ))}
+              </Rows>
+              <ButtonRow>
+                <Button label="Clear" tone="secondary" onPress={() => setSelections([])} full />
+                <Button
+                  label={`Who pays — ${money(total)}`}
+                  icon="person-outline"
+                  onPress={() => {
+                    setPayerQuery("");
+                    setMode("payer");
+                  }}
+                  full
+                />
+              </ButtonRow>
+            </>
+          ) : null}
 
-        <Text className="mb-1 mt-4 text-xs font-medium text-slate-600">Add a bird</Text>
-        <View>
-          <SearchBar value={birdQuery} onChange={setBirdQuery} placeholder="Band or breeder" />
-        </View>
-        {itemsReq.loading ? (
-          <Loading />
-        ) : birdChoices.length === 0 ? (
-          <Empty>{birdQuery ? "No bird matches that." : "This race has no entries."}</Empty>
-        ) : (
+          <Caption>Add a bird</Caption>
+          <SearchBar value={birdQuery} onChange={setBirdQuery} placeholder="Band or owner" />
           <ChoiceList
             choices={birdChoices}
             onPick={(k) => {
-              const found = (itemsReq.data?.raceItems ?? []).find((i) => i.id === Number(k));
+              const found = birds.find((b) => b.raceItemId === Number(k));
               if (found) {
                 setPicking(found);
-                setCategory(null);
+                setMode("pools");
               }
             }}
+            empty="No birds match your search."
           />
-        )}
-
-        <ButtonRow>
-          <Button label="Start over" tone="secondary" onPress={reset} full />
-          <Button
-            label="Place bets"
-            onPress={place}
-            pending={action.pending}
-            disabled={selections.length === 0}
-            full
-          />
-        </ButtonRow>
-      </Sheet>
-
-      {/* Step three: which pool, which tier. */}
-      <Sheet
-        open={picking != null}
-        onClose={() => {
-          setPicking(null);
-          setCategory(null);
-        }}
-        title={picking?.bird?.band ?? "Bird"}
-        subtitle={category ? "Which tier?" : "Which pool?"}
-      >
-        {category == null ? (
-          <ChoiceList
-            choices={CATEGORIES.map((c) => ({ key: c.key, label: c.label, hint: c.hint }))}
-            onPick={(k) => setCategory(k as Category)}
-          />
-        ) : (
-          <>
-            <ChoiceList
-              choices={Array.from({ length: TIERS[category] }, (_, i) => ({
-                key: i + 1,
-                label: `Tier ${i + 1}`,
-              }))}
-              onPick={(k) => addSelection(Number(k))}
+        </>
+      ) : mode === "pools" && picking ? (
+        <>
+          <View className="mt-2">
+            <Rows>
+              {pools.map((p) => {
+                const taken = picking.bets.find(
+                  (b) => b.category === p.category && b.tierIndex === p.tierIndex
+                );
+                const on = staged(picking.raceItemId, p);
+                // The portal colours a taken cell by who holds it and whether
+                // the stake has cleared; here that is said in words.
+                const holder = taken
+                  ? `${
+                      picking.ownerUserId != null && taken.bettorId === picking.ownerUserId
+                        ? "taken by the owner"
+                        : "taken by another bettor"
+                    } · stake ${taken.stakePaid ? "paid" : "not paid"}`
+                  : null;
+                return (
+                  <Row
+                    key={`${p.category}-${p.tierIndex}`}
+                    title={poolName(p)}
+                    subtitle={holder ?? (on ? "on the slip — tap to take it off" : "tap to add")}
+                    right={money(p.amount)}
+                    rightTone={taken ? "text-slate-400" : on ? "text-emerald-600" : "text-slate-900"}
+                    badge={
+                      taken
+                        ? { label: "taken", bg: "bg-slate-200", text: "text-slate-600" }
+                        : on
+                          ? { label: "added", bg: "bg-emerald-100", text: "text-emerald-700" }
+                          : null
+                    }
+                    onPress={taken ? undefined : () => togglePool(p)}
+                  />
+                );
+              })}
+            </Rows>
+          </View>
+          <ButtonRow>
+            <Button
+              label="Done with this bird"
+              onPress={() => {
+                setPicking(null);
+                setBirdQuery("");
+                setMode("slip");
+              }}
+              full
             />
-            <ButtonRow>
-              <Button
-                label="Back to pools"
-                tone="secondary"
-                onPress={() => setCategory(null)}
-                full
-              />
-            </ButtonRow>
-          </>
-        )}
-      </Sheet>
-    </>
+          </ButtonRow>
+        </>
+      ) : (
+        <>
+          {payer ? (
+            <>
+              <View className="mt-3">
+                <Rows>
+                  <Row
+                    title={payer.name}
+                    subtitle="Paying cash for this slip"
+                    right="change"
+                    onPress={() => setPayer(null)}
+                  />
+                </Rows>
+              </View>
+              <Text className="mt-2 text-xs text-slate-400">
+                {selections.map((s) => `${s.band} ${poolName(s)}`).join(", ")}
+              </Text>
+            </>
+          ) : (
+            <>
+              <View className="mt-2">
+                <SearchBar
+                  value={payerQuery}
+                  onChange={setPayerQuery}
+                  placeholder="Search breeder or bettor"
+                />
+              </View>
+              {breedersReq.loading ? (
+                <Loading />
+              ) : breedersReq.forbidden ? (
+                <Notice>
+                  The person paying is picked from the breeder list, and breeder access has not
+                  been given to you.
+                </Notice>
+              ) : breedersReq.error ? (
+                <Notice>{breedersReq.error}</Notice>
+              ) : (
+                <ChoiceList
+                  choices={payerChoices}
+                  onPick={(k) => {
+                    const found = payerChoices.find((c) => c.key === k);
+                    if (found) setPayer({ userId: String(k), name: found.label });
+                  }}
+                  empty={
+                    payerQuery
+                      ? "No match."
+                      : "No breeder has an account to bet under."
+                  }
+                />
+              )}
+            </>
+          )}
+          <ButtonRow>
+            <Button label="Back to the slip" tone="secondary" onPress={() => setMode("slip")} full />
+            <Button
+              label={`Register — ${money(total)}`}
+              icon="cash-outline"
+              onPress={() => setConfirming(true)}
+              disabled={!payer || selections.length === 0}
+              full
+            />
+          </ButtonRow>
+        </>
+      )}
+
+      <Confirm
+        open={confirming}
+        title={`Register ${money(total)} in cash?`}
+        body={`${selections.length} bet${selections.length === 1 ? "" : "s"} on ${raceName} are placed for ${
+          payer?.name ?? "this bettor"
+        }, and ${money(total)} is recorded as cash already received from them. Only do this with the money in hand.`}
+        confirmLabel="Register"
+        tone="success"
+        pending={action.pending}
+        onConfirm={place}
+        onCancel={() => setConfirming(false)}
+      />
+    </Sheet>
   );
 }

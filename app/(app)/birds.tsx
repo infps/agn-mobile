@@ -1,15 +1,17 @@
 import Header from "@/components/header";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import Modal from "@/components/Modal";
-import { useBirds } from "@/context";
+import { getSexLabel } from "@/constants/bird";
+import { useBirds, useToast } from "@/context";
 import { BirdType } from "@/context/BirdContext";
-import { useEffect, useState } from "react";
+import { downloadAndShare } from "@/service/download.service";
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
+  RefreshControl,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -17,279 +19,243 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { SEX_OPTIONS, getSexLabel } from "@/constants/bird";
+/** What `GET /api/breeder/birds` adds to each bird on top of the stored row. */
+type ListedBird = BirdType & {
+  image?: string | null;
+  totalRaces?: number;
+  wins?: number;
+  bestPosition?: number | null;
+  currentStatus?: string | null;
+};
 
-const FEDERATIONS = ["AU", "IF", "NPA", "CU", "BB", "ARPU", "IPB"];
-const COLORS = [
-  "BB", "BC", "BBWF", "BBPD", "BCWF", "BCPD", "SPLA", "CHOC", "RC", "SIL",
-  "RCSP", "RR", "BLK", "OPAL", "SLAT", "PENC", "WHIT", "GRIZ", "DC", "DCWF",
+const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
+  REGISTERED: { bg: "#dbeafe", fg: "#1d4ed8" },
+  LOFT_BASKETED: { bg: "#fef9c3", fg: "#a16207" },
+  RELEASED: { bg: "#ffedd5", fg: "#c2410c" },
+  ARRIVED: { bg: "#dcfce7", fg: "#15803d" },
+  FOREIGN_BIRD: { bg: "#fee2e2", fg: "#b91c1c" },
+};
+
+type Filter = "all" | "cock" | "hen" | "racing" | "lost";
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "cock", label: "Cocks" },
+  { key: "hen", label: "Hens" },
+  { key: "racing", label: "In a race" },
+  { key: "lost", label: "Lost" },
 ];
 
-type DropdownProps = {
-  label: string;
-  value: string;
-  options: { value: string; label: string }[] | string[];
-  onChange: (value: string) => void;
-};
+const EXPORTS = [
+  { format: "xlsx", label: "Excel (.xlsx)" },
+  { format: "csv", label: "CSV (.csv)" },
+  { format: "pdf", label: "PDF (.pdf)" },
+  { format: "html", label: "Web page (.html)" },
+] as const;
 
-const Dropdown = ({ label, value, options, onChange }: DropdownProps) => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  const normalizedOptions = options.map((opt) =>
-    typeof opt === "string" ? { value: opt, label: opt } : opt
-  );
-
-  const selectedLabel = normalizedOptions.find((o) => o.value === value)?.label || "Select";
-
-  return (
-    <View className="flex-1">
-      <Text className="text-sm mb-1 text-gray-600">{label}</Text>
-      <TouchableOpacity
-        className="border rounded-lg p-3 bg-white border-gray-300"
-        onPress={() => setIsOpen(!isOpen)}
-      >
-        <Text className={value ? "text-black" : "text-gray-400"}>
-          {selectedLabel}
-        </Text>
-      </TouchableOpacity>
-      {isOpen && (
-        <View className="absolute top-16 left-0 right-0 bg-white border border-gray-300 rounded-lg z-50 shadow-lg">
-          <ScrollView className="max-h-64">
-            {normalizedOptions.map((opt) => (
-              <TouchableOpacity
-                key={opt.value}
-                className={`p-3 border-b border-gray-100 ${value === opt.value ? "bg-primary/10" : ""}`}
-                onPress={() => {
-                  onChange(opt.value);
-                  setIsOpen(false);
-                }}
-              >
-                <Text className={value === opt.value ? "text-primary font-semibold" : "text-black"}>
-                  {opt.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-    </View>
-  );
-};
-
+/**
+ * My Birds — the portal's /birds table as a list.
+ *
+ * Same data, same columns (band, name, colour, sex, races / wins / best,
+ * current status), with the portal's band and name filters folded into one
+ * search box. Adding and editing happen on their own screen.
+ */
 const Birds = () => {
-  const { birds, loading, addBird, fetchBirds } = useBirds();
+  const { birds, loading, fetchBirds } = useBirds();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [birdData, setBirdData] = useState({
-    birdName: "",
-    color: "",
-    sex: "0",
-    band1: "",
-    band2: new Date().getFullYear().toString(),
-    band3: "",
-    band4: "",
-  });
-  useEffect(() => {
-    fetchBirds();
-  }, []);
-  const isDuplicateBird = () => {
-    const bandKey = `${birdData.band1}-${birdData.band2}-${birdData.band3}-${birdData.band4}`.toLowerCase();
-    return birds.some((bird: BirdType) => {
-      const existingKey = `${bird.band1 || ""}-${bird.band2 || ""}-${bird.band3 || ""}-${bird.band4 || ""}`.toLowerCase();
-      return existingKey === bandKey && bandKey !== "---";
-    });
-  };
+  const toast = useToast();
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [refreshing, setRefreshing] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
-  const addNewBird = async () => {
-    if (isDuplicateBird()) {
-      Alert.alert(
-        "Duplicate Bird",
-        "A bird with these band details already exists.",
-        [{ text: "OK" }]
+  // On focus rather than on mount, so coming back from adding or editing a
+  // bird shows the change.
+  useFocusEffect(
+    useCallback(() => {
+      fetchBirds();
+    }, [fetchBirds])
+  );
+
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (birds as ListedBird[]).filter((b) => {
+      if (filter === "cock" && b.sex !== 1) return false;
+      if (filter === "hen" && b.sex !== 2) return false;
+      if (filter === "racing" && !b.currentStatus) return false;
+      if (filter === "lost" && b.isLost !== 1) return false;
+      if (!q) return true;
+      return (
+        (b.band ?? "").toLowerCase().includes(q) ||
+        (b.birdName ?? "").toLowerCase().includes(q) ||
+        (b.rfid ?? "").toLowerCase().includes(q)
       );
-      return;
-    }
+    });
+  }, [birds, query, filter]);
 
-    try {
-      const success = await addBird({ ...birdData, sex: parseInt(birdData.sex, 10) || 0 });
-      if (success) {
-        setOpen(false);
-        setBirdData({
-          birdName: "",
-          color: "",
-          sex: "0",
-          band1: "",
-          band2: new Date().getFullYear().toString(),
-          band3: "",
-          band4: "",
-        });
-      }
-    } catch (err) {
-      console.log(err);
-    }
+  const runExport = async (format: (typeof EXPORTS)[number]["format"]) => {
+    setExporting(true);
+    const result = await downloadAndShare(
+      `/breeder/export/birds?format=${format}`,
+      `my-birds.${format}`
+    );
+    setExporting(false);
+    if (!result.ok) toast.error(result.problem ?? "Could not export your birds.");
   };
+
+  const chooseExport = () =>
+    Alert.alert("Export my birds", "Choose a format", [
+      ...EXPORTS.map((e) => ({ text: e.label, onPress: () => runExport(e.format) })),
+      { text: "Cancel", style: "cancel" as const },
+    ]);
+
   return (
-    <SafeAreaView className="flex-1">
-      <Header title="Birds" />
-      <View className="p-2 bg-primary flex-row justify-between mt-2 mx-2">
-        <Text className="text-white text-[10px]">SL. NO.</Text>
-        <Text className="text-white text-[10px]">Bird Name</Text>
-        <Text className="text-white text-[10px]">Color</Text>
-        <Text className="text-white text-[10px]">Sex</Text>
-        <Text className="text-white text-[10px]">Action</Text>
-      </View>
-      <View className="px-2 w-full pb-[100px]">
-        {loading ? (
-          [1, 2, 3, 4, 5].map((_, index) => (
-            <View className="p-2 mr-4 flex-row justify-between" key={index}>
-              <View className="w-full h-8 bg-gray-200 rounded" />
-              <View className="w-full h-8 bg-gray-200 rounded" />
-              <View className="w-full h-8 bg-gray-200 rounded" />
-              <View className="w-full h-8 bg-gray-200 rounded" />
-              <View className="w-full h-8 bg-gray-200 rounded" />
-              <View className="w-full h-8 bg-gray-200 rounded" />
-            </View>
-          ))
-        ) : birds.length > 0 ? (
-          <FlatList
-            data={birds}
-            keyExtractor={(item: BirdType, index: number) =>
-              item?.id != null ? String(item.id) : index.toString()
-            }
-            renderItem={({ item }: { item: BirdType }) => (
-              // The last column used to read "Action" and do nothing. It opens
-              // the bird now, which is the only action the row ever implied.
-              <TouchableOpacity
-                onPress={() =>
-                  router.push({
-                    pathname: "/bird-detail",
-                    params: { birdId: String(item.id) },
-                  })
-                }
-                className="w-full p-2 flex-row justify-between border border-b border-t-[0px] border-gray-300"
-              >
-                <Text className="text-gray-400 text-[12px]">{item.id}</Text>
-                <Text className="text-gray-400 text-[12px]">
-                  {item.birdName}
-                </Text>
-                <Text className="text-gray-400 text-[12px]">{item.color}</Text>
-                <Text className="text-gray-400 text-[12px]">
-                  {getSexLabel(item.sex)}
-                </Text>
-                <Ionicons name="chevron-forward" size={14} color="#9CA3AF" />
+    <SafeAreaView className="flex-1 bg-gray-50">
+      <Header title="My Birds" />
+
+      <View className="px-3 pt-3">
+        <View className="flex-row items-center gap-2">
+          <View className="flex-1 flex-row items-center rounded-lg border border-gray-300 bg-white px-3">
+            <Ionicons name="search" size={16} color="#9ca3af" />
+            <TextInput
+              className="flex-1 py-2 pl-2 text-black"
+              placeholder="Search band, name or tag"
+              placeholderTextColor="#9ca3af"
+              value={query}
+              onChangeText={setQuery}
+              autoCorrect={false}
+            />
+            {query ? (
+              <TouchableOpacity onPress={() => setQuery("")}>
+                <Ionicons name="close-circle" size={16} color="#9ca3af" />
               </TouchableOpacity>
+            ) : null}
+          </View>
+          <TouchableOpacity
+            className="h-10 w-10 items-center justify-center rounded-lg border border-gray-300 bg-white"
+            onPress={chooseExport}
+            disabled={exporting}
+            accessibilityLabel="Export my birds"
+          >
+            {exporting ? (
+              <ActivityIndicator size="small" color="#189AB4" />
+            ) : (
+              <Ionicons name="download-outline" size={18} color="#189AB4" />
             )}
-          />
-        ) : (
-          <Text className="text-center py-4 border border-gray-300">
-            No Bird Added
-          </Text>
-        )}
-      </View>
-      <Modal open={open} setOpen={setOpen}>
-        <Text className="text-2xl font-bold">Add Bird</Text>
-        <View className="mt-3">
-          <Text className="text-sm mb-1 text-gray-600">Bird Name</Text>
-          <TextInput
-            className="border rounded-lg p-3 text-black border-gray-300"
-            value={birdData.birdName}
-            placeholder="Enter bird name"
-            onChangeText={(text) =>
-              setBirdData({ ...birdData, birdName: text })
-            }
-          />
+          </TouchableOpacity>
         </View>
 
-        <Text className="text-lg mt-4 font-semibold">Band Details</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
+          {FILTERS.map((f) => {
+            const on = f.key === filter;
+            return (
+              <TouchableOpacity
+                key={f.key}
+                onPress={() => setFilter(f.key)}
+                className={`mr-2 rounded-full border px-3 py-1.5 ${
+                  on ? "bg-primary border-primary" : "bg-white border-gray-300"
+                }`}
+              >
+                <Text className={on ? "text-white text-xs font-semibold" : "text-gray-700 text-xs"}>
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+        <Text className="mt-2 text-xs text-gray-500">
+          {shown.length} of {birds.length} bird{birds.length === 1 ? "" : "s"}
+        </Text>
+      </View>
 
-        {/* Row 1: Federation Dropdown + Year */}
-        <View className="flex-row gap-3 mt-2">
-          <Dropdown
-            label="Federation"
-            value={birdData.band1}
-            options={FEDERATIONS}
-            onChange={(val) => setBirdData({ ...birdData, band1: val })}
-          />
-          <View className="flex-1">
-            <Text className="text-sm mb-1 text-gray-600">Year</Text>
-            <TextInput
-              className="border rounded-lg p-3 text-black border-gray-300"
-              placeholder="2024"
-              keyboardType="numeric"
-              value={birdData.band2}
-              onChangeText={(text) => {
-                const numOnly = text.replace(/[^0-9]/g, "");
-                setBirdData({ ...birdData, band2: numOnly });
+      {loading && birds.length === 0 ? (
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#189AB4" />
+        </View>
+      ) : (
+        <FlatList
+          data={shown}
+          contentContainerStyle={{ padding: 12, paddingBottom: 110 }}
+          keyExtractor={(item, index) => (item?.id != null ? String(item.id) : String(index))}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={async () => {
+                setRefreshing(true);
+                await fetchBirds();
+                setRefreshing(false);
               }}
             />
-          </View>
-        </View>
+          }
+          ListEmptyComponent={
+            <View className="items-center py-12">
+              <Ionicons name="egg-outline" size={40} color="#9ca3af" />
+              <Text className="mt-3 text-gray-500">
+                {birds.length === 0 ? "No birds yet. Add your first bird." : "No birds match."}
+              </Text>
+            </View>
+          }
+          renderItem={({ item, index }) => {
+            const status = item.currentStatus ?? null;
+            const tone = status ? STATUS_STYLE[status] ?? { bg: "#f3f4f6", fg: "#6b7280" } : null;
+            return (
+              <TouchableOpacity
+                onPress={() =>
+                  router.push({ pathname: "/bird-detail", params: { birdId: String(item.id) } })
+                }
+                className="mb-2 flex-row items-center rounded-xl border border-gray-200 bg-white p-3"
+              >
+                <Text className="w-7 text-xs text-gray-400">{index + 1}</Text>
+                <View className="flex-1">
+                  <Text className="text-sm font-semibold text-gray-900">
+                    {item.birdName || "Unnamed"}
+                  </Text>
+                  <Text className="text-xs text-gray-500">{item.band || "-"}</Text>
+                  <Text className="mt-1 text-xs text-gray-500">
+                    {item.color || "-"} · {getSexLabel(item.sex)}
+                    {item.totalRaces !== undefined
+                      ? ` · ${item.totalRaces} races / ${item.wins ?? 0} wins / best ${
+                          item.bestPosition != null ? `#${item.bestPosition}` : "—"
+                        }`
+                      : ""}
+                  </Text>
+                  <View className="mt-1 flex-row gap-2">
+                    {tone && status ? (
+                      <View style={{ backgroundColor: tone.bg }} className="rounded-full px-2 py-0.5">
+                        <Text style={{ color: tone.fg }} className="text-[10px] font-semibold">
+                          {status.replace(/_/g, " ")}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {item.isLost === 1 ? (
+                      <View className="rounded-full bg-rose-100 px-2 py-0.5">
+                        <Text className="text-[10px] font-semibold text-rose-700">LOST</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+                <TouchableOpacity
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  onPress={() =>
+                    router.push({ pathname: "/bird-new", params: { birdId: String(item.id) } })
+                  }
+                  accessibilityLabel="Edit bird"
+                  className="px-2"
+                >
+                  <Ionicons name="pencil" size={16} color="#189AB4" />
+                </TouchableOpacity>
+                <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+              </TouchableOpacity>
+            );
+          }}
+        />
+      )}
 
-        {/* Row 2: Letters + Color Dropdown */}
-        <View className="flex-row gap-3 mt-3">
-          <View className="flex-1">
-            <Text className="text-sm mb-1 text-gray-600">Letters</Text>
-            <TextInput
-              className="border rounded-lg p-3 text-black border-gray-300"
-              placeholder="ABC"
-              autoCapitalize="characters"
-              value={birdData.band3}
-              onChangeText={(text) =>
-                setBirdData({ ...birdData, band3: text.toUpperCase() })
-              }
-            />
-          </View>
-          <View className="flex-1">
-            <Text className="text-sm mb-1 text-gray-600">Band Number</Text>
-            <TextInput
-              className="border rounded-lg p-3 text-black border-gray-300"
-              placeholder="12345"
-              value={birdData.band4}
-              onChangeText={(text) => setBirdData({ ...birdData, band4: text })}
-            />
-          </View>
-        </View>
-
-        {/* Row 3: Sex Dropdown + Band Number */}
-        <View className="flex-row gap-3 mt-3">
-          <Dropdown
-            label="Color"
-            value={birdData.color}
-            options={COLORS}
-            onChange={(val) => setBirdData({ ...birdData, color: val })}
-          />
-          <Dropdown
-            label="Sex"
-            value={birdData.sex}
-            options={SEX_OPTIONS}
-            onChange={(val) => setBirdData({ ...birdData, sex: val })}
-          />
-        </View>
-
-        <View className="flex-row justify-end mt-6 gap-3">
-          <TouchableOpacity
-            className="bg-gray-200 px-5 py-3 rounded-xl items-center"
-            onPress={() => setOpen(false)}
-          >
-            <Text className="text-gray-700 font-medium">Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className="bg-primary px-5 py-3 rounded-xl items-center"
-            onPress={addNewBird}
-          >
-            <Text className="text-white font-medium">Submit</Text>
-          </TouchableOpacity>
-        </View>
-      </Modal>
-
-      <View className="absolute bottom-0 left-0 right-0 p-4 pb-8 bg-white">
+      <View className="absolute bottom-0 left-0 right-0 p-4 pb-8 bg-white border-t border-gray-100">
         <TouchableOpacity
           className="bg-primary py-3 px-6 rounded-full items-center"
-          onPress={() => setOpen(true)}
+          onPress={() => router.push("/bird-new" as any)}
         >
-          <Text className="text-white font-semibold text-base">
-            Add New Bird
-          </Text>
+          <Text className="text-white font-semibold text-base">Add Birds</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -297,5 +263,3 @@ const Birds = () => {
 };
 
 export default Birds;
-
-const styles = StyleSheet.create({});

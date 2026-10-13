@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Text } from "react-native";
+import { Switch, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useAdminData } from "@/hooks/useAdminData";
 import { useAdminAction } from "@/hooks/useAdminAction";
@@ -88,6 +88,7 @@ export default function EventScanners() {
   const [mapping, setMapping] = useState<{ serial: string; existing: Mapping | null } | null>(null);
   const [label, setLabel] = useState("");
   const [groupId, setGroupId] = useState<number | null>(null);
+  const [active, setActive] = useState(true);
   const [adding, setAdding] = useState(false);
   const [serial, setSerial] = useState("");
   const [removing, setRemoving] = useState<Mapping | null>(null);
@@ -107,24 +108,26 @@ export default function EventScanners() {
   const openMapper = (serialValue: string, existing: Mapping | null) => {
     setLabel(existing?.label ?? "");
     setGroupId(existing?.eventGroupId ?? null);
+    setActive(existing?.isActive ?? true);
     setMapping({ serial: serialValue, existing });
   };
 
   const save = async () => {
     if (!mapping) return;
-    const { ok } = await action.run(
-      "post",
-      base!,
-      {
-        scannerSerial: mapping.serial,
-        // Zero is the sentinel the picker uses for "no section"; the server
-        // wants a null, not a group that does not exist.
-        eventGroupId: groupId === 0 ? null : groupId,
-        label: label.trim() || null,
-      },
-      { success: "Reader mapped." }
-    );
+    const { ok, data: said } = await action.run<{ message?: string }>("post", base!, {
+      scannerSerial: mapping.serial,
+      // Zero is the sentinel the picker uses for "no section"; the server
+      // wants a null, not a group that does not exist.
+      eventGroupId: groupId === 0 ? null : groupId,
+      label: label.trim() || null,
+      // Only sent for a reader that already exists: a new one starts switched
+      // on, and leaving the field out is how the server is told "unchanged".
+      ...(mapping.existing ? { isActive: active } : {}),
+    });
     if (ok) {
+      // The server says where the reader now files — or that it files nowhere,
+      // which is the sentence somebody needs to read.
+      toast.success(said?.message ?? "Reader mapped.");
       setMapping(null);
       reload();
     }
@@ -242,14 +245,18 @@ export default function EventScanners() {
                 <Row
                   key={m.id}
                   title={m.label || m.scannerSerial}
-                  subtitle={`${m.eventGroup?.name ?? "No section"} · ${since(m.lastSeenAt)}`}
+                  subtitle={`${m.label ? `${m.scannerSerial} · ` : ""}${
+                    m.eventGroup?.name ?? "No section — log only"
+                  } · ${since(m.lastSeenAt)}`}
                   right={`${m.scanCount}`}
                   rightSub="scans"
                   rightTone={m.isActive ? "text-slate-600" : "text-slate-400"}
                   badge={
-                    m.eventGroupId == null
-                      ? { label: "unfiled", bg: "bg-amber-100", text: "text-amber-700" }
-                      : null
+                    !m.isActive
+                      ? { label: "off", bg: "bg-slate-100", text: "text-slate-500" }
+                      : m.eventGroupId == null
+                        ? { label: "unfiled", bg: "bg-amber-100", text: "text-amber-700" }
+                        : null
                   }
                   onPress={mayManage ? () => openMapper(m.scannerSerial, m) : undefined}
                 />
@@ -279,6 +286,17 @@ export default function EventScanners() {
           onPick={(k) => setGroupId(Number(k))}
           empty="This season has no loft sections yet."
         />
+        {mapping?.existing ? (
+          <View className="mt-4 flex-row items-center justify-between">
+            <View className="flex-1 pr-3">
+              <Text className="text-sm font-medium text-slate-800">Switched on</Text>
+              <Text className="text-xs text-slate-500">
+                Turned off, the mapping is kept but the reader stops filing birds.
+              </Text>
+            </View>
+            <Switch value={active} onValueChange={setActive} />
+          </View>
+        ) : null}
         <ButtonRow>
           {mapping?.existing ? (
             <Button

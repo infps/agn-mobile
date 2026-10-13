@@ -1,50 +1,26 @@
-import React, { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { useRouter } from "expo-router";
+import React, { useMemo, useState } from "react";
+import { Pressable, Text, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import api from "@/service/api.service";
 import { usePermissions } from "@/context/PermissionContext";
 import { useResponsive } from "@/hooks/useResponsive";
 import { useToast } from "@/context/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { useAdminAction } from "@/hooks/useAdminAction";
 import { EventPicker } from "@/components/admin/EventPicker";
+import { RaceFormSheet } from "@/components/admin/RaceFormSheet";
+import { type AdminRace, RACE_STATUS, raceLabel } from "@/components/admin/raceParts";
 import {
   Button,
   ButtonRow,
-  type Choice,
-  ChoiceList,
   Confirm,
-  Field,
-  Sheet,
+  Empty,
+  Loading,
+  NoAccess,
+  Notice,
+  Screen,
+  SearchBar,
 } from "@/components/admin/ui";
-
-interface Race {
-  id: number;
-  name: string | null;
-  raceNumber: number | null;
-  status: string;
-  startTime: string | null;
-  distance: number | null;
-  location: string | null;
-  transportStatus: string | null;
-  isLive: boolean;
-  raceType?: { name?: string | null } | null;
-}
-
-const STATUS_TONE: Record<string, { bg: string; text: string; label: string }> = {
-  STARTED: { bg: "bg-emerald-100", text: "text-emerald-700", label: "in the air" },
-  REGISTERING: { bg: "bg-blue-100", text: "text-blue-700", label: "taking entries" },
-  ENDED: { bg: "bg-slate-200", text: "text-slate-600", label: "ended" },
-};
 
 /**
  * Races for one event.
@@ -53,153 +29,54 @@ const STATUS_TONE: Record<string, { bg: string; text: string; label: string }> =
  * anybody needs to reach in a hurry, and scrolling past a season of finished
  * races to find it is exactly the friction this screen exists to remove.
  *
- * A race is created with the handful of things that have to be decided up
- * front — which type, which liberation point, when, how far. Weather and
- * arrival conditions are filled in on the race itself as the day goes, so they
- * are not asked for here; an empty field somebody has to come back to is worse
- * than no field at all.
+ * Each card carries what the portal's table does — type, distance, when, the
+ * bird counts, the arrival weather — and the betting switch, because opening a
+ * pool is a thing done from this list and not from inside the race. It asks
+ * first: opening betting announces itself to the whole season.
+ *
+ * Reached two ways. From an event it arrives with that event already chosen;
+ * from the tab bar it picks the newest and lets you change it.
  */
 export default function AdminRaces() {
-  const { can } = usePermissions();
-  const { isWide, isMedium, gutter } = useResponsive();
+  const params = useLocalSearchParams<{ eventId?: string }>();
+  const { can, canAny } = usePermissions();
+  const { isWide, isMedium } = useResponsive();
   const router = useRouter();
   const toast = useToast();
   const action = useAdminAction();
 
-  const [editing, setEditing] = useState<Race | "new" | null>(null);
-  const [removing, setRemoving] = useState<Race | null>(null);
-  const [form, setForm] = useState({
-    name: "",
-    raceNumber: "",
-    distance: "",
-    location: "",
-    startTime: "",
-    raceTypeId: null as number | null,
-    raceStationId: null as number | null,
-  });
-
-  const [eventId, setEventId] = useState<number | null>(null);
-  const [races, setRaces] = useState<Race[]>([]);
+  const [eventId, setEventId] = useState<number | null>(
+    params.eventId && !isNaN(Number(params.eventId)) ? Number(params.eventId) : null
+  );
   const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<AdminRace | "new" | null>(null);
+  const [removing, setRemoving] = useState<AdminRace | null>(null);
+  const [betting, setBetting] = useState<AdminRace | null>(null);
 
-  const load = useCallback(async () => {
-    if (eventId == null) return;
-    setError(null);
-    try {
-      // The admin list carries private races too, which the breeder list hides.
-      const { data } = await api.get(`/admin/race?eventId=${eventId}`);
-      setRaces(data?.races ?? []);
-    } catch {
-      setError("Could not load races for this event.");
-      setRaces([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [eventId]);
+  // The admin list carries private races too, which the breeder list hides.
+  const { data, loading, refreshing, forbidden, error, refresh, reload } = useAdminData<{
+    races?: AdminRace[];
+  }>(eventId != null ? `/admin/race?eventId=${eventId}` : null, [eventId]);
 
-  useEffect(() => {
-    setLoading(true);
-    load();
-  }, [load]);
-
-  const rank = (r: Race) =>
-    r.status === "STARTED" ? 0 : r.status === "REGISTERING" ? 1 : 2;
-
+  const races = useMemo(() => data?.races ?? [], [data]);
   const canManage = can("races.manage");
+  const canBet = can("betting.manage");
 
-  // Both lists are only needed while a race is being written, so they are
-  // fetched then rather than on every visit to the list.
-  const typesReq = useAdminData<{ raceTypes?: { id: number; name: string | null }[] }>(
-    editing != null ? "/admin/race-type" : null,
-    [editing != null]
-  );
-  const stationsReq = useAdminData<{ stations?: { id: number; name: string | null; miles: number | null }[] }>(
-    editing != null && eventId != null ? `/admin/event/${eventId}/stations` : null,
-    [editing != null, eventId]
-  );
-
-  const typeChoices: Choice[] = (typesReq.data?.raceTypes ?? []).map((t) => ({
-    key: t.id,
-    label: t.name ?? `Type ${t.id}`,
-  }));
-  const stationChoices: Choice[] = (stationsReq.data?.stations ?? []).map((s) => ({
-    key: s.id,
-    label: s.name ?? `Station ${s.id}`,
-    hint: s.miles != null ? `${Math.round(s.miles)} mi` : null,
-  }));
-
-  const startNew = () => {
-    setForm({
-      name: "",
-      raceNumber: "",
-      distance: "",
-      location: "",
-      startTime: "",
-      raceTypeId: null,
-      raceStationId: null,
-    });
-    setEditing("new");
-  };
-
-  const startEdit = (race: Race) => {
-    setForm({
-      name: race.name ?? "",
-      raceNumber: race.raceNumber != null ? String(race.raceNumber) : "",
-      distance: race.distance != null ? String(race.distance) : "",
-      location: race.location ?? "",
-      // Kept as the date part only: a liberation time is set on the day from
-      // the race screen, and asking for one here invites a guess.
-      startTime: race.startTime ? race.startTime.slice(0, 10) : "",
-      raceTypeId: null,
-      raceStationId: null,
-    });
-    setEditing(race);
-  };
-
-  const saveRace = async () => {
-    if (!form.name.trim() && !form.raceNumber.trim()) {
-      toast.error("Give the race a name or a number.");
-      return;
-    }
-    const isNew = editing === "new";
-    if (isNew && form.raceTypeId == null) {
-      toast.error("Pick the race type.");
-      return;
-    }
-
-    const num = (raw: string) => {
-      const t = raw.trim();
-      if (!t) return null;
-      const v = parseFloat(t);
-      return isNaN(v) ? null : v;
-    };
-
-    const shared = {
-      name: form.name.trim() || null,
-      raceNumber: num(form.raceNumber),
-      distance: num(form.distance),
-      location: form.location.trim() || null,
-      startTime: form.startTime.trim() ? new Date(form.startTime.trim()).toISOString() : null,
-      ...(form.raceStationId != null ? { raceStationId: form.raceStationId } : {}),
-    };
-
-    const { ok } = await action.run(
-      isNew ? "post" : "put",
-      "/admin/race",
-      isNew
-        ? { ...shared, eventId, raceTypeId: form.raceTypeId }
-        : { raceId: (editing as Race).id, ...shared },
-      { success: isNew ? "Race created." : "Race updated." }
-    );
-    if (ok) {
-      setEditing(null);
-      load();
-    }
-  };
+  const visible = useMemo(() => {
+    const rank = (r: AdminRace) => (r.status === "STARTED" ? 0 : r.status === "REGISTERING" ? 1 : 2);
+    const q = query.trim().toLowerCase();
+    return races
+      .filter(
+        (r) =>
+          !q ||
+          (r.name ?? "").toLowerCase().includes(q) ||
+          String(r.raceNumber ?? "").includes(q) ||
+          (r.location ?? "").toLowerCase().includes(q) ||
+          r.status.toLowerCase().includes(q) ||
+          (r.arrivalWeather ?? "").toLowerCase().includes(q)
+      )
+      .sort((a, b) => rank(a) - rank(b) || (b.raceNumber ?? 0) - (a.raceNumber ?? 0));
+  }, [races, query]);
 
   const removeRace = async () => {
     if (!removing) return;
@@ -208,248 +85,194 @@ export default function AdminRaces() {
     });
     if (ok) {
       setRemoving(null);
-      load();
+      reload();
     }
   };
 
-  const visible = races
-    .filter((r) => {
-      if (!query.trim()) return true;
-      const q = query.toLowerCase();
-      return (
-        (r.name ?? "").toLowerCase().includes(q) ||
-        String(r.raceNumber ?? "").includes(q) ||
-        (r.location ?? "").toLowerCase().includes(q)
-      );
-    })
-    .sort((a, b) => rank(a) - rank(b) || (b.raceNumber ?? 0) - (a.raceNumber ?? 0));
+  const toggleBetting = async () => {
+    if (!betting) return;
+    const { ok, data: said } = await action.run<{ bettingOpen?: boolean }>(
+      "post",
+      `/admin/race/${betting.id}/betting/toggle`
+    );
+    if (ok) {
+      toast.success(said?.bettingOpen ? "Betting is open." : "Betting is closed.");
+      setBetting(null);
+      reload();
+    }
+  };
+
+  if (!canAny("races.view", "races.manage") || forbidden) return <NoAccess what="Races" />;
 
   return (
-    <View className="flex-1" style={{ paddingHorizontal: gutter, paddingTop: gutter }}>
-      <Text className="text-2xl font-bold text-slate-900">Races</Text>
-
-      <View className="mt-3">
-        <EventPicker value={eventId} onChange={(id) => setEventId(id)} />
-      </View>
-
-      {canManage && eventId != null ? (
-        <ButtonRow>
-          <Button label="New race" icon="add" onPress={startNew} />
-        </ButtonRow>
-      ) : null}
-
-      <View className="mt-3 flex-row items-center gap-2 rounded-xl border border-slate-200 bg-white px-3">
-        <Ionicons name="search" size={16} color="#94a3b8" />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Race name, number or launch point"
-          placeholderTextColor="#94a3b8"
-          className="flex-1 py-2.5 text-sm text-slate-900"
-        />
-        {query.length > 0 && (
-          <Pressable onPress={() => setQuery("")} hitSlop={8}>
-            <Ionicons name="close-circle" size={16} color="#94a3b8" />
-          </Pressable>
-        )}
-      </View>
-
-      {loading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" />
-        </View>
-      ) : (
-        <ScrollView
-          className="mt-3 flex-1"
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                load();
-              }}
+    <Screen
+      title="Races"
+      onRefresh={refresh}
+      refreshing={refreshing}
+      header={
+        <>
+          <EventPicker value={eventId} onChange={(id) => setEventId(id)} />
+          {canManage && eventId != null ? (
+            <ButtonRow>
+              <Button label="New race" icon="add" onPress={() => setEditing("new")} />
+            </ButtonRow>
+          ) : null}
+          <View className="mt-3">
+            <SearchBar
+              value={query}
+              onChange={setQuery}
+              placeholder="Name, number, location, status or weather"
             />
-          }
-        >
-          {error && (
-            <View className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
-              <Text className="text-sm text-amber-800">{error}</Text>
-            </View>
-          )}
+          </View>
+        </>
+      }
+    >
+      {loading ? (
+        <Loading />
+      ) : (
+        <View className="mt-3">
+          {error ? <Notice>{error}</Notice> : null}
 
           {visible.length === 0 ? (
-            <View className="rounded-xl border border-slate-200 bg-white p-8">
-              <Text className="text-center text-sm text-slate-500">
-                {races.length === 0
-                  ? "This event has no races yet."
-                  : "No race matches that search."}
-              </Text>
-            </View>
+            <Empty>
+              {races.length === 0 ? "This event has no races yet." : "No race matches that search."}
+            </Empty>
           ) : (
             <View className={isWide || isMedium ? "flex-row flex-wrap" : ""} style={{ gap: 10 }}>
               {visible.map((race) => {
-                const tone = STATUS_TONE[race.status] ?? STATUS_TONE.ENDED;
+                const tone = RACE_STATUS[race.status] ?? RACE_STATUS.ENDED;
+                const canToggle = canBet && race.status === "REGISTERING";
                 return (
                   <Pressable
                     key={race.id}
-                    onPress={() =>
-                      router.push(`/(admin)/race-detail?raceId=${race.id}` as never)
-                    }
-                    // Editing is the rarer intent, so it sits behind a hold
-                    // rather than taking a tap target away from opening the
-                    // race — which is what somebody is doing on a race day.
-                    onLongPress={canManage ? () => startEdit(race) : undefined}
+                    onPress={() => router.push(`/(admin)/race-detail?raceId=${race.id}` as never)}
+                    // Editing is the rarer intent, so a hold reaches it as well
+                    // as the pencil — opening the race is what somebody is
+                    // doing on a race day, and it keeps the whole card.
+                    onLongPress={canManage ? () => setEditing(race) : undefined}
                     delayLongPress={400}
                     className="rounded-xl border border-slate-200 bg-white p-4"
-                    style={{
-                      flexGrow: 1,
-                      flexBasis: isWide ? "31%" : isMedium ? "47%" : "100%",
-                    }}
+                    style={{ flexGrow: 1, flexBasis: isWide ? "31%" : isMedium ? "47%" : "100%" }}
                   >
                     <View className="flex-row items-start justify-between gap-2">
                       <View className="flex-1">
-                        <Text className="font-semibold text-slate-900">
-                          {race.name || `Race ${race.raceNumber ?? race.id}`}
-                        </Text>
+                        <Text className="font-semibold text-slate-900">{raceLabel(race)}</Text>
                         <Text className="mt-0.5 text-xs text-slate-500">
                           {race.raceType?.name ?? "Race"}
-                          {race.distance ? ` · ${race.distance} mi` : ""}
+                          {race.distance != null ? ` · ${race.distance} miles` : ""}
                         </Text>
                       </View>
+                      {race.isPrivate ? (
+                        <View className="rounded-full bg-amber-100 px-2 py-0.5">
+                          <Text className="text-[10px] font-medium text-amber-700">private</Text>
+                        </View>
+                      ) : null}
                       <View className={`rounded-full px-2 py-0.5 ${tone.bg}`}>
-                        <Text className={`text-[10px] font-medium ${tone.text}`}>
-                          {tone.label}
-                        </Text>
+                        <Text className={`text-[10px] font-medium ${tone.text}`}>{tone.label}</Text>
                       </View>
                     </View>
 
                     <Text className="mt-2 text-xs text-slate-500">
-                      {race.startTime
-                        ? new Date(race.startTime).toLocaleString()
-                        : "Not scheduled"}
+                      {race.startTime ? new Date(race.startTime).toLocaleString() : "Not scheduled"}
                     </Text>
-                    {race.location && (
+                    {race.location ? (
                       <Text className="mt-0.5 text-xs text-slate-400">{race.location}</Text>
-                    )}
-                    {race.transportStatus && race.transportStatus !== "IDLE" && (
+                    ) : null}
+
+                    <Text className="mt-2 text-xs text-slate-600">
+                      {race.activeBirds ?? 0} active · {race.lostBirds ?? 0} lost ·{" "}
+                      {race.foreignBirds ?? 0} foreign
+                    </Text>
+                    {race.arrivalWeather || race.arrivalTemperature ? (
+                      <Text className="mt-0.5 text-xs text-slate-400">
+                        Arrival{" "}
+                        {[
+                          race.arrivalTemperature ? `${race.arrivalTemperature}°` : null,
+                          race.arrivalWeather,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </Text>
+                    ) : null}
+                    {race.transportStatus && race.transportStatus !== "IDLE" ? (
                       <Text className="mt-1 text-xs text-amber-600">
                         Transport {race.transportStatus.toLowerCase().replace(/_/g, " ")}
                       </Text>
-                    )}
+                    ) : null}
+
+                    <View className="mt-3 flex-row items-center justify-between">
+                      <Pressable
+                        onPress={canToggle ? () => setBetting(race) : undefined}
+                        disabled={!canToggle}
+                        hitSlop={6}
+                        className="flex-row items-center gap-1.5"
+                      >
+                        <Ionicons
+                          name={race.bettingOpen ? "toggle" : "toggle-outline"}
+                          size={26}
+                          color={race.bettingOpen ? "#059669" : canToggle ? "#64748b" : "#cbd5e1"}
+                        />
+                        <Text className="text-xs text-slate-500">
+                          Betting {race.bettingOpen ? "open" : "closed"}
+                        </Text>
+                      </Pressable>
+                      {canManage ? (
+                        <Pressable onPress={() => setEditing(race)} hitSlop={10}>
+                          <Ionicons name="create-outline" size={18} color="#64748b" />
+                        </Pressable>
+                      ) : null}
+                    </View>
                   </Pressable>
                 );
               })}
             </View>
           )}
 
-          {!canManage && races.length > 0 && (
+          {!canManage && races.length > 0 ? (
             <Text className="mt-4 text-center text-xs text-slate-400">
               You can see these races but not change them.
             </Text>
-          )}
-
-          <View style={{ height: 32 }} />
-        </ScrollView>
+          ) : null}
+        </View>
       )}
 
-      <Sheet
+      <RaceFormSheet
         open={editing != null}
         onClose={() => setEditing(null)}
-        title={editing === "new" ? "New race" : "Edit race"}
-        subtitle="Weather and arrival conditions are filled in on the day"
-      >
-        {editing === "new" ? (
-          <>
-            <Text className="mb-1 mt-3 text-xs font-medium text-slate-600">Race type</Text>
-            <ChoiceList
-              choices={typeChoices}
-              selected={form.raceTypeId}
-              onPick={(k) => setForm({ ...form, raceTypeId: Number(k) })}
-              empty="No race types are set up."
-            />
-          </>
-        ) : null}
-
-        <Field
-          label="Name"
-          value={form.name}
-          onChange={(v) => setForm({ ...form, name: v })}
-          placeholder="Week 3"
-        />
-        <Field
-          label="Race number"
-          value={form.raceNumber}
-          onChange={(v) => setForm({ ...form, raceNumber: v })}
-          keyboard="numeric"
-        />
-        <Field
-          label="Date"
-          value={form.startTime}
-          onChange={(v) => setForm({ ...form, startTime: v })}
-          placeholder="YYYY-MM-DD"
-          hint="The liberation time is set from the race screen on the day."
-        />
-        <Field
-          label="Distance (miles)"
-          value={form.distance}
-          onChange={(v) => setForm({ ...form, distance: v })}
-          keyboard="decimal-pad"
-        />
-        <Field
-          label="Launch point"
-          value={form.location}
-          onChange={(v) => setForm({ ...form, location: v })}
-        />
-
-        {stationChoices.length > 0 ? (
-          <>
-            <Text className="mb-1 mt-3 text-xs font-medium text-slate-600">
-              Or pick a station
-            </Text>
-            <ChoiceList
-              choices={stationChoices}
-              selected={form.raceStationId}
-              onPick={(k) => {
-                const picked = (stationsReq.data?.stations ?? []).find((s) => s.id === Number(k));
-                setForm({
-                  ...form,
-                  raceStationId: Number(k),
-                  location: picked?.name ?? form.location,
-                  distance: picked?.miles != null ? String(picked.miles) : form.distance,
-                });
-              }}
-            />
-          </>
-        ) : null}
-
-        <ButtonRow>
-          {editing !== "new" && editing != null ? (
-            <Button
-              label="Delete"
-              tone="secondary"
-              onPress={() => {
-                const race = editing as Race;
-                setEditing(null);
-                setRemoving(race);
-              }}
-              full
-            />
-          ) : (
-            <Button label="Cancel" tone="secondary" onPress={() => setEditing(null)} full />
-          )}
-          <Button label="Save" onPress={saveRace} pending={action.pending} full />
-        </ButtonRow>
-      </Sheet>
+        eventId={eventId}
+        race={editing === "new" ? null : editing}
+        onSaved={reload}
+        onDelete={(race) => setRemoving(race)}
+      />
 
       <Confirm
         open={removing != null}
-        title={`Delete ${removing?.name || `race ${removing?.raceNumber ?? ""}`}?`}
+        title={`Delete ${removing ? raceLabel(removing) : "this race"}?`}
         body="Entries, arrivals and results recorded against it go with it. A race that has been flown should be kept, not deleted."
         confirmLabel="Delete"
         pending={action.pending}
         onConfirm={removeRace}
         onCancel={() => setRemoving(null)}
       />
-    </View>
+
+      <Confirm
+        open={betting != null}
+        title={
+          betting?.bettingOpen
+            ? `Close betting on ${betting ? raceLabel(betting) : ""}?`
+            : `Open betting on ${betting ? raceLabel(betting) : ""}?`
+        }
+        body={
+          betting?.bettingOpen
+            ? "No more bets will be taken on this race."
+            : "The season is told the pool is open. Only one race in an event can take bets at a time."
+        }
+        confirmLabel={betting?.bettingOpen ? "Close betting" : "Open betting"}
+        tone={betting?.bettingOpen ? "danger" : "primary"}
+        pending={action.pending}
+        onConfirm={toggleBetting}
+        onCancel={() => setBetting(null)}
+      />
+    </Screen>
   );
 }

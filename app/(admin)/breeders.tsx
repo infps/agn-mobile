@@ -13,8 +13,8 @@ import { Ionicons } from "@expo/vector-icons";
 import api from "@/service/api.service";
 import { usePermissions } from "@/context/PermissionContext";
 import { CsvImportSheet } from "@/components/admin/CsvImportSheet";
-import { downloadAndShare } from "@/service/download.service";
-import { useToast } from "@/context/ToastContext";
+import { BREEDER_CSV_COLUMNS, BreederExportSheet } from "@/components/admin/BreederExportSheet";
+import { TeamsSheet } from "@/components/admin/TeamsSheet";
 import { Button, ButtonRow } from "@/components/admin/ui";
 import { useResponsive } from "@/hooks/useResponsive";
 
@@ -60,7 +60,7 @@ export default function AdminBreeders() {
   const [query, setQuery] = useState("");
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const toast = useToast();
+  const [teamsOpen, setTeamsOpen] = useState(false);
   const [open, setOpen] = useState<Breeder | null>(null);
   const [birds, setBirds] = useState<Bird[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -173,6 +173,24 @@ export default function AdminBreeders() {
           )}
         </View>
 
+        {/* Teams are the lofts this breeder enters under — the same list the
+            portal keeps behind "View Teams". */}
+        <ButtonRow>
+          <Button
+            label="Teams"
+            tone="secondary"
+            icon="people-outline"
+            onPress={() => setTeamsOpen(true)}
+            full
+          />
+        </ButtonRow>
+        <TeamsSheet
+          open={teamsOpen}
+          breederId={open.id}
+          who={name}
+          onClose={() => setTeamsOpen(false)}
+        />
+
         {open.note && (
           <View className="mt-3 rounded-xl border border-slate-200 bg-white p-4">
             <Text className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -269,17 +287,7 @@ export default function AdminBreeders() {
             label="Export"
             tone="secondary"
             icon="download-outline"
-            pending={exporting}
-            onPress={async () => {
-              setExporting(true);
-              const stamp = new Date().toISOString().slice(0, 10);
-              const res = await downloadAndShare(
-                "/admin/breeders/export",
-                `breeders-${stamp}.csv`
-              );
-              setExporting(false);
-              if (!res.ok && res.problem) toast.error(res.problem);
-            }}
+            onPress={() => setExporting(true)}
             full
           />
         </ButtonRow>
@@ -380,6 +388,7 @@ export default function AdminBreeders() {
         title="Import breeders"
         previewPath="/admin/breeders/import/preview"
         commitPath="/admin/breeders/import/commit"
+        columns={BREEDER_CSV_COLUMNS}
         describe={(row) => ({
           title:
             `${(row.firstName as string) ?? ""} ${(row.lastName as string) ?? ""}`.trim() ||
@@ -388,6 +397,8 @@ export default function AdminBreeders() {
             [row.email as string, row.city1 as string].filter(Boolean).join(" · ") || undefined,
         })}
       />
+
+      <BreederExportSheet open={exporting} onClose={() => setExporting(false)} />
     </View>
   );
 }
