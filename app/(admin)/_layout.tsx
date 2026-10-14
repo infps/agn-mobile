@@ -36,14 +36,16 @@ const NAV: NavItem[] = [
     short: "Events",
     href: "/(admin)/events",
     icon: "calendar-outline",
-    permissions: ["events.view", "events.manage"],
+    // The portal sidebar's Events item checks events.view alone.
+    permissions: ["events.view"],
   },
   {
     label: "Races",
     short: "Races",
     href: "/(admin)/races",
     icon: "flag-outline",
-    permissions: ["races.view", "races.manage"],
+    // The portal's Races tab checks races.view alone.
+    permissions: ["races.view"],
   },
   {
     label: "Check-in",
@@ -64,7 +66,8 @@ const NAV: NavItem[] = [
     short: "Money",
     href: "/(admin)/accounting",
     icon: "cash-outline",
-    permissions: ["accounting.view", "payments.view"],
+    // The portal's Accounting tab checks accounting.view alone.
+    permissions: ["accounting.view"],
   },
   {
     label: "More",

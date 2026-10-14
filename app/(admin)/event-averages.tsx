@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
+import { seasonRacesUrl, useChosenSeason } from "@/service/season.service";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { useAdminData } from "@/hooks/useAdminData";
@@ -123,9 +124,14 @@ export default function EventAverages() {
     editing != null ? "/admin/race-type" : null,
     [editing != null]
   );
+  // The portal's Averages tab picks from the selected season's races.
+  const chosen = useChosenSeason(eventId);
   const racesReq = useAdminData<{
     races?: { id: number; name: string | null; raceNumber: number | null }[];
-  }>(editing != null && eventId ? `/admin/race?eventId=${eventId}` : null, [editing != null, eventId]);
+  }>(
+    editing != null && eventId ? seasonRacesUrl(eventId, chosen) : null,
+    [editing != null, eventId, chosen?.id]
+  );
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();

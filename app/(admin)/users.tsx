@@ -111,6 +111,9 @@ export default function AdminUsers() {
   const mayApprove = can("users.approve");
   const mayList = canAny("users.view", "users.manage");
   const mayEdit = can("users.manage");
+  // The portal shows "Add Breeder" to every admin on this page, and its POST
+  // /admin/users accepts any ADMIN or SUPERADMIN without a permission check.
+  const mayCreate = role === "ADMIN" || role === "SUPERADMIN";
   const mayExport = can("users.view");
   const mayAssign = can("users.permissions");
   const isSuper = role === "SUPERADMIN";
@@ -373,7 +376,7 @@ export default function AdminUsers() {
                   onPress={() => setOverlay({ kind: "filters" })}
                   full
                 />
-                {mayEdit ? (
+                {mayCreate ? (
                   <Button
                     label="Add breeder"
                     icon="person-add-outline"

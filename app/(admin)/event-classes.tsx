@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
+import { seasonRacesUrl, useChosenSeason } from "@/service/season.service";
 import api from "@/service/api.service";
 import { useAdminData } from "@/hooks/useAdminData";
 import { useAdminAction } from "@/hooks/useAdminAction";
@@ -123,9 +124,11 @@ export default function EventClasses() {
   const [removing, setRemoving] = useState<RaceClass | null>(null);
 
   // Only while the settle sheet is open — the race list is irrelevant otherwise.
+  // The portal's Classes tab lists the selected season's races.
+  const chosen = useChosenSeason(eventId);
   const racesReq = useAdminData<{ races?: Race[] }>(
-    settling && eventId ? `/admin/race?eventId=${eventId}` : null,
-    [settling, eventId]
+    settling && eventId ? seasonRacesUrl(eventId, chosen) : null,
+    [settling, eventId, chosen?.id]
   );
 
   const classes = data?.classes ?? [];

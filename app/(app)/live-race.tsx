@@ -2,6 +2,7 @@ import BreederExportButton from "@/components/BreederExportButton";
 import Header from "@/components/header";
 import { RaceRouteMap, RouteLine, RoutePin } from "@/components/RaceRouteMap";
 import { RaceTrackMap } from "@/components/RaceTrackMap";
+import { inUnit, sexLabel, useDisplaySettings } from "@/components/admin/displaySettings";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import api from "@/service/api.service";
@@ -146,6 +147,8 @@ const LiveRace = () => {
   const { raceId } = useLocalSearchParams<{ raceId: string }>();
   const { user } = useAuth();
   const toast = useToast();
+  // The portal's race page shows speed and sex in the viewer's display settings.
+  const { velocityUnit, sexTerminology } = useDisplaySettings();
 
   const [race, setRace] = useState<Race | null>(null);
   const [raceItems, setRaceItems] = useState<RaceItem[]>([]);
@@ -370,7 +373,11 @@ const LiveRace = () => {
           <Fact icon="time-outline" label="Release" value={race.startTime ? format(new Date(race.startTime), "MMM dd, HH:mm") : "-"} />
           <Fact icon="navigate-outline" label="Miles" value={race.distance != null ? String(race.distance) : "-"} />
           <Fact icon="checkmark-done-outline" label="Arrived" value={`${arrivedCount}/${rows.length}`} />
-          <Fact icon="speedometer-outline" label="Winner YPM" value={raceVelocity != null ? raceVelocity.toFixed(2) : "-"} />
+          <Fact
+            icon="speedometer-outline"
+            label={`Winner ${velocityUnit}`}
+            value={raceVelocity != null ? inUnit(raceVelocity, velocityUnit).toFixed(2) : "-"}
+          />
         </View>
 
         {/* Weather at release and at the loft, as recorded for the race */}
@@ -518,6 +525,9 @@ const LiveRace = () => {
                   <Text className="text-xs text-primary" numberOfLines={1}>
                     {item.band}
                     {item.bird?.birdName ? ` · ${item.bird.birdName}` : ""}
+                    {item.bird?.sex === 1 || item.bird?.sex === 2
+                      ? ` · ${sexLabel(item.bird.sex, sexTerminology)}`
+                      : ""}
                   </Text>
                 </TouchableOpacity>
                 {item.previousPosition != null ? (
@@ -537,7 +547,9 @@ const LiveRace = () => {
                       <Text className="text-[10px] text-gray-500">Flight {clock(item.flightTimeMs)}</Text>
                     ) : null}
                     {item.ypm != null ? (
-                      <Text className="text-[10px] font-semibold text-blue-600">{item.ypm.toFixed(4)} YPM</Text>
+                      <Text className="text-[10px] font-semibold text-blue-600">
+                        {inUnit(item.ypm, velocityUnit).toFixed(4)} {velocityUnit}
+                      </Text>
                     ) : null}
                   </>
                 ) : (
@@ -632,7 +644,7 @@ const LiveRace = () => {
                   <Text className="text-xs text-gray-500">
                     {e.eventName ?? ""} · {format(new Date(e.date), "MMM d, yyyy")}
                     {e.distance != null ? ` · ${e.distance} mi` : ""}
-                    {e.ypm != null ? ` · ${e.ypm.toFixed(2)} YPM` : ""}
+                    {e.ypm != null ? ` · ${inUnit(e.ypm, velocityUnit).toFixed(2)} ${velocityUnit}` : ""}
                   </Text>
                 </View>
               ))}

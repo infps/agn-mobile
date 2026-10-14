@@ -26,7 +26,11 @@ interface Section {
   label: string;
   hint: string;
   icon: keyof typeof Ionicons.glyphMap;
-  /** Any one is enough — the same pair the section's route accepts. */
+  /**
+   * Any one is enough. Where the portal has the same tab this is exactly the
+   * single permission its tab strip checks (`tabAllowed` in the portal's
+   * admin/events/[eventId]/page.tsx), so a section shows here iff it shows there.
+   */
   permissions: string[];
   /** Sections not yet built on mobile route nowhere; they are simply absent. */
   route?: string;
@@ -41,15 +45,15 @@ const GROUPS: Group[] = [
   {
     label: "Setup",
     sections: [
-      { key: "details", label: "Details", hint: "Dates, location, contact and schemes", icon: "information-circle-outline", permissions: ["events.view", "events.manage"], route: "/(admin)/event-settings" },
+      { key: "details", label: "Details", hint: "Dates, location, contact and schemes", icon: "information-circle-outline", permissions: ["events.view"], route: "/(admin)/event-settings" },
       { key: "seasons", label: "Seasons", hint: "Open, clone and switch seasons", icon: "layers-outline", permissions: ["events.view", "events.manage"], route: "/(admin)/event-seasons" },
-      { key: "breeders", label: "Breeders", hint: "Who is entered", icon: "people-outline", permissions: ["breeders.view", "breeders.manage"], route: "/(admin)/event-breeders" },
-      // The bird list is served by the registrations route, so it answers to
-      // the breeders permission rather than the birds one.
-      { key: "birds", label: "Birds", hint: "Every bird in the loft", icon: "egg-outline", permissions: ["breeders.view", "breeders.manage"], route: "/(admin)/event-birds" },
-      { key: "groups", label: "Groups", hint: "Sections and vaccinations", icon: "albums-outline", permissions: ["groups.view", "groups.manage"], route: "/(admin)/event-groups" },
-      { key: "baskets", label: "Baskets", hint: "Loft and race baskets", icon: "cube-outline", permissions: ["baskets.view", "baskets.manage"], route: "/(admin)/event-baskets" },
-      { key: "stations", label: "Stations", hint: "Liberation points", icon: "location-outline", permissions: ["stations.manage"], route: "/(admin)/event-stations" },
+      { key: "breeders", label: "Breeders", hint: "Who is entered", icon: "people-outline", permissions: ["breeders.view"], route: "/(admin)/event-breeders" },
+      // The portal shows its Birds tab on birds.view (the list itself is served
+      // by the registrations route, which answers to breeders.view|manage).
+      { key: "birds", label: "Birds", hint: "Every bird in the loft", icon: "egg-outline", permissions: ["birds.view"], route: "/(admin)/event-birds" },
+      { key: "groups", label: "Groups", hint: "Sections and vaccinations", icon: "albums-outline", permissions: ["groups.view"], route: "/(admin)/event-groups" },
+      { key: "baskets", label: "Baskets", hint: "Loft and race baskets", icon: "cube-outline", permissions: ["baskets.view"], route: "/(admin)/event-baskets" },
+      { key: "stations", label: "Stations", hint: "Liberation points", icon: "location-outline", permissions: ["stations.view"], route: "/(admin)/event-stations" },
       { key: "checkin", label: "Check-in", hint: "Link tags and place arriving birds", icon: "scan-outline", permissions: ["checkin.view", "checkin.manage"], route: "/(admin)/checkin" },
       { key: "scanners", label: "Scanners", hint: "Which reader feeds which section", icon: "radio-outline", permissions: ["scanners.view", "scanners.manage"], route: "/(admin)/event-scanners" },
       { key: "presets", label: "Status presets", hint: "The statuses a race day uses", icon: "pricetag-outline", permissions: ["events.manage"], route: "/(admin)/status-presets" },
@@ -58,29 +62,29 @@ const GROUPS: Group[] = [
   {
     label: "Racing",
     sections: [
-      { key: "races", label: "Races", hint: "Schedule and live control", icon: "flag-outline", permissions: ["races.view", "races.manage"], route: "/(admin)/races" },
-      { key: "result", label: "Result", hint: "Positions and prizes", icon: "trophy-outline", permissions: ["races.view", "races.manage"], route: "/(admin)/event-result" },
-      { key: "averages", label: "Averages", hint: "Multi-race standings", icon: "stats-chart-outline", permissions: ["races.view", "races.manage"], route: "/(admin)/event-averages" },
-      { key: "tournaments", label: "Knockout", hint: "Rounds and cuts", icon: "git-branch-outline", permissions: ["tournaments.view", "tournaments.manage"], route: "/(admin)/event-knockout" },
-      { key: "classes", label: "Classes", hint: "Class entries and payouts", icon: "ribbon-outline", permissions: ["classes.view", "classes.manage"], route: "/(admin)/event-classes" },
+      { key: "races", label: "Races", hint: "Schedule and live control", icon: "flag-outline", permissions: ["races.view"], route: "/(admin)/races" },
+      { key: "result", label: "Result", hint: "Positions and prizes", icon: "trophy-outline", permissions: ["races.view"], route: "/(admin)/event-result" },
+      { key: "averages", label: "Averages", hint: "Multi-race standings", icon: "stats-chart-outline", permissions: ["races.view"], route: "/(admin)/event-averages" },
+      { key: "tournaments", label: "Knockout", hint: "Rounds and cuts", icon: "git-branch-outline", permissions: ["tournaments.view"], route: "/(admin)/event-knockout" },
+      { key: "classes", label: "Classes", hint: "Class entries and payouts", icon: "ribbon-outline", permissions: ["classes.view"], route: "/(admin)/event-classes" },
     ],
   },
   {
     label: "Money",
     sections: [
       { key: "accounting", label: "Accounting", hint: "Ledger and statements", icon: "cash-outline", permissions: ["accounting.view"], route: "/(admin)/accounting" },
-      { key: "defaulters", label: "Defaulters", hint: "Unpaid entries", icon: "alert-circle-outline", permissions: ["payments.view", "payments.manage"], route: "/(admin)/event-defaulters" },
-      { key: "betting", label: "Betting", hint: "Pools and cash bets", icon: "dice-outline", permissions: ["betting.view", "betting.manage"], route: "/(admin)/event-betting" },
-      { key: "calcutta", label: "Calcutta", hint: "Live auction", icon: "hammer-outline", permissions: ["calcutta.view", "calcutta.manage"], route: "/(admin)/event-calcutta" },
-      { key: "store", label: "Store", hint: "Defaulter birds for sale", icon: "storefront-outline", permissions: ["store.view", "store.manage"], route: "/(admin)/event-store" },
+      { key: "defaulters", label: "Defaulters", hint: "Unpaid entries", icon: "alert-circle-outline", permissions: ["payments.view"], route: "/(admin)/event-defaulters" },
+      { key: "betting", label: "Betting", hint: "Pools and cash bets", icon: "dice-outline", permissions: ["betting.view"], route: "/(admin)/event-betting" },
+      { key: "calcutta", label: "Calcutta", hint: "Live auction", icon: "hammer-outline", permissions: ["calcutta.view"], route: "/(admin)/event-calcutta" },
+      { key: "store", label: "Store", hint: "Defaulter birds for sale", icon: "storefront-outline", permissions: ["store.view"], route: "/(admin)/event-store" },
     ],
   },
   {
     label: "Publish",
     sections: [
-      { key: "messages", label: "Messages", hint: "Broadcast to breeders", icon: "chatbubbles-outline", permissions: ["messages.view", "messages.manage"], route: "/(admin)/event-messages" },
-      { key: "history", label: "History", hint: "Archived races by year", icon: "time-outline", permissions: ["events.view", "events.manage"], route: "/(admin)/event-history" },
-      { key: "content", label: "Rules & videos", hint: "Rules, fees and videos", icon: "document-text-outline", permissions: ["content.view", "content.manage"], route: "/(admin)/event-rules" },
+      { key: "messages", label: "Messages", hint: "Broadcast to breeders", icon: "chatbubbles-outline", permissions: ["messages.view"], route: "/(admin)/event-messages" },
+      { key: "history", label: "History", hint: "Archived races by year", icon: "time-outline", permissions: ["birds.view"], route: "/(admin)/event-history" },
+      { key: "content", label: "Rules & videos", hint: "Rules, fees and videos", icon: "document-text-outline", permissions: ["content.view"], route: "/(admin)/event-rules" },
     ],
   },
 ];

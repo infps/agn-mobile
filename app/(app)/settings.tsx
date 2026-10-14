@@ -1,3 +1,4 @@
+import { useDisplaySettings } from "@/components/admin/displaySettings";
 import { useAuth } from "@/context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -6,6 +7,7 @@ import {
   ScrollView,
   Share,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -67,6 +69,7 @@ function MenuSection({ title, items, onPress }: { title?: string; items: typeof 
 export default function Settings() {
   const { user, signOut } = useAuth();
   const router = useRouter();
+  const { velocityUnit, sexTerminology, update } = useDisplaySettings();
 
   const go = (link: string) => router.push(link as any);
 
@@ -106,6 +109,37 @@ export default function Settings() {
         {/* Other */}
         <View style={{ marginTop: 12 }}>
           <MenuSection title="More" items={OTHER_ITEMS} onPress={go} />
+        </View>
+
+        {/* Display settings — the portal offers these to every signed-in user. */}
+        <View style={[s.section, { marginTop: 12 }]}>
+          <Text style={s.sectionTitle}>Display settings</Text>
+          <View style={[s.menuItem, s.menuItemBorder]}>
+            <View style={s.menuLeft}>
+              <View style={s.iconBox}>
+                <Ionicons name="speedometer-outline" size={18} color="#189AB4" />
+              </View>
+              <Text style={s.menuLabel}>Velocity: {velocityUnit === "MPM" ? "Metres / min" : "Yards / min"}</Text>
+            </View>
+            <Switch
+              value={velocityUnit === "MPM"}
+              onValueChange={(v) => update({ velocityUnit: v ? "MPM" : "YPM" })}
+            />
+          </View>
+          <View style={s.menuItem}>
+            <View style={s.menuLeft}>
+              <View style={s.iconBox}>
+                <Ionicons name="male-female-outline" size={18} color="#189AB4" />
+              </View>
+              <Text style={s.menuLabel}>
+                Sex labels: {sexTerminology === "neutral" ? "Male / Female" : "Cock / Hen"}
+              </Text>
+            </View>
+            <Switch
+              value={sexTerminology === "neutral"}
+              onValueChange={(v) => update({ sexTerminology: v ? "neutral" : "traditional" })}
+            />
+          </View>
         </View>
 
         {/* Share */}

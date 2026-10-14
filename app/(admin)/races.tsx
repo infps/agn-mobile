@@ -8,6 +8,7 @@ import { useToast } from "@/context/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { useAdminAction } from "@/hooks/useAdminAction";
 import { EventPicker } from "@/components/admin/EventPicker";
+import { seasonRacesUrl, useChosenSeason } from "@/service/season.service";
 import { RaceFormSheet } from "@/components/admin/RaceFormSheet";
 import { type AdminRace, RACE_STATUS, raceLabel } from "@/components/admin/raceParts";
 import {
@@ -53,10 +54,14 @@ export default function AdminRaces() {
   const [removing, setRemoving] = useState<AdminRace | null>(null);
   const [betting, setBetting] = useState<AdminRace | null>(null);
 
+  // The season chosen on the event's Seasons screen: the portal's Races tab
+  // lists the races of the season selected above its tabs.
+  const season = useChosenSeason(eventId);
+
   // The admin list carries private races too, which the breeder list hides.
   const { data, loading, refreshing, forbidden, error, refresh, reload } = useAdminData<{
     races?: AdminRace[];
-  }>(eventId != null ? `/admin/race?eventId=${eventId}` : null, [eventId]);
+  }>(eventId != null ? seasonRacesUrl(eventId, season) : null, [eventId, season?.id]);
 
   const races = useMemo(() => data?.races ?? [], [data]);
   const canManage = can("races.manage");
@@ -107,6 +112,7 @@ export default function AdminRaces() {
   return (
     <Screen
       title="Races"
+      subtitle={season ? `Season: ${season.name ?? `#${season.id}`}` : undefined}
       onRefresh={refresh}
       refreshing={refreshing}
       header={

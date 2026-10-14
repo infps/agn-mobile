@@ -10,6 +10,7 @@ import {
   SchemePool,
 } from "@/components/EventShared";
 import Header from "@/components/header";
+import { sexLabel, useDisplaySettings } from "@/components/admin/displaySettings";
 import { useToast } from "@/context/ToastContext";
 import api from "@/service/api.service";
 import { Ionicons } from "@expo/vector-icons";
@@ -66,6 +67,7 @@ interface MyBird {
 const RegisterInEvent = () => {
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const toast = useToast();
+  const { sexTerminology } = useDisplaySettings();
 
   const [event, setEvent] = useState<any>(null);
   const [birds, setBirds] = useState<MyBird[]>([]);
@@ -436,7 +438,7 @@ const RegisterInEvent = () => {
                       <Text className="text-sm font-semibold text-gray-800">{bandOf(b) || "No band"}</Text>
                       <Text className="text-xs text-gray-500">
                         {b.birdName || "Unnamed"} · {b.color || "-"} ·{" "}
-                        {b.sex === 1 ? "Cock" : b.sex === 2 ? "Hen" : "Unknown"}
+                        {b.sex === 1 || b.sex === 2 ? sexLabel(b.sex, sexTerminology) : "Unknown"}
                       </Text>
                     </View>
                   </TouchableOpacity>

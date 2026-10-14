@@ -64,3 +64,16 @@ export function withChosenSeason(url: string | undefined, params?: Record<string
   if (/[?&]seasonId=/.test(url) || (params && "seasonId" in params)) return url;
   return `${url}${url.includes("?") ? "&" : "?"}seasonId=${season.id}`;
 }
+
+/**
+ * The race list for an event, in the season chosen for it.
+ *
+ * The portal's Races, Classes, Knockout and Averages tabs ask GET /admin/race
+ * for `?seasonId=` of the season selected above the tabs (the route prefers it
+ * over the event's active season); its Baskets, Betting and Result tabs ask by
+ * `?eventId=`, which is always the active season. Screens mirroring the first
+ * group build their URL here; the rest keep asking by event.
+ */
+export function seasonRacesUrl(eventId: string | number, season: SeasonChoice | null): string {
+  return season ? `/admin/race?seasonId=${season.id}` : `/admin/race?eventId=${eventId}`;
+}

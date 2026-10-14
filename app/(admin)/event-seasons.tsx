@@ -106,10 +106,12 @@ const span = (s: Season) => `${ymd(s.startDate)} → ${ymd(s.endDate)}`;
  * what the rest of the app shows, and it asks first — it moves everybody, not
  * just the person tapping.
  *
- * Who may do what is uneven on purpose, and follows the server exactly: editing
- * and copying need the events permission; opening, activating, trimming and
- * deleting are for super admins alone. Those four answer a wrong role with a
- * sign-out rather than a refusal, so they are hidden rather than offered.
+ * Who may do what follows the portal's UI: its "Manage seasons" dialog (new,
+ * edit, copy, delete) only exists for super admins, so those are super-admin
+ * only here too, even where the server would accept an `events.manage` holder.
+ * (Status presets have no portal screen and keep their own gate.) Opening,
+ * activating, trimming and deleting also answer a wrong role with a sign-out
+ * rather than a refusal, so they are hidden rather than offered.
  *
  * Copying is the usual way a new year starts. It carries configuration only —
  * results, payments, bets, baskets and groups never come across — and defaults
@@ -475,7 +477,7 @@ export default function EventSeasons() {
                   }}
                 />
               ) : null}
-              {mayManage ? (
+              {mayManage && superAdmin ? (
                 <>
                   <Button
                     label="Edit"

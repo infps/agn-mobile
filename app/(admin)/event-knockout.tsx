@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
+import { seasonRacesUrl, useChosenSeason } from "@/service/season.service";
 import { useAdminData } from "@/hooks/useAdminData";
 import { useAdminAction } from "@/hooks/useAdminAction";
 import { usePermissions } from "@/context/PermissionContext";
@@ -104,10 +105,12 @@ export default function EventKnockout() {
     raceIds: [] as number[],
   });
 
-  // Rounds are picked from the season's races, and only while creating.
+  // Rounds are picked from the selected season's races (as the portal's
+  // Knockout tab does), and only while creating.
+  const chosen = useChosenSeason(eventId);
   const racesReq = useAdminData<{
     races?: { id: number; name: string | null; raceNumber: number | null }[];
-  }>(creating && eventId ? `/admin/race?eventId=${eventId}` : null, [creating, eventId]);
+  }>(creating && eventId ? seasonRacesUrl(eventId, chosen) : null, [creating, eventId, chosen?.id]);
   const races = racesReq.data?.races ?? [];
 
   const rows = data?.tournaments ?? [];

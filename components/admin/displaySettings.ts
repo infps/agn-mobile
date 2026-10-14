@@ -79,6 +79,9 @@ export const sexLabel = (sex: number | null | undefined, terminology: SexTermino
       ? terminology === "neutral" ? "Female" : "Hen"
       : "—";
 
+/** A speed held in yards per minute, converted (not formatted) to the chosen unit. */
+export const inUnit = (ypm: number, unit: VelocityUnit) => (unit === "MPM" ? ypm * 0.9144 : ypm);
+
 /** A speed held in yards per minute, shown in the unit this device was set to. */
 export const velocity = (ypm: number | null | undefined, unit: VelocityUnit) =>
   ypm == null ? "—" : `${(unit === "MPM" ? ypm * 0.9144 : ypm).toFixed(2)} ${unit}`;

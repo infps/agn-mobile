@@ -40,6 +40,7 @@ import {
   toDay,
   when,
 } from "@/components/admin/birdParts";
+import { sexLabel as wordSex, useDisplaySettings } from "@/components/admin/displaySettings";
 
 interface Bet {
   bettorId: string | null;
@@ -261,6 +262,8 @@ export default function AdminBirdDetail() {
   const { can, canAny } = usePermissions();
   const toast = useToast();
   const action = useAdminAction();
+  // The portal's bird properties card words the sex per display settings.
+  const { sexTerminology } = useDisplaySettings();
 
   const [healthOpen, setHealthOpen] = useState(false);
   const [healthStatus, setHealthStatus] = useState("HEALTHY");
@@ -549,7 +552,10 @@ export default function AdminBirdDetail() {
         <Row title="Year" right={bird.band2 || "—"} />
         <Row title="Fancier" right={loft ? `${who} - ${loft}` : who} />
         <Row title="Country" right={bird.breeder?.country || "—"} />
-        <Row title="Gender" right={sexLabel(bird.sex)} />
+        <Row
+          title="Gender"
+          right={bird.sex === 1 || bird.sex === 2 ? wordSex(bird.sex, sexTerminology) : sexLabel(bird.sex)}
+        />
         <Row title="Colour" right={bird.color || "—"} />
         <Row
           title="RFID"

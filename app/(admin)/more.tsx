@@ -20,11 +20,14 @@ interface Item {
   hint: string;
   icon: keyof typeof Ionicons.glyphMap;
   route: string;
-  /** Any one is enough. Empty means everybody. */
+  /**
+   * Any one is enough. Empty means everybody. Where the portal sidebar has the
+   * same item this is exactly its single `permission` (components/app-sidebar).
+   */
   permissions: string[];
   /**
-   * Set where the portal's route checks the role itself rather than a
-   * permission. Showing the door to anyone else would only lead to a refusal.
+   * Set where the portal checks the role itself rather than a permission — its
+   * route, or its sidebar's "Administration" group, which is SUPERADMIN-only.
    */
   superAdminOnly?: boolean;
 }
@@ -35,14 +38,14 @@ const ITEMS: Item[] = [
     hint: "Look up any band number on record",
     icon: "egg-outline",
     route: "/(admin)/birds",
-    permissions: ["birds.view", "birds.manage"],
+    permissions: ["birds.view"],
   },
   {
     label: "Users",
     hint: "Approve sign-ups and see accounts",
     icon: "person-add-outline",
     route: "/(admin)/users",
-    permissions: ["users.view", "users.manage", "users.approve", "users.permissions"],
+    permissions: ["users.view"],
   },
   {
     label: "Permissions",
@@ -50,13 +53,14 @@ const ITEMS: Item[] = [
     icon: "shield-checkmark-outline",
     route: "/(admin)/permissions",
     permissions: ["users.permissions"],
+    superAdminOnly: true,
   },
   {
     label: "Schemes",
     hint: "What an entry costs and what a place pays",
     icon: "pricetags-outline",
     route: "/(admin)/schemes",
-    permissions: ["schemes.view", "schemes.manage"],
+    permissions: ["schemes.manage"],
   },
   {
     label: "Reports",
@@ -71,7 +75,7 @@ const ITEMS: Item[] = [
     hint: "Send an announcement to people with the app",
     icon: "megaphone-outline",
     route: "/(admin)/notifications",
-    permissions: ["notifications.view", "notifications.manage"],
+    permissions: ["notifications.view"],
   },
   {
     label: "Race types",

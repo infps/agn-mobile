@@ -77,6 +77,9 @@ export function UserDetailSheet({
 }) {
   const { can, canAny, role } = usePermissions();
   const mayEdit = can("users.manage");
+  // Copy creates a new account (POST /admin/users), which the portal offers to
+  // every admin and its route accepts from any ADMIN or SUPERADMIN.
+  const mayCopy = role === "ADMIN" || role === "SUPERADMIN";
   const maySeeBirds = canAny("breeders.view", "breeders.manage");
   const mayAssign = canAny("users.permissions", "users.manage");
   const mayDelete = role === "SUPERADMIN";
@@ -141,7 +144,7 @@ export function UserDetailSheet({
             {mayEdit && !legacy ? (
               <Button label="Edit" icon="create-outline" onPress={() => onEdit(user)} full />
             ) : null}
-            {mayEdit ? (
+            {mayCopy ? (
               <Button
                 label="Copy"
                 tone="secondary"
