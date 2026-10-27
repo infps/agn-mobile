@@ -59,9 +59,9 @@ function cartKey(raceItemId: number, category: string, tierIndex: number): strin
   return `${raceItemId}-${category}-${tierIndex}`;
 }
 
-/** Poll every 3s, and give up after ~2 minutes rather than spinning forever. */
+/** Poll every 3s, and give up after ~5 minutes rather than spinning forever. */
 const POLL_MS = 3000;
-const MAX_POLLS = 40;
+const MAX_POLLS = 100; // 5 min, matches the server bet hold
 
 const RaceBetting = () => {
   const { raceId } = useLocalSearchParams<{ raceId: string }>();
@@ -219,6 +219,10 @@ const RaceBetting = () => {
               raceId: Number(raceId),
               selections: payload,
             });
+            if (captureRes.status === 202) {
+              toast.info(captureRes.data?.message);
+              return;
+            }
             const placed = captureRes.data?.betsCreated ?? payload.length;
             toast.success(`${placed} bet${placed === 1 ? "" : "s"} placed`);
             setCart(new Map());
