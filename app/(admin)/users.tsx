@@ -753,3 +753,5 @@ export default function AdminUsers() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

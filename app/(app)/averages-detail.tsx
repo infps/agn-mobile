@@ -56,3 +56,5 @@ export default function AveragesDetail() {
     </SafeAreaView>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

@@ -237,3 +237,5 @@ export default function AdminNotifications() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

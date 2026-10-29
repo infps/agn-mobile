@@ -1186,3 +1186,5 @@ export default function Schemes() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

@@ -263,3 +263,5 @@ export default function Notifications() {
     </SafeAreaView>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

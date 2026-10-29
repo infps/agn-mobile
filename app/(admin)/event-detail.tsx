@@ -205,3 +205,5 @@ export default function AdminEventDetail() {
     </ScrollView>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

@@ -645,3 +645,5 @@ function Reads({ log }: { log: LogLine[] }) {
     </View>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

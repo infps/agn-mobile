@@ -469,3 +469,5 @@ export default function EventAverages() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

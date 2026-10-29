@@ -212,3 +212,5 @@ export default function AdminEvents() {
     </View>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

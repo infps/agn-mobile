@@ -44,3 +44,5 @@ const PrivacyPolicy = () => {
 export default PrivacyPolicy;
 
 const styles = StyleSheet.create({});
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

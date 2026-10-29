@@ -235,6 +235,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       router.navigate("/login");
       return false;
     } catch (error: any) {
+      // Offline, timeout or a 500 says nothing about the session — keep it.
+      if (error?.response?.status !== 401) return false;
       await SecureStorageService.clearAll();
       delete (api as any).defaults.headers.common["Authorization"];
       setUser(null);

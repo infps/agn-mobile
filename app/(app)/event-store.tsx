@@ -175,3 +175,5 @@ const EventStore = () => {
 };
 
 export default EventStore;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

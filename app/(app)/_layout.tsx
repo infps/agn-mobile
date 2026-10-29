@@ -41,3 +41,5 @@ export default function AppLayout() {
 
   return <Stack screenOptions={{ headerShown: false }} />;
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

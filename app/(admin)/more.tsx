@@ -187,3 +187,5 @@ export default function AdminMore() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

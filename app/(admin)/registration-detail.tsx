@@ -806,3 +806,5 @@ export default function RegistrationDetail() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

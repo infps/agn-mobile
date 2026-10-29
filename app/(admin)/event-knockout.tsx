@@ -358,3 +358,5 @@ export default function EventKnockout() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

@@ -171,3 +171,5 @@ const Login = () => {
 };
 
 export default Login;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

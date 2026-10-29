@@ -926,3 +926,5 @@ export default function AdminBirdDetail() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

@@ -888,3 +888,5 @@ export default function EventBaskets() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

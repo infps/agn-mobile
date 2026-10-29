@@ -789,3 +789,5 @@ export default function BirdDetail() {
     </SafeAreaView>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

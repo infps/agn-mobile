@@ -183,3 +183,5 @@ export default function AdminLayout() {
     </SafeAreaView>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

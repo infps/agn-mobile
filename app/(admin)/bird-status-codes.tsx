@@ -237,3 +237,5 @@ export default function BirdStatusCodes() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

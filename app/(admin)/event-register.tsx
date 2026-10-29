@@ -602,3 +602,5 @@ export default function EventRegister() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

@@ -286,3 +286,5 @@ export default function EventCalcutta() {
     </SafeAreaView>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

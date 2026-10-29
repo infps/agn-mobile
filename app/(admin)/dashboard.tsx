@@ -233,3 +233,5 @@ export default function AdminDashboard() {
     </ScrollView>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

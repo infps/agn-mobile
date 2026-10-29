@@ -74,3 +74,5 @@ export default function Index() {
 
   return <Redirect href={isAdminCapable ? "/(admin)/dashboard" : "/(app)/home"} />;
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

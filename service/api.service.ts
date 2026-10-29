@@ -112,8 +112,8 @@ api.interceptors.response.use(
     // Check for token refresh from bearer plugin
     const newToken = response.headers['set-auth-token'];
     if (newToken) {
-      await SecureStorageService.setTokens(newToken, "ACCESS_TOKEN");
       (api as any).defaults.headers.common["Authorization"] = `Bearer ${newToken}`;
+      await SecureStorageService.setTokens(newToken, "ACCESS_TOKEN").catch(() => {});
     }
     return response;
   },

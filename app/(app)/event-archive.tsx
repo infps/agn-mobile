@@ -110,3 +110,5 @@ export default function EventArchive() {
     </SafeAreaView>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

@@ -511,3 +511,5 @@ const Teams = () => {
 };
 
 export default Teams;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

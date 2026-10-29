@@ -143,3 +143,5 @@ export default function EventHistory() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

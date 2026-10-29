@@ -469,3 +469,5 @@ export default function BirdNew() {
     </SafeAreaView>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

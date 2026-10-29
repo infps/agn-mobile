@@ -334,3 +334,5 @@ export default function AdminReports() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

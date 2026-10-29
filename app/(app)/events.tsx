@@ -125,7 +125,7 @@ const EventsList = () => {
         </Pressable>
         <View className="px-2 py-2">
           <Text className="text-lg text-gray-600">
-            {format(new Date(eventItem.eventDate), "PPP")}
+            {eventItem.eventDate ? format(new Date(eventItem.eventDate), "PPP") : "-"}
           </Text>
           <Text className="text-lg text-gray-600">
             {eventItem?._count?.eventInventories ?? eventItem?.eventInventories?.length ?? 0} Participants
@@ -308,3 +308,5 @@ const styles = StyleSheet.create({
 });
 
 export default EventsList;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

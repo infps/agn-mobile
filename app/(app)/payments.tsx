@@ -382,3 +382,5 @@ const PaymentsList = () => {
 };
 
 export default PaymentsList;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

@@ -343,3 +343,5 @@ export default function EventScanners() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

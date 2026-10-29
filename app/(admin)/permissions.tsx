@@ -258,3 +258,5 @@ export default function AdminPermissions() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

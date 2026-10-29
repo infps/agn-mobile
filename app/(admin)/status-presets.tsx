@@ -314,3 +314,5 @@ export default function StatusPresets() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

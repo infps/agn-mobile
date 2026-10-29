@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -77,8 +78,14 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
     setIsUnknown(false);
   }, []);
 
+  // Whose permissions are on screen. A refreshed user object (checkSession,
+  // refreshUser) re-asks quietly: flipping isLoading would make both shell
+  // layouts swap their whole navigator for a spinner and drop every screen.
+  const loadedFor = useRef<unknown>(null);
+
   const load = useCallback(async () => {
     if (!user) {
+      loadedFor.current = null;
       setPermissions([]);
       setRole(null);
       setIsApproved(true);
@@ -89,7 +96,7 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setIsLoading(true);
+    if (loadedFor.current !== user.id) setIsLoading(true);
     try {
       const { data } = await api.get("/me/permissions");
       const fresh: Cached = {
@@ -121,6 +128,7 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
       setIsStale(false);
       setIsUnknown(true);
     } finally {
+      loadedFor.current = user.id;
       setIsLoading(false);
     }
   }, [user, apply]);

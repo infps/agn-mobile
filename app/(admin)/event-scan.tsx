@@ -717,3 +717,5 @@ export default function EventScan() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

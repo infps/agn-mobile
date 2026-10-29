@@ -189,3 +189,5 @@ export default function EventTypes() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

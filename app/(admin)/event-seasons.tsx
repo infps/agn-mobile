@@ -686,3 +686,5 @@ export default function EventSeasons() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

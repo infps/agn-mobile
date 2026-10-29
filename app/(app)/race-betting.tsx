@@ -508,3 +508,5 @@ const RaceBetting = () => {
 };
 
 export default RaceBetting;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

@@ -52,3 +52,5 @@ export default function EventDefaulters() {
     </SafeAreaView>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

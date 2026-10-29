@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import MapView, { Marker, UrlTile } from "react-native-maps";
+import { MAPS_AVAILABLE, MapUnavailable } from "@/components/MapUnavailable";
 
 export interface MapPoint {
   id: number;
@@ -123,6 +124,8 @@ export function StationsMap({
       </View>
     );
   }
+
+  if (!MAPS_AVAILABLE) return <MapUnavailable height={height} />;
 
   const active = LAYERS.find((l) => l.key === layer) ?? LAYERS[0];
 

@@ -328,3 +328,5 @@ export default function RaceCalendar() {
     </SafeAreaView>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

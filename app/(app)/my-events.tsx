@@ -112,3 +112,5 @@ const MyEvent = () => {
 };
 
 export default MyEvent;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

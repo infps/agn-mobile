@@ -595,3 +595,5 @@ export default function EventBreeders() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

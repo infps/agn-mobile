@@ -105,3 +105,5 @@ export default function EventRules() {
     </SafeAreaView>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

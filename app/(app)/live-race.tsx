@@ -7,7 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import api from "@/service/api.service";
 import { Ionicons } from "@expo/vector-icons";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 import { router, useLocalSearchParams } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -266,7 +266,15 @@ const LiveRace = () => {
     setWindLoading(true);
     try {
       const res = await api.get(`/race/${raceId}/wind-route`, { timeout: 60000 });
-      setWind(res.data);
+      // Windy gaps come through as null; one null sample would take the screen down.
+      setWind({
+        ...res.data,
+        samples: (res.data?.samples ?? []).filter(
+          (s: any) =>
+            Number.isFinite(s?.lat) && Number.isFinite(s?.lon) &&
+            Number.isFinite(s?.wind?.speedMph) && Number.isFinite(s?.tempK)
+        ),
+      });
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Could not load the wind along the route");
       setWindOpen(false);
@@ -642,7 +650,7 @@ const LiveRace = () => {
                     <Text className="text-sm font-bold text-primary">{e.position != null ? `#${e.position}` : "-"}</Text>
                   </View>
                   <Text className="text-xs text-gray-500">
-                    {e.eventName ?? ""} · {format(new Date(e.date), "MMM d, yyyy")}
+                    {e.eventName ?? ""} · {isValid(new Date(e.date)) ? format(new Date(e.date), "MMM d, yyyy") : "-"}
                     {e.distance != null ? ` · ${e.distance} mi` : ""}
                     {e.ypm != null ? ` · ${inUnit(e.ypm, velocityUnit).toFixed(2)} ${velocityUnit}` : ""}
                   </Text>
@@ -657,3 +665,5 @@ const LiveRace = () => {
 };
 
 export default LiveRace;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

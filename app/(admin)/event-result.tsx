@@ -376,3 +376,5 @@ export default function EventResult() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

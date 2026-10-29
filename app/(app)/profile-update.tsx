@@ -349,3 +349,5 @@ const ProfileUpdate = () => {
 };
 
 export default ProfileUpdate;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

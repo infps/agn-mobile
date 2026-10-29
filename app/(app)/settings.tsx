@@ -214,3 +214,5 @@ const s = StyleSheet.create({
   menuLabel: { fontSize: 15, fontWeight: "500", color: "#1f2937" },
   actionRow: { paddingHorizontal: 16, paddingVertical: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12 },
 });
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

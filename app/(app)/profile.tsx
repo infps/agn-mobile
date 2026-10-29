@@ -166,3 +166,5 @@ const Profile = () => {
 };
 
 export default Profile;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

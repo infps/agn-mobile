@@ -438,3 +438,5 @@ export default function EventMessages() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

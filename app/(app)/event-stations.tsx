@@ -121,3 +121,5 @@ export default function EventStations() {
     </SafeAreaView>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import MapView, { Marker, Polyline, UrlTile } from "react-native-maps";
+import { MAPS_AVAILABLE, MapUnavailable } from "@/components/MapUnavailable";
 import api from "@/service/api.service";
 
 interface Ping {
@@ -50,6 +51,21 @@ const LAYERS = [
   },
 ] as const;
 
+// A station or loft without coordinates comes back as `{lat: null}`, and a
+// null coordinate handed to the native map is a hard crash, not a blank pin.
+const finite = (p: { lat: unknown; lng: unknown } | null | undefined): boolean =>
+  !!p && Number.isFinite(p.lat) && Number.isFinite(p.lng);
+
+function sanitize(t: Track): Track {
+  return {
+    ...t,
+    pings: (t.pings ?? []).filter(finite),
+    latest: finite(t.latest) ? t.latest : null,
+    station: finite(t.station) ? t.station : null,
+    loft: finite(t.loft) ? t.loft : null,
+  };
+}
+
 /** OpenTopoMap caps at 17; the portal keeps every layer there so switching never re-clamps. */
 const MAP_MAX_ZOOM = 17;
 
@@ -92,7 +108,7 @@ export function RaceTrackMap({
     const load = async () => {
       try {
         const { data } = await api.get(`/public/race/${raceId}/track`);
-        if (!cancelled) setTrack(data ?? null);
+        if (!cancelled) setTrack(data ? sanitize(data) : null);
       } catch {
         if (!cancelled) setTrack(null);
       } finally {
@@ -128,13 +144,17 @@ export function RaceTrackMap({
     return all;
   }, [route, track]);
 
+  // Re-frame only when the coordinates change: `points` is a new array every
+  // 30s poll, and keying on it snapped the camera back mid-pan.
+  const frameKey = points.map((p) => `${p.latitude.toFixed(4)},${p.longitude.toFixed(4)}`).join(";");
   useEffect(() => {
     if (points.length === 0 || !mapRef.current) return;
     mapRef.current.fitToCoordinates(points, {
       edgePadding: { top: 48, right: 48, bottom: 48, left: 48 },
       animated: true,
     });
-  }, [points]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frameKey]);
 
   if (loading) {
     return (
@@ -164,6 +184,8 @@ export function RaceTrackMap({
       </View>
     );
   }
+
+  if (!MAPS_AVAILABLE) return <MapUnavailable height={height} />;
 
   const first = points[0];
   const active = LAYERS.find((l) => l.key === layer) ?? LAYERS[0];

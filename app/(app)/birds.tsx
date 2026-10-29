@@ -263,3 +263,5 @@ const Birds = () => {
 };
 
 export default Birds;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

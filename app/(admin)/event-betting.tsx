@@ -524,3 +524,5 @@ export default function EventBetting() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

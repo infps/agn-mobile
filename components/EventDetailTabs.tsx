@@ -21,6 +21,7 @@ import {
   View,
 } from "react-native";
 import MapView, { Marker, UrlTile } from "react-native-maps";
+import { MAPS_AVAILABLE, MapUnavailable } from "@/components/MapUnavailable";
 
 /**
  * The tabs of an event, one component each.
@@ -533,7 +534,7 @@ function RaceCard({ race }: { race: any }) {
       </View>
       <View className="flex-row flex-wrap mt-2" style={{ gap: 12 }}>
         {race.startTime ? (
-          <Text className="text-xs text-gray-500">{format(new Date(race.startTime), "MMM dd, yyyy HH:mm")}</Text>
+          <Text className="text-xs text-gray-500">{race.startTime ? format(new Date(race.startTime), "MMM dd, yyyy HH:mm") : "-"}</Text>
         ) : null}
         {race.location ? <Text className="text-xs text-gray-500">{race.location}</Text> : null}
         {race.distance != null ? <Text className="text-xs text-gray-500">{race.distance} mi</Text> : null}
@@ -700,7 +701,11 @@ export function StationsTab({ eventId, event }: { eventId: string; event: any })
         </TouchableOpacity>
       </View>
 
-      {start ? (
+      {start && !MAPS_AVAILABLE ? (
+        <View className="mt-3">
+          <MapUnavailable height={280} />
+        </View>
+      ) : start ? (
         <View className="overflow-hidden rounded-xl border border-slate-200 mt-3" style={{ height: 280 }}>
           <MapView
             // Re-centre when a different station is picked from the list.

@@ -139,3 +139,5 @@ export default function Messages() {
     </SafeAreaView>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

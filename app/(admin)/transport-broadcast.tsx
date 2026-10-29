@@ -10,3 +10,5 @@
  * Takes `raceId`, like the race screen that links to it.
  */
 export { default } from "../(app)/liberation";
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

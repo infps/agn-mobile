@@ -89,3 +89,5 @@ function Entries({ title, entries }: { title: string; entries: HelpEntry[] }) {
     </>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

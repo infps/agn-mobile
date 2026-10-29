@@ -577,3 +577,5 @@ export default function AdminAccounting() {
     </View>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

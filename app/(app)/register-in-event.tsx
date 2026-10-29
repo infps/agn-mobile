@@ -554,3 +554,5 @@ function FeeLine({ label, value }: { label: string; value: number }) {
 }
 
 export default RegisterInEvent;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

@@ -558,3 +558,5 @@ export default function EventStations() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

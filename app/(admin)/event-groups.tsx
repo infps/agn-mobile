@@ -1065,3 +1065,5 @@ export default function EventGroups() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

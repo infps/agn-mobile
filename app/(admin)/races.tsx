@@ -282,3 +282,5 @@ export default function AdminRaces() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

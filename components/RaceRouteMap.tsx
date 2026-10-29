@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import MapView, { Marker, Polyline, UrlTile } from "react-native-maps";
+import { MAPS_AVAILABLE, MapUnavailable } from "@/components/MapUnavailable";
 
 /**
  * A map of race routes, drawn over the portal's own free tile layers.
@@ -50,9 +51,12 @@ export interface RoutePin {
   onCalloutPress?: () => void;
 }
 
+const finite = (p: { latitude: unknown; longitude: unknown }): boolean =>
+  Number.isFinite(p.latitude) && Number.isFinite(p.longitude);
+
 export function RaceRouteMap({
-  lines,
-  pins,
+  lines: rawLines,
+  pins: rawPins,
   height = 320,
   emptyText = "There is nothing to map yet.",
 }: {
@@ -63,6 +67,13 @@ export function RaceRouteMap({
 }) {
   const [layer, setLayer] = useState<(typeof LAYERS)[number]["key"]>("street");
   const mapRef = useRef<MapView | null>(null);
+
+  // A null coordinate reaching the native map crashes the app outright.
+  const lines = useMemo(
+    () => rawLines.map((l) => ({ ...l, points: l.points.filter(finite) })),
+    [rawLines]
+  );
+  const pins = useMemo(() => rawPins.filter(finite), [rawPins]);
 
   const all = useMemo(() => {
     const out: { latitude: number; longitude: number }[] = [];
@@ -98,6 +109,8 @@ export function RaceRouteMap({
       </View>
     );
   }
+
+  if (!MAPS_AVAILABLE) return <MapUnavailable height={height} />;
 
   const active = LAYERS.find((l) => l.key === layer) ?? LAYERS[0];
 

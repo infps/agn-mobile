@@ -202,3 +202,5 @@ const Signup = () => {
 };
 
 export default Signup;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

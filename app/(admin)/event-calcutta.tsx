@@ -910,3 +910,5 @@ export default function EventCalcutta() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

@@ -252,3 +252,5 @@ export default function RaceTypes() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

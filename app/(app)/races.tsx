@@ -91,12 +91,22 @@ const TABS: { key: RacesView; label: string; icon: React.ComponentProps<typeof I
 
 function elapsedSince(start: string | null, now: number): string {
   if (!start) return "+00:00:00";
-  const ms = Math.max(0, now - new Date(start).getTime());
+  const ms = Math.max(0, now - new Date(start).getTime() || 0);
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
   const s = Math.floor((ms % 60000) / 1000);
   const p = (n: number) => String(n).padStart(2, "0");
   return `+${p(h)}:${p(m)}:${p(s)}`;
+}
+
+/** Ticks on its own so the 1s clock re-renders one Text, not the whole screen. */
+function Elapsed({ start }: { start: string | null }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return <>{elapsedSince(start, now)}</>;
 }
 
 function sortLive(races: LiveRace[], key: SortKey): LiveRace[] {
@@ -141,7 +151,6 @@ const Races = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
 
   const load = useCallback(async () => {
     setError(null);
@@ -164,13 +173,6 @@ const Races = () => {
   useEffect(() => {
     load();
   }, [load]);
-
-  // The live cards carry a running clock.
-  useEffect(() => {
-    if (view !== "live") return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [view]);
 
   // The map is only fetched once somebody asks for it, then kept fresh every
   // 30s while it is on screen — the same cadence the portal uses.
@@ -448,7 +450,7 @@ const Races = () => {
                           className="text-xs font-medium text-red-500"
                           style={{ fontVariant: ["tabular-nums"] }}
                         >
-                          {started ? elapsedSince(item.startTime, now) : "taking entries"}
+                          {started ? <Elapsed start={item.startTime} /> : "taking entries"}
                         </Text>
                       </View>
                     </View>
@@ -593,3 +595,5 @@ const Races = () => {
 };
 
 export default Races;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

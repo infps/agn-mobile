@@ -625,3 +625,5 @@ export default function EventBirds() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

@@ -281,3 +281,5 @@ const EventDetail = () => {
 };
 
 export default EventDetail;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

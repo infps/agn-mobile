@@ -464,3 +464,5 @@ const Liberation = () => {
 };
 
 export default Liberation;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

@@ -55,3 +55,5 @@ export default function Settings() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

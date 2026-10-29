@@ -263,7 +263,7 @@ export default function MyRegistration() {
                         <Text className="text-xs text-gray-700">{p.desc ?? `Payment #${p.id}`}</Text>
                         {p.date && (
                           <Text className="text-[10px] text-gray-400">
-                            {format(new Date(p.date), "MMM dd, yyyy")}
+                            {p.date ? format(new Date(p.date), "MMM dd, yyyy") : "-"}
                           </Text>
                         )}
                       </View>
@@ -321,3 +321,5 @@ function FeeRow({ label, value }: { label: string; value: number }) {
     </View>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";
