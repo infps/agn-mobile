@@ -1,3 +1,4 @@
+import { BETTING_ENABLED } from "@/constants/features";
 import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -484,7 +485,7 @@ export default function AdminRaceDetail() {
         {canManage ? (
           <Tool label="Edit race" icon="create-outline" onPress={() => setOpen("edit")} />
         ) : null}
-        {can("betting.manage") && race.status === "REGISTERING" ? (
+        {BETTING_ENABLED && can("betting.manage") && race.status === "REGISTERING" ? (
           <Tool
             label={race.bettingOpen ? "Close betting" : "Open betting"}
             icon="dice-outline"

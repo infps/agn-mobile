@@ -1,3 +1,4 @@
+import { BETTING_ENABLED } from "@/constants/features";
 import BreederExportButton from "@/components/BreederExportButton";
 import Header from "@/components/header";
 import { RaceRouteMap, RouteLine, RoutePin } from "@/components/RaceRouteMap";
@@ -407,15 +408,17 @@ const LiveRace = () => {
             <Ionicons name="flag-outline" size={15} color="#189AB4" />
             <Text className="text-primary text-xs font-semibold ml-1">Wind route</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => router.push({ pathname: "/race-betting", params: { raceId: String(raceId) } } as any)}
-            className="flex-row items-center border border-primary rounded-lg px-3 py-2"
-          >
-            <Ionicons name="cash-outline" size={15} color="#189AB4" />
-            <Text className="text-primary text-xs font-semibold ml-1">
-              Betting{race.bettingOpen ? " (open)" : ""}
-            </Text>
-          </TouchableOpacity>
+          {BETTING_ENABLED && (
+            <TouchableOpacity
+              onPress={() => router.push({ pathname: "/race-betting", params: { raceId: String(raceId) } } as any)}
+              className="flex-row items-center border border-primary rounded-lg px-3 py-2"
+            >
+              <Ionicons name="cash-outline" size={15} color="#189AB4" />
+              <Text className="text-primary text-xs font-semibold ml-1">
+                Betting{race.bettingOpen ? " (open)" : ""}
+              </Text>
+            </TouchableOpacity>
+          )}
           <BreederExportButton kind="results" raceId={raceId} label="My results" />
         </View>
 

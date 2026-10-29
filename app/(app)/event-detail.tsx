@@ -1,3 +1,4 @@
+import { BETTING_ENABLED } from "@/constants/features";
 import {
   BirdsTab,
   BreedersTab,
@@ -221,7 +222,7 @@ const EventDetail = () => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10 }}
         >
-          {event.raceFormat === "CALCUTTA" ? (
+          {BETTING_ENABLED && event.raceFormat === "CALCUTTA" ? (
             <Shortcut
               icon="hammer-outline"
               label="Join Calcutta Auction"

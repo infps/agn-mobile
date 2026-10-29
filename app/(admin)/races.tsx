@@ -1,3 +1,4 @@
+import { BETTING_ENABLED } from "@/constants/features";
 import React, { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -207,21 +208,25 @@ export default function AdminRaces() {
                     ) : null}
 
                     <View className="mt-3 flex-row items-center justify-between">
-                      <Pressable
-                        onPress={canToggle ? () => setBetting(race) : undefined}
-                        disabled={!canToggle}
-                        hitSlop={6}
-                        className="flex-row items-center gap-1.5"
-                      >
-                        <Ionicons
-                          name={race.bettingOpen ? "toggle" : "toggle-outline"}
-                          size={26}
-                          color={race.bettingOpen ? "#059669" : canToggle ? "#64748b" : "#cbd5e1"}
-                        />
-                        <Text className="text-xs text-slate-500">
-                          Betting {race.bettingOpen ? "open" : "closed"}
-                        </Text>
-                      </Pressable>
+                      {BETTING_ENABLED ? (
+                        <Pressable
+                          onPress={canToggle ? () => setBetting(race) : undefined}
+                          disabled={!canToggle}
+                          hitSlop={6}
+                          className="flex-row items-center gap-1.5"
+                        >
+                          <Ionicons
+                            name={race.bettingOpen ? "toggle" : "toggle-outline"}
+                            size={26}
+                            color={race.bettingOpen ? "#059669" : canToggle ? "#64748b" : "#cbd5e1"}
+                          />
+                          <Text className="text-xs text-slate-500">
+                            Betting {race.bettingOpen ? "open" : "closed"}
+                          </Text>
+                        </Pressable>
+                      ) : (
+                        <View />
+                      )}
                       {canManage ? (
                         <Pressable onPress={() => setEditing(race)} hitSlop={10}>
                           <Ionicons name="create-outline" size={18} color="#64748b" />

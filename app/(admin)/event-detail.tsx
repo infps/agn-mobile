@@ -1,3 +1,4 @@
+import { BETTING_ENABLED } from "@/constants/features";
 import React from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -122,7 +123,12 @@ export default function AdminEventDetail() {
   const groups = GROUPS.map((group) => ({
     ...group,
     // A section with no mobile screen yet is left out rather than shown dead.
-    sections: group.sections.filter((s) => s.route && canAny(...s.permissions)),
+    sections: group.sections.filter(
+      (s) =>
+        s.route &&
+        canAny(...s.permissions) &&
+        (BETTING_ENABLED || (s.key !== "betting" && s.key !== "calcutta"))
+    ),
   })).filter((group) => group.sections.length > 0);
 
   const s = stats.data;
