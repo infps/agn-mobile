@@ -30,6 +30,13 @@
         "EXPO_PUBLIC_NODE_ENV": "production",
         "EXPO_PUBLIC_API_URL": "https://pigeon-pulse.vercel.app/api"
       }
+    },
+    "aws": {
+      "extends": "preview",
+      "env": {
+        "EXPO_PUBLIC_NODE_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "http://52.35.79.242/api"
+      }
     }
   },
   "submit": {
