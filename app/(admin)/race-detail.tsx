@@ -210,11 +210,6 @@ export default function AdminRaceDetail() {
         />
       }
     >
-      <Pressable onPress={() => router.back()} className="mb-3 flex-row items-center gap-1">
-        <Ionicons name="chevron-back" size={16} color="#2563eb" />
-        <Text className="text-sm font-medium text-blue-600">Races</Text>
-      </Pressable>
-
       <Text className="text-2xl font-bold text-slate-900">
         {race.name || `Race ${race.raceNumber ?? race.id}`}
       </Text>
@@ -244,7 +239,7 @@ export default function AdminRaceDetail() {
           style={{ flexGrow: 1, flexBasis: "30%" }}
         >
           <Text className="text-base font-semibold text-slate-900">
-            {race.status.toLowerCase()}
+            {(race.status ?? "unknown").toLowerCase()}
           </Text>
           <Text className="mt-0.5 text-xs text-slate-500">
             {race.startTime ? new Date(race.startTime).toLocaleString() : "Not scheduled"}
@@ -409,7 +404,7 @@ export default function AdminRaceDetail() {
                   >
                     {item.arrivalTime
                       ? new Date(item.arrivalTime).toLocaleTimeString()
-                      : item.status.toLowerCase().replace(/_/g, " ")}
+                      : (item.status ?? "not clocked").toLowerCase().replace(/_/g, " ")}
                   </Text>
                   {item.prizeValue != null && item.prizeValue > 0 && (
                     <Text className="text-xs font-medium text-emerald-600">

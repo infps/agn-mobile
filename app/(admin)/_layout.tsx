@@ -1,11 +1,15 @@
 import React from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
-import { Redirect, Slot, usePathname, useRouter } from "expo-router";
+import { Redirect, Slot, useGlobalSearchParams, usePathname, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionContext";
 import { useResponsive } from "@/hooks/useResponsive";
+
+// A screen that throws while rendering shows a recovery page instead of
+// crashing the app — see ScreenErrorBoundary.
+export { ScreenErrorBoundary as ErrorBoundary } from "@/components/ScreenErrorBoundary";
 
 /**
  * The admin shell.
@@ -83,6 +87,7 @@ export default function AdminLayout() {
   const { isWide, gutter } = useResponsive();
   const router = useRouter();
   const pathname = usePathname();
+  const { raceId } = useGlobalSearchParams<{ raceId?: string }>();
 
   if (authLoading || permsLoading) {
     return (
@@ -117,6 +122,26 @@ export default function AdminLayout() {
         ];
 
   const isActive = (href: string) => pathname?.startsWith(href.replace("/(admin)", ""));
+
+  // The shell renders screens through a Slot, which keeps history but draws no
+  // header, and an iPhone has no back button of its own. So the shell draws the
+  // one back button, top left, on every screen that is not a tab root.
+  //
+  // A tab root is whatever the navigation shows right now: everything on the
+  // tablet rail, but only the bottom-bar items on a phone. Breeders or
+  // Accounting folded into More are somewhere you went *from* More, so they get
+  // a back button there. Check-in is a root from the nav, but the same screen
+  // opened from a race (with a raceId) is clocking arrivals for that race.
+  const rootPaths = (isWide ? visible : barItems).map((item) =>
+    item.href.replace("/(admin)", "")
+  );
+  const isRoot = rootPaths.includes(pathname ?? "") && !(pathname === "/checkin" && raceId);
+  const showBack = pathname != null && !isRoot;
+
+  const goBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace("/(admin)/dashboard");
+  };
 
   const NavButton = ({ item, rail }: { item: NavItem; rail: boolean }) => {
     const active = isActive(item.href);
@@ -166,6 +191,23 @@ export default function AdminLayout() {
         )}
 
         <View className="flex-1">
+          {showBack && (
+            <View
+              className="flex-row items-center border-b border-slate-200 bg-white"
+              style={{ paddingHorizontal: gutter - 6, height: 44 }}
+            >
+              <Pressable
+                onPress={goBack}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+                className="flex-row items-center gap-0.5 py-2 pr-3"
+              >
+                <Ionicons name="chevron-back" size={24} color="#2563eb" />
+                <Text className="text-base font-medium text-blue-600">Back</Text>
+              </Pressable>
+            </View>
+          )}
           <Slot />
         </View>
       </View>

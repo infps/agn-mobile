@@ -224,11 +224,6 @@ export default function AdminBirdDetail() {
       onRefresh={refresh}
       refreshing={refreshing}
     >
-      <Pressable onPress={() => router.back()} className="mt-3 flex-row items-center gap-1">
-        <Ionicons name="chevron-back" size={16} color="#2563eb" />
-        <Text className="text-sm font-medium text-blue-600">Back</Text>
-      </Pressable>
-
       {error ? <Notice>{error}</Notice> : null}
 
       {bird.isLost === 1 && <Notice tone="rose">This bird is recorded as lost.</Notice>}

@@ -113,11 +113,6 @@ export default function AdminEventDetail() {
 
   return (
     <ScrollView style={{ paddingHorizontal: gutter, paddingTop: gutter }}>
-      <Pressable onPress={() => router.back()} className="mb-3 flex-row items-center gap-1">
-        <Ionicons name="chevron-back" size={16} color="#2563eb" />
-        <Text className="text-sm font-medium text-blue-600">Events</Text>
-      </Pressable>
-
       <Text className="text-2xl font-bold text-slate-900">{name || "Event"}</Text>
       <Text className="mt-1 text-sm text-slate-500">
         {[s?.seasonName, s?.displayStatus].filter(Boolean).join(" · ") || "Season not set"}

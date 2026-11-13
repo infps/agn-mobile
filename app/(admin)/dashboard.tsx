@@ -185,7 +185,7 @@ export default function AdminDashboard() {
                   </Text>
                   <View className={`rounded-full px-2 py-0.5 ${tone.bg}`}>
                     <Text className={`text-[10px] font-medium ${tone.text}`}>
-                      {race.status.toLowerCase()}
+                      {(race.status ?? "unknown").toLowerCase()}
                     </Text>
                   </View>
                 </View>
