@@ -59,9 +59,9 @@ function cartKey(raceItemId: number, category: string, tierIndex: number): strin
   return `${raceItemId}-${category}-${tierIndex}`;
 }
 
-/** Poll every 3s, and give up after ~2 minutes rather than spinning forever. */
+/** Poll every 3s, and give up after ~5 minutes rather than spinning forever. */
 const POLL_MS = 3000;
-const MAX_POLLS = 40;
+const MAX_POLLS = 100; // 5 min, matches the server bet hold
 
 const RaceBetting = () => {
   const { raceId } = useLocalSearchParams<{ raceId: string }>();
@@ -69,6 +69,7 @@ const RaceBetting = () => {
   const [data, setData] = useState<BetData | null>(null);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
+  const [placingCash, setPlacingCash] = useState(false);
   const [pickerBird, setPickerBird] = useState<BirdEntry | null>(null);
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<Map<string, Selection>>(new Map());
@@ -218,6 +219,10 @@ const RaceBetting = () => {
               raceId: Number(raceId),
               selections: payload,
             });
+            if (captureRes.status === 202) {
+              toast.info(captureRes.data?.message);
+              return;
+            }
             const placed = captureRes.data?.betsCreated ?? payload.length;
             toast.success(`${placed} bet${placed === 1 ? "" : "s"} placed`);
             setCart(new Map());
@@ -238,6 +243,35 @@ const RaceBetting = () => {
       toast.error(err?.response?.data?.message || "Failed to start payment");
       setPaying(false);
     }
+  };
+
+  /**
+   * The portal's "Pay Cash Later": each selection is registered with POST
+   * /breeder/race/[raceId]/bet, which places the bet with a PENDING stake that
+   * is settled in cash with the organiser.
+   */
+  const handleCashLater = async () => {
+    if (selections.length === 0) return;
+    setPlacingCash(true);
+    let placed = 0;
+    let problem: string | null = null;
+    for (const s of selections) {
+      try {
+        await api.post(`/breeder/race/${raceId}/bet`, {
+          raceItemId: s.raceItemId,
+          category: s.category,
+          tierIndex: s.tierIndex,
+        });
+        placed += 1;
+      } catch (err: any) {
+        problem = problem ?? (err?.response?.data?.message || "Failed to register a cash bet");
+      }
+    }
+    setPlacingCash(false);
+    setCart(new Map());
+    if (placed > 0) toast.success(`${placed} bet${placed === 1 ? "" : "s"} registered — pay cash to admin.`);
+    if (problem) toast.error(problem);
+    await fetch();
   };
 
   if (loading) {
@@ -438,14 +472,25 @@ const RaceBetting = () => {
           </View>
           <View className="flex-row gap-2">
             <TouchableOpacity
-              disabled={paying}
+              disabled={paying || placingCash}
               onPress={() => setCart(new Map())}
-              className={`flex-1 rounded-lg bg-gray-100 py-3 items-center ${paying ? "opacity-50" : ""}`}
+              className={`flex-1 rounded-lg bg-gray-100 py-3 items-center ${paying || placingCash ? "opacity-50" : ""}`}
             >
               <Text className="text-sm font-bold text-gray-700">Clear</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              disabled={paying}
+              disabled={paying || placingCash}
+              onPress={handleCashLater}
+              className={`flex-[1.4] rounded-lg border border-primary py-3 items-center ${paying || placingCash ? "opacity-50" : ""}`}
+            >
+              {placingCash ? (
+                <ActivityIndicator color="#189AB4" size="small" />
+              ) : (
+                <Text className="text-sm font-bold text-primary">Cash later</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              disabled={paying || placingCash}
               onPress={handlePay}
               className={`flex-[2] rounded-lg bg-primary py-3 items-center ${paying ? "opacity-60" : ""}`}
             >
@@ -463,3 +508,5 @@ const RaceBetting = () => {
 };
 
 export default RaceBetting;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

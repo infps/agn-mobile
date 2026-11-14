@@ -1,3 +1,4 @@
+import { useDisplaySettings } from "@/components/admin/displaySettings";
 import { useAuth } from "@/context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -6,6 +7,7 @@ import {
   ScrollView,
   Share,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -23,11 +25,12 @@ const NAV_ITEMS: { title: string; icon: IoniconName; link: string }[] = [
   { title: "Teams",           icon: "people-outline",              link: "/teams" },
   { title: "My Birds",        icon: "egg-outline",                 link: "/birds" },
   { title: "Notifications",   icon: "notifications-outline",       link: "/notifications" },
-  { title: "Messages",        icon: "chatbubble-ellipses-outline", link: "/messages" },
+  { title: "News & Updates",  icon: "newspaper-outline",           link: "/messages" },
 ];
 
 const OTHER_ITEMS: { title: string; icon: IoniconName; link: string }[] = [
   { title: "Payments",            icon: "card-outline",               link: "/payments" },
+  { title: "Profile",             icon: "person-circle-outline",      link: "/profile" },
   { title: "About Us",            icon: "information-circle-outline",  link: "/about-us" },
   { title: "Privacy Policy",      icon: "shield-checkmark-outline",   link: "/privacy-policy" },
   { title: "Contact Us",          icon: "call-outline",               link: "/contact-us" },
@@ -66,6 +69,7 @@ function MenuSection({ title, items, onPress }: { title?: string; items: typeof 
 export default function Settings() {
   const { user, signOut } = useAuth();
   const router = useRouter();
+  const { velocityUnit, sexTerminology, update } = useDisplaySettings();
 
   const go = (link: string) => router.push(link as any);
 
@@ -105,6 +109,37 @@ export default function Settings() {
         {/* Other */}
         <View style={{ marginTop: 12 }}>
           <MenuSection title="More" items={OTHER_ITEMS} onPress={go} />
+        </View>
+
+        {/* Display settings — the portal offers these to every signed-in user. */}
+        <View style={[s.section, { marginTop: 12 }]}>
+          <Text style={s.sectionTitle}>Display settings</Text>
+          <View style={[s.menuItem, s.menuItemBorder]}>
+            <View style={s.menuLeft}>
+              <View style={s.iconBox}>
+                <Ionicons name="speedometer-outline" size={18} color="#189AB4" />
+              </View>
+              <Text style={s.menuLabel}>Velocity: {velocityUnit === "MPM" ? "Metres / min" : "Yards / min"}</Text>
+            </View>
+            <Switch
+              value={velocityUnit === "MPM"}
+              onValueChange={(v) => update({ velocityUnit: v ? "MPM" : "YPM" })}
+            />
+          </View>
+          <View style={s.menuItem}>
+            <View style={s.menuLeft}>
+              <View style={s.iconBox}>
+                <Ionicons name="male-female-outline" size={18} color="#189AB4" />
+              </View>
+              <Text style={s.menuLabel}>
+                Sex labels: {sexTerminology === "neutral" ? "Male / Female" : "Cock / Hen"}
+              </Text>
+            </View>
+            <Switch
+              value={sexTerminology === "neutral"}
+              onValueChange={(v) => update({ sexTerminology: v ? "neutral" : "traditional" })}
+            />
+          </View>
         </View>
 
         {/* Share */}
@@ -179,3 +214,5 @@ const s = StyleSheet.create({
   menuLabel: { fontSize: 15, fontWeight: "500", color: "#1f2937" },
   actionRow: { paddingHorizontal: 16, paddingVertical: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12 },
 });
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

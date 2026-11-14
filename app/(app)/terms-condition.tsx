@@ -50,3 +50,5 @@ const TermsCondition = () => {
 export default TermsCondition;
 
 const styles = StyleSheet.create({});
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

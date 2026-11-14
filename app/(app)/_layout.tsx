@@ -3,10 +3,6 @@ import { usePermissions } from "@/context/PermissionContext";
 import { Redirect, Stack } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
 
-// A screen that throws while rendering shows a recovery page instead of
-// crashing the app — see ScreenErrorBoundary.
-export { ScreenErrorBoundary as ErrorBoundary } from "@/components/ScreenErrorBoundary";
-
 /**
  * The breeder shell, and who is allowed in it.
  *
@@ -45,3 +41,5 @@ export default function AppLayout() {
 
   return <Stack screenOptions={{ headerShown: false }} />;
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

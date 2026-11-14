@@ -61,3 +61,5 @@ const Onboarding = () => {
 };
 
 export default Onboarding;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

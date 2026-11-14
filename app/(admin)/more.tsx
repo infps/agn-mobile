@@ -20,7 +20,16 @@ interface Item {
   hint: string;
   icon: keyof typeof Ionicons.glyphMap;
   route: string;
+  /**
+   * Any one is enough. Empty means everybody. Where the portal sidebar has the
+   * same item this is exactly its single `permission` (components/app-sidebar).
+   */
   permissions: string[];
+  /**
+   * Set where the portal checks the role itself rather than a permission — its
+   * route, or its sidebar's "Administration" group, which is SUPERADMIN-only.
+   */
+  superAdminOnly?: boolean;
 }
 
 const ITEMS: Item[] = [
@@ -29,28 +38,82 @@ const ITEMS: Item[] = [
     hint: "Look up any band number on record",
     icon: "egg-outline",
     route: "/(admin)/birds",
-    permissions: ["birds.view", "birds.manage"],
+    permissions: ["birds.view"],
   },
   {
     label: "Users",
     hint: "Approve sign-ups and see accounts",
     icon: "person-add-outline",
     route: "/(admin)/users",
-    permissions: ["users.view", "users.manage", "users.approve"],
+    permissions: ["users.view"],
+  },
+  {
+    label: "Permissions",
+    hint: "What each role and person may do",
+    icon: "shield-checkmark-outline",
+    route: "/(admin)/permissions",
+    permissions: ["users.permissions"],
+    superAdminOnly: true,
   },
   {
     label: "Schemes",
     hint: "What an entry costs and what a place pays",
     icon: "pricetags-outline",
     route: "/(admin)/schemes",
-    permissions: ["schemes.view", "schemes.manage"],
+    permissions: ["schemes.manage"],
   },
   {
     label: "Reports",
     hint: "What the portal can produce",
     icon: "document-text-outline",
     route: "/(admin)/reports",
-    permissions: ["reports.view", "reports.manage"],
+    // The report routes ask for view; manage alone is refused by them.
+    permissions: ["reports.view"],
+  },
+  {
+    label: "Notifications",
+    hint: "Send an announcement to people with the app",
+    icon: "megaphone-outline",
+    route: "/(admin)/notifications",
+    permissions: ["notifications.view"],
+  },
+  {
+    label: "Race types",
+    hint: "The kinds of race and what each pays for",
+    icon: "ribbon-outline",
+    route: "/(admin)/race-types",
+    permissions: ["schemes.manage"],
+    superAdminOnly: true,
+  },
+  {
+    label: "Event types",
+    hint: "The kinds of event an organiser can run",
+    icon: "albums-outline",
+    route: "/(admin)/event-types",
+    permissions: ["events.manage"],
+    superAdminOnly: true,
+  },
+  {
+    label: "Bird status codes",
+    hint: "The statuses a bird can carry, and their colours",
+    icon: "color-palette-outline",
+    route: "/(admin)/bird-status-codes",
+    permissions: ["users.permissions"],
+    superAdminOnly: true,
+  },
+  {
+    label: "Display settings",
+    hint: "Velocity units and how sex is worded",
+    icon: "options-outline",
+    route: "/(admin)/settings",
+    permissions: [],
+  },
+  {
+    label: "Help & guide",
+    hint: "What each section is for",
+    icon: "help-circle-outline",
+    route: "/(admin)/help",
+    permissions: [],
   },
 ];
 
@@ -60,7 +123,11 @@ export default function AdminMore() {
   const { isWide, isMedium } = useResponsive();
   const router = useRouter();
 
-  const visible = ITEMS.filter((item) => canAny(...item.permissions));
+  const visible = ITEMS.filter(
+    (item) =>
+      (item.permissions.length === 0 || canAny(...item.permissions)) &&
+      (!item.superAdminOnly || role === "SUPERADMIN")
+  );
 
   const confirmSignOut = () => {
     Alert.alert("Sign out", "You will need to sign in again to use the app.", [
@@ -120,3 +187,5 @@ export default function AdminMore() {
     </Screen>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

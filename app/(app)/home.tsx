@@ -312,3 +312,5 @@ export default function HomeScreen() {
     </SafeAreaView>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

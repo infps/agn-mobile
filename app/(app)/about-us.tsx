@@ -62,3 +62,5 @@ const AboutUs = () => {
 };
 
 export default AboutUs;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

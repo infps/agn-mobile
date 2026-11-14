@@ -62,3 +62,5 @@ const ContactUs = () => {
 };
 
 export default ContactUs;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

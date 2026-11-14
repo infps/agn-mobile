@@ -48,6 +48,7 @@ export function CsvImportSheet({
   commitPath,
   /** Which fields to show on a row, in order. */
   describe,
+  columns,
 }: {
   open: boolean;
   onClose: () => void;
@@ -56,6 +57,12 @@ export function CsvImportSheet({
   previewPath: string;
   commitPath: string;
   describe: (row: PreviewRow) => { title: string; subtitle?: string };
+  /**
+   * The header row the importer expects, comma-separated. The portal offers
+   * this as a template file to download; on a phone the names are what is
+   * needed, since the spreadsheet is being made somewhere else.
+   */
+  columns?: string;
 }) {
   const toast = useToast();
   const action = useAdminAction();
@@ -110,10 +117,19 @@ export function CsvImportSheet({
 
   const commit = async () => {
     if (ok.length === 0) return;
-    const { ok: done } = await action.run("post", commitPath, { rows: ok }, {
-      success: `${ok.length} row${ok.length === 1 ? "" : "s"} imported.`,
-    });
+    const { ok: done, data } = await action.run<{
+      summary?: { created?: number; failed?: number };
+    }>("post", commitPath, { rows: ok });
     if (done) {
+      // A row that passed the check can still fail on write — a duplicate, say —
+      // and the route answers 200 either way. Its own count is the honest one.
+      const created = data?.summary?.created ?? ok.length;
+      const failed = data?.summary?.failed ?? 0;
+      if (failed > 0) {
+        toast.error(`${created} imported, ${failed} failed on write.`);
+      } else {
+        toast.success(`${created} row${created === 1 ? "" : "s"} imported.`);
+      }
       setRows(null);
       setFilename(null);
       onClose();
@@ -142,6 +158,16 @@ export function CsvImportSheet({
             The file is checked row by row first. You will see what it would import, and what it
             refused, before anything is written.
           </Notice>
+          {columns ? (
+            <View className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <Text className="text-xs font-medium text-slate-600">
+                First row of the file, exactly:
+              </Text>
+              <Text selectable className="mt-1 text-xs text-slate-500">
+                {columns}
+              </Text>
+            </View>
+          ) : null}
           <ButtonRow>
             <Button label="Choose a file" icon="document-outline" onPress={pick} full />
           </ButtonRow>

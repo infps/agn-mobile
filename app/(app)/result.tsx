@@ -142,3 +142,5 @@ export default function Result() {
     </SafeAreaView>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

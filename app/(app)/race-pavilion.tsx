@@ -90,3 +90,5 @@ const RacePavilion = () => {
 };
 
 export default RacePavilion;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

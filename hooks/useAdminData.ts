@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import api from "@/service/api.service";
 
 export interface AdminData<T> {
@@ -34,6 +34,9 @@ export function useAdminData<T = any>(
   const [refreshing, setRefreshing] = useState(false);
   const [forbidden, setForbidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Polls mostly return what is already on screen; skipping identical data
+  // spares re-rendering hundreds of rows every tick on a live race.
+  const lastJson = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     if (!path) {
@@ -44,7 +47,11 @@ export function useAdminData<T = any>(
     setError(null);
     try {
       const res = await api.get(path);
-      setData(res.data ?? null);
+      const json = JSON.stringify(res.data ?? null);
+      if (json !== lastJson.current) {
+        lastJson.current = json;
+        setData(res.data ?? null);
+      }
     } catch (err: any) {
       const status = err?.response?.status;
       if (status === 401 || status === 403) {
@@ -52,7 +59,12 @@ export function useAdminData<T = any>(
       } else {
         setError(err?.response?.data?.message ?? "Could not load this just now.");
       }
-      setData(null);
+      // No response = network blip (often a background poll); keep what is on
+      // screen rather than swapping a live race for "not found".
+      if (err?.response) {
+        lastJson.current = null;
+        setData(null);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);

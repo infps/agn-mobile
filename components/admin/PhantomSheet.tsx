@@ -3,12 +3,14 @@ import { Text, View } from "react-native";
 
 import { useAdminData } from "@/hooks/useAdminData";
 import { useAdminAction } from "@/hooks/useAdminAction";
+import { useToast } from "@/context/ToastContext";
 import {
   Button,
   ButtonRow,
   type Choice,
   ChoiceList,
   Empty,
+  Field,
   Loading,
   Notice,
   Row,
@@ -16,55 +18,50 @@ import {
   SearchBar,
   Sheet,
 } from "@/components/admin/ui";
+import {
+  type AdminRaceItem,
+  bandOf,
+  breederOf,
+  CheckRow,
+  Pills,
+} from "@/components/admin/raceParts";
+
+type Band = {
+  band1: string | null;
+  band2: string | null;
+  band3: string | null;
+  band4: string | null;
+};
 
 interface Phantom {
   id: number;
-  rfidTag: string | null;
+  rfid: string | null;
   arrivalTime: string | null;
-  resolved?: boolean | null;
-  bird?: {
+  /** Set once the read has been matched; an unmatched read has none. */
+  birdId: number | null;
+  bird?: (Band & { id: number }) | null;
+}
+
+interface Ignored {
+  id: number;
+  inventoryItemId: number | null;
+  note: string | null;
+  inventoryItem?: {
     id: number;
-    band1: string | null;
-    rfid: string | null;
-    breeder?: { firstName: string | null; lastName: string | null } | null;
+    bird?: (Band & { id: number; birdName: string | null }) | null;
   } | null;
 }
 
-interface RaceItem {
-  id: number;
-  bird?: {
-    id?: number;
-    band?: string | null;
-    birdName?: string | null;
-    breeder?: { firstName?: string | null; lastName?: string | null } | null;
-  };
-}
+const joinBand = (b?: Band | null) =>
+  b ? [b.band1, b.band2, b.band3, b.band4].filter(Boolean).join("-") : "";
 
 /**
- * A switch, drawn as a button that shows its own state.
+ * Race-day corrections: tags nobody could match, and birds left out of the
+ * result.
  *
- * Declared here rather than inside the sheet: a component defined during
- * render is a new type on every render, so React unmounts and rebuilds it —
- * which, in a sheet with a search box above it, reset both switches on every
- * keystroke.
- */
-function Toggle({ on, label, onPress }: { on: boolean; label: string; onPress: () => void }) {
-  return (
-    <Button
-      label={`${on ? "✓ " : "  "}${label}`}
-      tone={on ? "primary" : "secondary"}
-      onPress={onPress}
-      full
-    />
-  );
-}
-
-/**
- * Tags the readers saw that nobody could match to a bird.
- *
- * This is the failure mode of the whole scanning arrangement, and the one that
- * is invisible until somebody's bird is missing from the result. A tag that
- * reads cleanly but belongs to no registered bird is recorded as a phantom
+ * The first is the failure mode of the whole scanning arrangement, and the one
+ * that is invisible until somebody's bird is missing from the result. A tag
+ * that reads cleanly but belongs to no registered bird is recorded as a phantom
  * rather than dropped, and this is where it gets a name put to it.
  *
  * Resolving one is two decisions, not one, which is why they are separate
@@ -72,6 +69,12 @@ function Toggle({ on, label, onPress }: { on: boolean; label: string; onPress: (
  * count this read as the bird's arrival. A tag swapped between birds mid-season
  * wants the first without the second; a bird clocked on a spare reader wants
  * both.
+ *
+ * The second is the "it didn't really fly" list — a bird that went back to the
+ * loft or was scanned in error. Neither change moves the leaderboard on its
+ * own. The server says so in its reply, and that reply is what gets shown: the
+ * positions shift only when the race is recalculated, which is a separate,
+ * previewed step on the race screen.
  */
 export function PhantomSheet({
   open,
@@ -79,124 +82,237 @@ export function PhantomSheet({
   raceId,
   items,
   onResolved,
+  canManage = true,
 }: {
   open: boolean;
   onClose: () => void;
   raceId: number;
   /** The race's own entries — a phantom belongs to one of them or to nobody. */
-  items: RaceItem[];
+  items: AdminRaceItem[];
   onResolved: () => void;
+  /** Reading these needs races.view; changing them needs races.manage. */
+  canManage?: boolean;
 }) {
   const action = useAdminAction();
+  const toast = useToast();
+  const [tab, setTab] = useState<"tags" | "excluded">("tags");
   const [picking, setPicking] = useState<Phantom | null>(null);
+  const [excluding, setExcluding] = useState(false);
   const [query, setQuery] = useState("");
+  const [note, setNote] = useState("");
   const [linkRfid, setLinkRfid] = useState(true);
   const [recordArrival, setRecordArrival] = useState(true);
 
-  const { data, loading, error, reload } = useAdminData<{ phantoms?: Phantom[] }>(
+  const phantomsReq = useAdminData<{ phantoms?: Phantom[] }>(
     open ? `/admin/race/${raceId}/phantoms` : null,
+    [open, raceId]
+  );
+  const ignoredReq = useAdminData<{ ignored?: Ignored[] }>(
+    open ? `/admin/race/${raceId}/ignore-birds` : null,
     [open, raceId]
   );
 
   const phantoms = useMemo(
-    () => (data?.phantoms ?? []).filter((p) => p.resolved !== true),
-    [data]
+    () => (phantomsReq.data?.phantoms ?? []).filter((p) => p.birdId == null),
+    [phantomsReq.data]
+  );
+  const ignored = useMemo(() => ignoredReq.data?.ignored ?? [], [ignoredReq.data]);
+
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const pool = q
+      ? items.filter((i) =>
+          `${i.bird?.band ?? ""} ${bandOf(i)} ${i.bird?.birdName ?? ""} ${breederOf(i)}`
+            .toLowerCase()
+            .includes(q)
+        )
+      : items;
+    return pool;
+  }, [items, query]);
+
+  const birdChoices: Choice[] = useMemo(
+    () =>
+      matches
+        .filter((i) => i.bird?.id != null)
+        .slice(0, 40)
+        .map((i) => ({
+          key: i.bird!.id!,
+          label: bandOf(i),
+          hint: breederOf(i) || i.bird?.birdName || null,
+        })),
+    [matches]
   );
 
-  const birds: Choice[] = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const matched = q
-      ? items.filter((i) => {
-          const who = `${i.bird?.breeder?.firstName ?? ""} ${i.bird?.breeder?.lastName ?? ""}`;
-          return `${i.bird?.band ?? ""} ${i.bird?.birdName ?? ""} ${who}`
-            .toLowerCase()
-            .includes(q);
-        })
-      : items;
-    return matched
-      .filter((i) => i.bird?.id != null)
+  const excludeChoices: Choice[] = useMemo(() => {
+    const out = new Set(ignored.map((i) => i.inventoryItemId));
+    return matches
+      .filter((i) => i.inventoryItemId != null && i.bird != null && !out.has(i.inventoryItemId))
       .slice(0, 40)
       .map((i) => ({
-        key: i.bird!.id!,
-        label: i.bird?.band ?? `Bird ${i.bird?.id}`,
-        hint:
-          `${i.bird?.breeder?.firstName ?? ""} ${i.bird?.breeder?.lastName ?? ""}`.trim() ||
-          i.bird?.birdName ||
-          null,
+        key: i.inventoryItemId!,
+        label: bandOf(i),
+        hint: breederOf(i) || i.bird?.birdName || null,
       }));
-  }, [items, query]);
+  }, [matches, ignored]);
+
+  /** The server's own sentence, because it says whether a recalculation is owed. */
+  const done = (said: { message?: string } | null, fallback: string) => {
+    toast.success(said?.message ?? fallback);
+    phantomsReq.reload();
+    ignoredReq.reload();
+    onResolved();
+  };
 
   const resolve = async (birdId: string | number) => {
     if (!picking) return;
-    const { ok } = await action.run(
+    const { ok, data } = await action.run<{ message?: string }>(
       "post",
       `/admin/race/${raceId}/phantoms/${picking.id}`,
-      { birdId: Number(birdId), linkRfid, recordArrival },
-      { success: "Phantom resolved." }
+      { birdId: Number(birdId), linkRfid, recordArrival }
     );
     if (ok) {
       setPicking(null);
       setQuery("");
-      reload();
-      onResolved();
+      done(data, "Scan matched.");
     }
   };
 
   const drop = async (phantom: Phantom) => {
-    const { ok } = await action.run("delete", `/admin/race/${raceId}/phantoms/${phantom.id}`, undefined, {
-      success: "Phantom discarded.",
-    });
+    const { ok, data } = await action.run<{ message?: string }>(
+      "delete",
+      `/admin/race/${raceId}/phantoms/${phantom.id}`
+    );
+    if (ok) done(data, "Scan dismissed.");
+  };
+
+  const exclude = async (inventoryItemId: string | number) => {
+    const { ok, data } = await action.run<{ message?: string }>(
+      "post",
+      `/admin/race/${raceId}/ignore-birds`,
+      { inventoryItemId: Number(inventoryItemId), ...(note.trim() ? { note: note.trim() } : {}) }
+    );
     if (ok) {
-      reload();
-      onResolved();
+      setExcluding(false);
+      setNote("");
+      setQuery("");
+      done(data, "Bird excluded from results.");
     }
   };
+
+  const reinclude = async (inventoryItemId: number) => {
+    const { ok, data } = await action.run<{ message?: string }>(
+      "delete",
+      `/admin/race/${raceId}/ignore-birds?inventoryItemId=${inventoryItemId}`
+    );
+    if (ok) done(data, "Bird re-included.");
+  };
+
+  const loading = tab === "tags" ? phantomsReq.loading : ignoredReq.loading;
+  const error = tab === "tags" ? phantomsReq.error : ignoredReq.error;
 
   return (
     <>
       <Sheet
-        open={open && picking == null}
+        open={open && picking == null && !excluding}
         onClose={onClose}
-        title="Unmatched tags"
-        subtitle={
-          phantoms.length > 0
-            ? `${phantoms.length} read that belong to no registered bird`
-            : "Every tag the readers saw was matched"
-        }
+        title="Race corrections"
+        subtitle="Neither changes the leaderboard until the race is recalculated"
       >
+        <View className="mt-2">
+          <Pills
+            wrap
+            pills={[
+              { key: "tags", label: "Unmatched tags", lead: phantoms.length },
+              { key: "excluded", label: "Excluded birds", lead: ignored.length },
+            ]}
+            isOn={(k) => k === tab}
+            onPress={(k) => setTab(k as "tags" | "excluded")}
+          />
+        </View>
+
         {loading ? (
           <Loading />
         ) : error ? (
           <Notice>{error}</Notice>
-        ) : phantoms.length === 0 ? (
-          <Empty>Nothing to reconcile.</Empty>
+        ) : tab === "tags" ? (
+          phantoms.length === 0 ? (
+            <View className="mt-3">
+              <Empty>Every tag the readers saw was matched.</Empty>
+            </View>
+          ) : (
+            <View className="mt-3">
+              <Rows>
+                {phantoms.map((p) => (
+                  <Row
+                    key={p.id}
+                    title={p.rfid ?? `Scan ${p.id}`}
+                    subtitle={
+                      p.arrivalTime
+                        ? new Date(p.arrivalTime).toLocaleString()
+                        : "no arrival time recorded"
+                    }
+                    right={canManage ? "Match" : null}
+                    rightTone="text-cyan-600"
+                    onPress={
+                      canManage
+                        ? () => {
+                            setLinkRfid(true);
+                            setRecordArrival(true);
+                            setQuery("");
+                            setPicking(p);
+                          }
+                        : undefined
+                    }
+                  />
+                ))}
+              </Rows>
+              <Text className="mt-3 text-xs text-slate-400">
+                A tag left here is not in the result. Match it to a bird, or dismiss it if it was a
+                stray read.
+              </Text>
+            </View>
+          )
         ) : (
-          <View className="mt-2">
-            <Rows>
-              {phantoms.map((p) => (
-                <Row
-                  key={p.id}
-                  title={p.rfidTag ?? `Phantom ${p.id}`}
-                  subtitle={
-                    p.arrivalTime
-                      ? new Date(p.arrivalTime).toLocaleTimeString()
-                      : "no arrival time recorded"
-                  }
-                  right="Match"
-                  rightTone="text-cyan-600"
+          <View className="mt-3">
+            {ignored.length === 0 ? (
+              <Empty>No bird is excluded from this race.</Empty>
+            ) : (
+              <Rows>
+                {ignored.map((i) => (
+                  <Row
+                    key={i.id}
+                    title={
+                      [joinBand(i.inventoryItem?.bird), i.inventoryItem?.bird?.birdName]
+                        .filter(Boolean)
+                        .join(" · ") || `Entry ${i.inventoryItemId ?? i.id}`
+                    }
+                    subtitle={i.note || "no reason given"}
+                    right={canManage && i.inventoryItemId != null ? "Re-include" : null}
+                    rightTone="text-cyan-600"
+                    onPress={
+                      canManage && i.inventoryItemId != null
+                        ? () => reinclude(i.inventoryItemId!)
+                        : undefined
+                    }
+                  />
+                ))}
+              </Rows>
+            )}
+            {canManage ? (
+              <ButtonRow>
+                <Button
+                  label="Exclude a bird"
+                  tone="secondary"
+                  icon="remove-circle-outline"
                   onPress={() => {
-                    setLinkRfid(true);
-                    setRecordArrival(true);
                     setQuery("");
-                    setPicking(p);
+                    setNote("");
+                    setExcluding(true);
                   }}
+                  full
                 />
-              ))}
-            </Rows>
-            <Text className="mt-3 text-xs text-slate-400">
-              A tag left here is not in the result. Match it to a bird, or discard it if it was a
-              stray read.
-            </Text>
+              </ButtonRow>
+            ) : null}
           </View>
         )}
       </Sheet>
@@ -204,35 +320,35 @@ export function PhantomSheet({
       <Sheet
         open={picking != null}
         onClose={() => setPicking(null)}
-        title={`Tag ${picking?.rfidTag ?? ""}`}
+        title={`Tag ${picking?.rfid ?? ""}`}
         subtitle="Which bird did this read belong to?"
       >
-        <View className="mt-2" style={{ gap: 8 }}>
-          <Toggle
-            on={linkRfid}
-            label="Attach the tag to that bird"
-            onPress={() => setLinkRfid((v) => !v)}
-          />
-          <Toggle
-            on={recordArrival}
-            label="Count it as the arrival"
-            onPress={() => setRecordArrival((v) => !v)}
-          />
-        </View>
+        <CheckRow
+          on={linkRfid}
+          label="Attach the tag to that bird"
+          hint="So future scans match on their own."
+          onPress={() => setLinkRfid((v) => !v)}
+        />
+        <CheckRow
+          on={recordArrival}
+          label="Count it as the arrival"
+          hint="Records the read's time as the bird's arrival in this race."
+          onPress={() => setRecordArrival((v) => !v)}
+        />
 
-        <View className="mt-4">
-          <SearchBar value={query} onChange={setQuery} placeholder="Search band or breeder" />
+        <View className="mt-3">
+          <SearchBar value={query} onChange={setQuery} placeholder="Search band, name or breeder" />
         </View>
 
         <ChoiceList
-          choices={birds}
+          choices={birdChoices}
           onPick={resolve}
           empty={query ? "No entered bird matches that." : "This race has no entries."}
         />
 
         <ButtonRow>
           <Button
-            label="Discard this read"
+            label="Dismiss this read"
             tone="secondary"
             onPress={() => {
               const p = picking;
@@ -242,6 +358,29 @@ export function PhantomSheet({
             full
           />
         </ButtonRow>
+      </Sheet>
+
+      <Sheet
+        open={excluding}
+        onClose={() => setExcluding(false)}
+        title="Exclude a bird"
+        subtitle="It keeps its scan but takes no position"
+      >
+        <Field
+          label="Reason (optional)"
+          value={note}
+          onChange={setNote}
+          placeholder="Returned to loft without flying"
+          hint="Kept in the bird's history."
+        />
+        <View className="mt-3">
+          <SearchBar value={query} onChange={setQuery} placeholder="Search band, name or breeder" />
+        </View>
+        <ChoiceList
+          choices={excludeChoices}
+          onPick={exclude}
+          empty={query ? "No entered bird matches that." : "Nothing left to exclude."}
+        />
       </Sheet>
     </>
   );

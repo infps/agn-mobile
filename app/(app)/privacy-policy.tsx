@@ -50,3 +50,5 @@ const PrivacyPolicy = () => {
 };
 
 export default PrivacyPolicy;
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

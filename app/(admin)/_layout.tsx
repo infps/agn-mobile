@@ -7,10 +7,6 @@ import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionContext";
 import { useResponsive } from "@/hooks/useResponsive";
 
-// A screen that throws while rendering shows a recovery page instead of
-// crashing the app — see ScreenErrorBoundary.
-export { ScreenErrorBoundary as ErrorBoundary } from "@/components/ScreenErrorBoundary";
-
 /**
  * The admin shell.
  *
@@ -40,21 +36,23 @@ const NAV: NavItem[] = [
     short: "Events",
     href: "/(admin)/events",
     icon: "calendar-outline",
-    permissions: ["events.view", "events.manage"],
+    // The portal sidebar's Events item checks events.view alone.
+    permissions: ["events.view"],
   },
   {
     label: "Races",
     short: "Races",
     href: "/(admin)/races",
     icon: "flag-outline",
-    permissions: ["races.view", "races.manage"],
+    // The portal's Races tab checks races.view alone.
+    permissions: ["races.view"],
   },
   {
     label: "Check-in",
     short: "Scan",
     href: "/(admin)/checkin",
     icon: "scan-outline",
-    permissions: ["checkin.manage"],
+    permissions: ["checkin.view", "checkin.manage"],
   },
   {
     label: "Breeders",
@@ -68,7 +66,8 @@ const NAV: NavItem[] = [
     short: "Money",
     href: "/(admin)/accounting",
     icon: "cash-outline",
-    permissions: ["accounting.view", "payments.view"],
+    // The portal's Accounting tab checks accounting.view alone.
+    permissions: ["accounting.view"],
   },
   {
     label: "More",
@@ -222,3 +221,5 @@ export default function AdminLayout() {
     </SafeAreaView>
   );
 }
+
+export { ErrorBoundary } from "@/components/ErrorScreen";

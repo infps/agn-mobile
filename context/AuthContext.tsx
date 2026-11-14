@@ -32,6 +32,8 @@ export interface User {
   webAddress?: string | null;
   note?: string | null;
   ssn?: string | null;
+  /** Lives on the breeder record; pre-fills the loft name at registration. */
+  defaultTeamName?: string | null;
   status?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -53,6 +55,8 @@ interface AuthContextType {
   checkSession: () => Promise<boolean>;
   signOut: () => Promise<void>;
 updateProfile: (userData: any) => Promise<boolean>;
+  /** Re-read the profile without raising the app-wide loading flag. */
+  refreshUser: () => Promise<User | null>;
   initializeAuth: () => Promise<void>;
   isAuthenticated: boolean;
 }
@@ -231,6 +235,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       router.navigate("/login");
       return false;
     } catch (error: any) {
+      // Offline, timeout or a 500 says nothing about the session — keep it.
+      if (error?.response?.status !== 401) return false;
       await SecureStorageService.clearAll();
       delete (api as any).defaults.headers.common["Authorization"];
       setUser(null);
@@ -297,6 +303,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(false);
     }
   }, []);
+  // The shell layouts swap the whole navigator for a spinner while isLoading
+  // is set, so a screen that only wants fresh profile data must not touch it.
+  const refreshUser = useCallback(async () => {
+    try {
+      const response = await api.get("/user/profile");
+      const fresh: User | null = response.data.user ?? null;
+      if (fresh) {
+        await SecureStorageService.setUserData(fresh);
+        setUser(fresh);
+      }
+      return fresh;
+    } catch {
+      return null;
+    }
+  }, []);
   const value = {
     user,
     token,
@@ -306,6 +327,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signIn,
     signOut,
     updateProfile,
+    refreshUser,
     initializeAuth,
     checkSession,
     isAuthenticated: !!user,

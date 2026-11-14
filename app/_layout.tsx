@@ -1,6 +1,9 @@
+import { FatalErrorGate } from "@/components/ErrorScreen";
 import { AppProviders } from "@/context";
 import { Slot } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+
+export { ErrorBoundary } from "@/components/ErrorScreen";
 
 /**
  * The root of both apps.
@@ -13,12 +16,14 @@ import { StatusBar } from "expo-status-bar";
  */
 export default function RootLayout() {
   return (
-    <AppProviders>
-      <Slot />
-      {/* SDK 56 also dropped backgroundColor from expo-status-bar: Android
+    <FatalErrorGate>
+      <AppProviders>
+        <Slot />
+        {/* SDK 56 also dropped backgroundColor from expo-status-bar: Android
           draws edge-to-edge now, so the bar takes the colour of whatever is
           behind it. The light content style is what actually mattered. */}
-      <StatusBar style="light" />
-    </AppProviders>
+        <StatusBar style="light" />
+      </AppProviders>
+    </FatalErrorGate>
   );
 }
