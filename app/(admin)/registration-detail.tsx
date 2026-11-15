@@ -159,6 +159,54 @@ function Line({
   );
 }
 
+/** The portal's RegistrationAccount (lib/hayloft-account), the fields shown here. */
+interface Account {
+  perchFee: number;
+  entryFee: number;
+  hotSpotFee: number;
+  betsValue: number;
+  transferDue: number;
+  raceFee: number;
+  poolStakes: number;
+  entryRefund: number;
+  betsRefund: number;
+  hotSpotRefund: number;
+  pay: {
+    perchFee: number;
+    entryFee: number;
+    hotSpot: number;
+    bets: number;
+    transferDue: number;
+    registration: number;
+    other: number;
+    entryRefund: number;
+    betsRefund: number;
+    hotSpotRefund: number;
+    winnerPayout: number;
+  };
+  totalPayment: number;
+  capitalPrize: number;
+  hotSpot1Prize: number;
+  hotSpot2Prize: number;
+  avgSpeedPrize: number;
+  betsPrize: number;
+  winnerPayoutValue: number;
+  balance: number;
+}
+
+/** One block of the account: its non-zero rows, and a total (as the portal). */
+function AccountBlock({ title, rows, total }: { title: string; rows: [string, number][]; total?: number }) {
+  const shown = rows.filter(([, v]) => Math.abs(v) >= 0.005);
+  const sum = total ?? rows.reduce((t, [, v]) => t + v, 0);
+  return (
+    <View className="pb-1">
+      <Text className="px-4 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">{title}</Text>
+      {shown.length === 0 ? <Line label="None" value="" /> : shown.map(([label, v]) => <Line key={label} label={label} value={money(v)} />)}
+      <Line label="Total" value={money(sum)} strong />
+    </View>
+  );
+}
+
 function Card({ children }: { children: React.ReactNode }) {
   return (
     <View className="overflow-hidden rounded-xl border border-slate-200 bg-white py-2">
@@ -203,12 +251,21 @@ export default function RegistrationDetail() {
   const mayMoney = canAny("payments.manage", "refunds.manage");
 
   const path = inventoryId ? `/admin/event-inventory/${inventoryId}` : null;
-  const { data, loading, refreshing, forbidden, error, refresh, reload } = useAdminData<{
+  const { data, loading, refreshing, forbidden, error, refresh, reload: reloadInventory } = useAdminData<{
     eventInventory?: Inventory;
   }>(path, [inventoryId]);
   const inv = data?.eventInventory ?? null;
 
   const betsReq = useAdminData<{ bets?: Bet[] }>(path ? `${path}/bets` : null, [inventoryId]);
+  const accountReq = useAdminData<{ account?: Account | null }>(
+    eventId && inventoryId ? `/admin/event/${eventId}/accounting?view=account&inventoryId=${inventoryId}` : null,
+    [eventId, inventoryId]
+  );
+  // Anything that changes the registration can change its account.
+  const reload = () => {
+    reloadInventory();
+    accountReq.reload();
+  };
   const bets = betsReq.data?.bets ?? [];
 
   const birdsReq = useAdminData<{ birds?: Bird[] }>(
@@ -280,28 +337,10 @@ export default function RegistrationDetail() {
 
   if (forbidden) return <NoAccess what="This registration" />;
 
-  // The portal's arithmetic, line for line, so the two never disagree.
-  const sum = (pick: (i: Item) => number | null) => items.reduce((s, i) => s + (pick(i) ?? 0), 0);
-  const perch = sum((i) => i.entryFeeValue);
-  const perBird = sum((i) => i.perchFeeValue);
-  const hotspot = sum((i) => i.hotSpotFeeValue);
-  const race = sum((i) => i.raceFeeValue);
-  const classes = payments
-    .filter((p) => p.paymentDesc?.toLowerCase().includes("bet stake"))
-    .reduce((s, p) => s + (p.paymentValue ?? 0), 0);
-  const fees = perch + perBird + hotspot + race + classes;
-  const entryRefund = sum((i) => i.entryRefund);
-  const hotspotRefund = sum((i) => i.hotSpotRefund);
-  const refunds = entryRefund + hotspotRefund;
-  // Only PAID rows are money that has moved; a PENDING row is an unpaid order.
-  const paidOut = payments
-    .filter((p) => p.paymentType === 3 && p.status === "PAID")
-    .reduce((s, p) => s + Math.abs(p.paymentValue ?? 0), 0);
-  const paid = payments
-    .filter((p) => p.paymentType !== 3 && p.status === "PAID")
-    .reduce((s, p) => s + (p.paymentValue ?? 0), 0);
-  const transferDue = sum((i) => i.transferDue);
-  const balance = fees - refunds - paid + paidOut;
+  // HayLoft's account for this registration, exactly as the portal shows it
+  // (lib/hayloft-account on the server): charges, payments, winnings, balance.
+  const account = accountReq.data?.account ?? null;
+  const balance = account ? Math.round(account.balance * 100) / 100 : 0;
 
   const status: Approval = inv?.approvalStatus ?? "APPROVED";
   const who = fullName(inv?.breeder) || "Registration";
@@ -395,6 +434,7 @@ export default function RegistrationDetail() {
       onRefresh={() => {
         refresh();
         betsReq.reload();
+        accountReq.reload();
       }}
       refreshing={refreshing}
     >
@@ -538,23 +578,58 @@ export default function RegistrationDetail() {
             </Card>
           )}
 
-          {/* What do they owe. */}
-          <SectionTitle>Fee summary</SectionTitle>
+          {/* What do they owe: HayLoft's account, as the portal's Account panel. */}
+          <SectionTitle>Account</SectionTitle>
           <Card>
-            <Line label="Perch fee" value={money(perch)} />
-            <Line label="Per bird fee" value={money(perBird)} />
-            <Line label="Race fee" value={money(race)} />
-            <Line label="Perch fee (hot spot)" value={money(hotspot)} />
-            <Line label="Classes" value={money(classes)} />
-            <Line label="Total fees" value={money(fees)} strong />
-            <View className="my-1.5 border-t border-slate-100" />
-            <Line label="Entry refund" value={money(entryRefund)} />
-            <Line label="Hot spot refund" value={money(hotspotRefund)} />
-            <Line label="Total refunds" value={money(refunds)} strong />
-            <View className="my-1.5 border-t border-slate-100" />
-            <Line label="Payments" value={money(paid)} />
-            <Line label="Refunds paid out" value={money(paidOut)} />
-            <Line label="Transfer due" value={money(transferDue)} />
+            {!account ? (
+              <Line label={accountReq.loading ? "Loading account…" : "Account unavailable"} value="" />
+            ) : (
+              <>
+                <AccountBlock
+                  title="Charges"
+                  rows={[
+                    ["Perch fee", account.perchFee],
+                    ["Entry fee", account.entryFee],
+                    ["Hot spot fee", account.hotSpotFee],
+                    ["Class bets", account.betsValue],
+                    ["Transfer due", account.transferDue],
+                    ["Race fee", account.raceFee],
+                    ["Pool bet stakes", account.poolStakes],
+                    ["Entry refund", -account.entryRefund],
+                    ["Bets refund", -account.betsRefund],
+                    ["Hot spot refund", -account.hotSpotRefund],
+                  ]}
+                />
+                <AccountBlock
+                  title="Payments"
+                  rows={[
+                    ["Perch fee", account.pay.perchFee],
+                    ["Entry fee", account.pay.entryFee],
+                    ["Hot spot fee", account.pay.hotSpot],
+                    ["Bets", account.pay.bets],
+                    ["Transfer due", account.pay.transferDue],
+                    ["Registration", account.pay.registration],
+                    ["Other", account.pay.other],
+                    ["Entry refund paid", account.pay.entryRefund],
+                    ["Bets refund paid", account.pay.betsRefund],
+                    ["Hot spot refund paid", account.pay.hotSpotRefund],
+                    ["Winner payout paid", account.pay.winnerPayout],
+                  ]}
+                  total={account.totalPayment}
+                />
+                <AccountBlock
+                  title="Won"
+                  rows={[
+                    ["Final race", account.capitalPrize],
+                    ["Hot Spot 1", account.hotSpot1Prize],
+                    ["Hot Spot 2", account.hotSpot2Prize],
+                    ["Average speed", account.avgSpeedPrize],
+                    ["Class bets", account.betsPrize],
+                  ]}
+                  total={account.winnerPayoutValue}
+                />
+              </>
+            )}
             {owedRefunds.map((r) => (
               <Line
                 key={r.id}
@@ -565,8 +640,8 @@ export default function RegistrationDetail() {
             ))}
             <View className="my-1.5 border-t border-slate-100" />
             <Line
-              label="Balance"
-              value={money(balance)}
+              label={balance < 0 ? "Owed to breeder" : "Balance"}
+              value={money(Math.abs(balance))}
               strong
               tone={
                 balance === 0

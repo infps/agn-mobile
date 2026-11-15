@@ -40,6 +40,10 @@ interface FeeTotals {
   owed: number;
   paid: number;
   status: PayStatus;
+  /** HayLoft's BALANCE_VALUE: positive, the breeder owes; negative, they are owed. */
+  balance?: number | null;
+  /** HayLoft's winner payout value: prizes won this season. */
+  won?: number | null;
 }
 
 interface Registration {
@@ -438,9 +442,30 @@ export default function EventBreeders() {
                           .join(" · ")
                       }
                       badge={PAY_BADGE[status] ?? PAY_BADGE.NA}
-                      right={money(r.feeTotals?.paid ?? 0)}
-                      rightSub={`of ${money(r.feeTotals?.owed ?? 0)}`}
-                      rightTone={owes ? "text-rose-600" : "text-slate-700"}
+                      // HayLoft's balance, as the portal's Balance column; fees paid and
+                      // prizes won beneath it.
+                      right={
+                        r.feeTotals?.balance != null
+                          ? `${r.feeTotals.balance < 0 ? "owed " : ""}${money(Math.abs(r.feeTotals.balance))}`
+                          : money(r.feeTotals?.paid ?? 0)
+                      }
+                      rightSub={[
+                        `paid ${money(r.feeTotals?.paid ?? 0)} of ${money(r.feeTotals?.owed ?? 0)}`,
+                        r.feeTotals?.won ? `won ${money(r.feeTotals.won)}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                      rightTone={
+                        r.feeTotals?.balance != null
+                          ? r.feeTotals.balance > 0
+                            ? "text-rose-600"
+                            : r.feeTotals.balance < 0
+                              ? "text-amber-600"
+                              : "text-emerald-600"
+                          : owes
+                            ? "text-rose-600"
+                            : "text-slate-700"
+                      }
                       onPress={() => openDetail(r)}
                     />
                   );

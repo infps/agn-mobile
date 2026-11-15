@@ -134,6 +134,8 @@ export default function AdminAccounting() {
   const [settling, setSettling] = useState<Refund | null>(null);
   const [settlement, setSettlement] = useState({ method: "", reference: "" });
   const [confirmingSettle, setConfirmingSettle] = useState(false);
+  // HayLoft's "post entry" / "post hot spot" (ENTRY_FEE_BATCH_SET), as the portal's Accounting tab.
+  const [posting, setPosting] = useState<null | "post_entry" | "post_hot_spot">(null);
   const [fetching, setFetching] = useState<string | null>(null);
 
   const maySeeRefunds = canAny("refunds.view", "refunds.manage");
@@ -220,6 +222,20 @@ export default function AdminAccounting() {
       toast.success(said?.message ?? `${money(settling.amount)} marked as refunded.`);
       setSettling(null);
       refundsReq.reload();
+      load();
+    }
+  };
+
+  const postFees = async () => {
+    if (!posting || eventId == null || seasonId == null) return;
+    const { ok, data: said } = await action.run<{ message?: string }>(
+      "post",
+      `/admin/event/${eventId}/post-fees`,
+      { seasonId, operation: posting }
+    );
+    setPosting(null);
+    if (ok) {
+      toast.success(said?.message ?? "Fees posted.");
       load();
     }
   };
@@ -439,6 +455,29 @@ export default function AdminAccounting() {
                 </View>
               ) : null}
 
+              {can("accounting.manage") ? (
+                <View className="mb-3">
+                  <ButtonRow>
+                    <Button
+                      label="Post entry fees"
+                      tone="secondary"
+                      icon="add-circle-outline"
+                      onPress={() => setPosting("post_entry")}
+                      disabled={seasonId == null || action.pending}
+                      full
+                    />
+                    <Button
+                      label="Post hot spot fees"
+                      tone="secondary"
+                      icon="add-circle-outline"
+                      onPress={() => setPosting("post_hot_spot")}
+                      disabled={seasonId == null || action.pending}
+                      full
+                    />
+                  </ButtonRow>
+                </View>
+              ) : null}
+
               <View className="mb-3">
                 <SearchBar value={query} onChange={setQuery} placeholder="Breeder or loft" />
               </View>
@@ -574,6 +613,16 @@ export default function AdminAccounting() {
           onCancel={() => setConfirmingSettle(false)}
         />
       </Sheet>
+
+      <Confirm
+        open={posting != null}
+        title={posting === "post_hot_spot" ? "Post hot spot fees?" : "Post entry fees?"}
+        body={`Puts this season's ${posting === "post_hot_spot" ? "Hot Spot 1" : "entry"} fee on every bird still competing (not lost, active, not replaced, not departed), as HayLoft's "${posting === "post_hot_spot" ? "post hot spot" : "post entry"}" does. Birds already carrying the fee keep it; other birds are not changed.`}
+        confirmLabel="Post fees"
+        pending={action.pending}
+        onConfirm={postFees}
+        onCancel={() => setPosting(null)}
+      />
     </View>
   );
 }

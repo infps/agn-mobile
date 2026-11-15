@@ -9,6 +9,7 @@ import { useAdminAction } from "@/hooks/useAdminAction";
 import { usePermissions } from "@/context/PermissionContext";
 import { useToast } from "@/context/ToastContext";
 import { CheckRow, Label, Pills, raceLabel, shortBand } from "@/components/admin/raceParts";
+import { AvgSpeedPrizesSheet } from "@/components/admin/AvgSpeedPrizes";
 import {
   Button,
   ButtonRow,
@@ -95,6 +96,8 @@ export default function EventAverages() {
   const [editing, setEditing] = useState<Config | "new" | null>(null);
   const [form, setForm] = useState({ ...EMPTY });
   const [removing, setRemoving] = useState<Config | null>(null);
+  // HayLoft's average-speed winners and prizes (the portal's Averages tab card).
+  const [prizesOpen, setPrizesOpen] = useState(false);
 
   const base = eventId ? `/admin/event/${eventId}/averages` : null;
 
@@ -278,6 +281,9 @@ export default function EventAverages() {
         <>
           <ButtonRow>
             <Button label="New average" icon="add" onPress={startNew} />
+            {can("accounting.view") ? (
+              <Button label="Speed prizes" tone="secondary" icon="trophy-outline" onPress={() => setPrizesOpen(true)} />
+            ) : null}
           </ButtonRow>
           {configs.length > 0 ? (
             <View className="mt-3">
@@ -466,6 +472,9 @@ export default function EventAverages() {
         onConfirm={remove}
         onCancel={() => setRemoving(null)}
       />
+      {eventId ? (
+        <AvgSpeedPrizesSheet open={prizesOpen} onClose={() => setPrizesOpen(false)} eventId={String(eventId)} />
+      ) : null}
     </Screen>
   );
 }

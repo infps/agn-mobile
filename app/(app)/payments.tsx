@@ -1,4 +1,5 @@
 import BreederExportButton from "@/components/BreederExportButton";
+import { paymentTypeLabel } from "@/utils/payment-types";
 import Header from "@/components/header";
 import { useToast } from "@/context/ToastContext";
 import api from "@/service/api.service";
@@ -43,14 +44,7 @@ interface Payment {
   } | null;
 }
 
-// Same tables as the portal's payments/columns.tsx.
-const TYPE_LABELS: Record<number, string> = {
-  0: "Perch Fee",
-  1: "Per Bird Fee",
-  2: "Races Fee",
-  3: "Payouts",
-  4: "Other",
-};
+// Same tables as the portal (types: utils/payment-types, HayLoft's codes).
 const METHOD_LABELS: Record<number, string> = {
   0: "Cash",
   1: "Credit Card",
@@ -248,7 +242,7 @@ const PaymentsList = () => {
             {eventOf(item)?.name || "-"}
           </Text>
           <Text className="text-xs text-gray-500 mt-0.5">
-            {item.paymentType != null ? TYPE_LABELS[item.paymentType] ?? String(item.paymentType) : "-"}
+            {paymentTypeLabel(item.paymentType)}
             {" · "}
             {item.paymentMethod != null
               ? METHOD_LABELS[item.paymentMethod] ?? String(item.paymentMethod)

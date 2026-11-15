@@ -1,4 +1,5 @@
 import React, { type ReactNode } from "react";
+import { MANUAL_PAYMENT_TYPES, paymentTypeLabel, type PaymentTypeKey } from "@/utils/payment-types";
 import { Pressable, Text, View } from "react-native";
 
 /**
@@ -123,7 +124,8 @@ export function Line({
 }
 
 export type PaymentMethodCode = "CASH" | "CREDIT_CARD" | "PAYPAL" | "BANK_TRANSFER";
-export type PaymentTypeCode = "PERCH_FEE" | "BIRD_FEE" | "RACES_FEE" | "PAYOUTS" | "OTHER";
+/** HayLoft's payment type keys (utils/payment-types), as the portal's API takes them. */
+export type PaymentTypeCode = Exclude<PaymentTypeKey, "REGISTRATION">;
 
 /** In the order the portal stores them: the index is the stored integer. */
 export const PAYMENT_METHODS: Option<PaymentMethodCode>[] = [
@@ -133,20 +135,17 @@ export const PAYMENT_METHODS: Option<PaymentMethodCode>[] = [
   { key: "BANK_TRANSFER", label: "Bank transfer" },
 ];
 
-/** Type 3 is sent as PAYOUTS and read back as a refund, exactly as the portal labels it. */
-export const PAYMENT_TYPES: Option<PaymentTypeCode>[] = [
-  { key: "PERCH_FEE", label: "Perch fee" },
-  { key: "BIRD_FEE", label: "Per bird fee" },
-  { key: "RACES_FEE", label: "Races fee" },
-  { key: "PAYOUTS", label: "Refund" },
-  { key: "OTHER", label: "Other" },
-];
+/** The types an admin may record by hand, HayLoft's list; money-out types are
+ *  entered as a positive amount and stored negative by the API. */
+export const PAYMENT_TYPES: Option<PaymentTypeCode>[] = MANUAL_PAYMENT_TYPES.map((t) => ({
+  key: t.key as PaymentTypeCode,
+  label: t.outgoing ? `${t.label} (money out)` : t.label,
+}));
 
 export const methodLabel = (stored: number | null | undefined) =>
   stored == null ? null : (PAYMENT_METHODS[stored]?.label ?? `Method ${stored}`);
 
-export const typeLabel = (stored: number | null | undefined) =>
-  stored == null ? null : (PAYMENT_TYPES[stored]?.label ?? `Type ${stored}`);
+export const typeLabel = (stored: number | null | undefined) => paymentTypeLabel(stored);
 
 /** A typed amount, or null when it is not a number at all. */
 export function parseAmount(text: string): number | null {
