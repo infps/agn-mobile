@@ -1,7 +1,12 @@
 import React from "react";
-import { StyleSheet, View } from "react-native";
-import RNModal from "react-native-modal";
+import { Modal as RNModal, StyleSheet, View } from "react-native";
 
+/**
+ * A centred popup.
+ *
+ * Built on React Native's own Modal: react-native-modal calls
+ * InteractionManager, which React Native 0.88 removed, so opening it threw.
+ */
 const Modal = ({
   children,
   open,
@@ -12,12 +17,22 @@ const Modal = ({
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }) => {
   return (
-    <RNModal isVisible={open} animationIn="zoomIn" animationOut="zoomOut">
-      <View
-        className="bg-white rounded-[8px] px-[14px] pt-[20px] pb-[10px]"
-        style={styles.rnmModal}
-      >
-        {children}
+    <RNModal
+      visible={open}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => setOpen(false)}
+    >
+      {/* Tapping outside does not close it, as before — the content owns its
+          own close/cancel buttons. Android's back button does. */}
+      <View className="flex-1 items-center justify-center bg-black/50 px-5">
+        <View
+          className="w-full bg-white rounded-[8px] px-[14px] pt-[20px] pb-[10px]"
+          style={styles.rnmModal}
+        >
+          {children}
+        </View>
       </View>
     </RNModal>
   );

@@ -1,6 +1,15 @@
 import React, { type ReactNode } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import RNModal from "react-native-modal";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 /**
@@ -142,17 +151,23 @@ export function Sheet({
   subtitle?: string | null;
   children: ReactNode;
 }) {
+  // React Native's own Modal: react-native-modal calls InteractionManager,
+  // which React Native 0.88 removed, so opening any sheet threw.
   return (
-    <RNModal
-      isVisible={open}
-      onBackdropPress={onClose}
-      onBackButtonPress={onClose}
-      swipeDirection="down"
-      onSwipeComplete={onClose}
-      propagateSwipe
-      style={{ justifyContent: "flex-end", margin: 0 }}
+    <Modal
+      visible={open}
+      transparent
+      animationType="slide"
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={onClose}
     >
-      <View className="max-h-[85%] rounded-t-2xl bg-white px-4 pb-8 pt-3">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        className="flex-1 justify-end bg-black/40"
+      >
+        <Pressable className="flex-1" onPress={onClose} accessibilityLabel="Close" />
+        <View className="max-h-[85%] rounded-t-2xl bg-white px-4 pb-8 pt-3">
         <View className="mb-3 h-1 w-10 self-center rounded-full bg-slate-300" />
         <View className="flex-row items-start justify-between">
           <View className="flex-1 pr-3">
@@ -164,8 +179,9 @@ export function Sheet({
           </Pressable>
         </View>
         <ScrollView keyboardShouldPersistTaps="handled">{children}</ScrollView>
-      </View>
-    </RNModal>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
@@ -267,20 +283,28 @@ export function Confirm({
   onCancel: () => void;
 }) {
   return (
-    <RNModal
-      isVisible={open}
-      onBackdropPress={pending ? undefined : onCancel}
-      animationIn="zoomIn"
-      animationOut="zoomOut"
+    <Modal
+      visible={open}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={pending ? () => {} : onCancel}
     >
-      <View className="rounded-2xl bg-white p-5">
-        <Text className="text-base font-semibold text-slate-900">{title}</Text>
-        <Text className="mt-2 text-sm text-slate-600">{body}</Text>
-        <ButtonRow>
-          <Button label="Cancel" tone="secondary" onPress={onCancel} disabled={pending} full />
-          <Button label={confirmLabel} tone={tone} onPress={onConfirm} pending={pending} full />
-        </ButtonRow>
+      <View className="flex-1 justify-center bg-black/50 px-5">
+        <Pressable
+          className="absolute inset-0"
+          onPress={pending ? undefined : onCancel}
+          accessibilityLabel="Cancel"
+        />
+        <View className="rounded-2xl bg-white p-5">
+          <Text className="text-base font-semibold text-slate-900">{title}</Text>
+          <Text className="mt-2 text-sm text-slate-600">{body}</Text>
+          <ButtonRow>
+            <Button label="Cancel" tone="secondary" onPress={onCancel} disabled={pending} full />
+            <Button label={confirmLabel} tone={tone} onPress={onConfirm} pending={pending} full />
+          </ButtonRow>
+        </View>
       </View>
-    </RNModal>
+    </Modal>
   );
 }

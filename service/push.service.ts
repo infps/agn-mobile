@@ -1,5 +1,5 @@
 import { Platform } from "react-native";
-import Constants from "expo-constants";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import * as Device from "expo-device";
 import api from "./api.service";
 
@@ -46,6 +46,12 @@ export async function registerForPush(): Promise<RegisterOutcome> {
   try {
     if (!Notifications) return { ok: false, reason: "Push not supported in Expo Go." };
     if (!Device.isDevice) return { ok: false, reason: "Push only works on a real device." };
+    // Expo Go dropped remote push on Android (SDK 53+), and its notification
+    // channel manager throws a NullPointerException there. Push only works in
+    // a real build (TestFlight / Play), so don't try in Expo Go.
+    if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
+      return { ok: false, reason: "Push needs a real build, not Expo Go." };
+    }
 
     await ensureAndroidChannel();
 
