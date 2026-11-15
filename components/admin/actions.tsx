@@ -1,6 +1,8 @@
-import React, { type ReactNode } from "react";
+import React, { useEffect, useRef, type ReactNode } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  PanResponder,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -143,14 +145,51 @@ export function Sheet({
   onClose,
   title,
   subtitle,
+  fixedHeight = false,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   subtitle?: string | null;
+  /**
+   * Always take the full sheet height instead of shrinking to the content.
+   * For sheets with tabs, so switching to a short tab doesn't make the sheet
+   * jump down under the thumb.
+   */
+  fixedHeight?: boolean;
   children: ReactNode;
 }) {
+  // Drag the handle or header down to dismiss: the sheet follows the finger,
+  // and closes if pulled far enough or flicked; otherwise it springs back.
+  const translateY = useRef(new Animated.Value(0)).current;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (open) translateY.setValue(0);
+  }, [open, translateY]);
+
+  const drag = useRef(
+    PanResponder.create({
+      // Taps still reach the close button; only a vertical drag is taken.
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 4 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_, g) => translateY.setValue(Math.max(0, g.dy)),
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 120 || g.vy > 1.2) {
+          Animated.timing(translateY, { toValue: 1200, duration: 180, useNativeDriver: true }).start(() =>
+            onCloseRef.current()
+          );
+        } else {
+          Animated.spring(translateY, { toValue: 0, bounciness: 4, useNativeDriver: true }).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(translateY, { toValue: 0, bounciness: 4, useNativeDriver: true }).start();
+      },
+    })
+  ).current;
+
   // React Native's own Modal: react-native-modal calls InteractionManager,
   // which React Native 0.88 removed, so opening any sheet threw.
   return (
@@ -167,19 +206,32 @@ export function Sheet({
         className="flex-1 justify-end bg-black/40"
       >
         <Pressable className="flex-1" onPress={onClose} accessibilityLabel="Close" />
-        <View className="max-h-[85%] rounded-t-2xl bg-white px-4 pb-8 pt-3">
-        <View className="mb-3 h-1 w-10 self-center rounded-full bg-slate-300" />
-        <View className="flex-row items-start justify-between">
-          <View className="flex-1 pr-3">
-            <Text className="text-lg font-semibold text-slate-900">{title}</Text>
-            {subtitle ? <Text className="mt-0.5 text-xs text-slate-500">{subtitle}</Text> : null}
+        <Animated.View
+          style={{
+            maxHeight: "85%",
+            height: fixedHeight ? "85%" : undefined,
+            transform: [{ translateY }],
+          }}
+        >
+          <View
+            className={`${fixedHeight ? "flex-1" : "flex-shrink"} rounded-t-2xl bg-white px-4 pb-8`}
+          >
+            {/* Drag area: the handle and the header row. */}
+            <View {...drag.panHandlers} className="pt-3">
+              <View className="mb-3 h-1 w-10 self-center rounded-full bg-slate-300" />
+              <View className="flex-row items-start justify-between">
+                <View className="flex-1 pr-3">
+                  <Text className="text-lg font-semibold text-slate-900">{title}</Text>
+                  {subtitle ? <Text className="mt-0.5 text-xs text-slate-500">{subtitle}</Text> : null}
+                </View>
+                <Pressable onPress={onClose} hitSlop={10}>
+                  <Ionicons name="close" size={22} color="#94a3b8" />
+                </Pressable>
+              </View>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled">{children}</ScrollView>
           </View>
-          <Pressable onPress={onClose} hitSlop={10}>
-            <Ionicons name="close" size={22} color="#94a3b8" />
-          </Pressable>
-        </View>
-        <ScrollView keyboardShouldPersistTaps="handled">{children}</ScrollView>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );

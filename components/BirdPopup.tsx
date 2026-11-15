@@ -139,7 +139,7 @@ function BirdPopup({ birdId, onClose, onOpenBird }: { birdId: number; onClose: (
   const subtitle = e ? `${e.event ?? "Event"}${e.season && e.season !== e.event ? ` · ${e.season}` : ""}` : b?.name ?? null;
 
   return (
-    <Sheet open onClose={onClose} title={b?.band || "Bird"} subtitle={subtitle}>
+    <Sheet open onClose={onClose} title={b?.band || "Bird"} subtitle={subtitle} fixedHeight>
       {loading && <Loading />}
       {error && <Text className="py-6 text-center text-sm text-rose-600">{error}</Text>}
       {card && b && (
