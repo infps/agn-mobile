@@ -410,6 +410,7 @@ export default function EventBetting() {
                         <Row
                           key={e.betId}
                           title={e.band ?? "No band"}
+                          bird={{ band: e.band }}
                           subtitle={
                             [
                               e.bettorName || e.bettorEmail,

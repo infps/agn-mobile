@@ -498,7 +498,7 @@ const RegisterInEvent = () => {
             <Text className="text-xs text-gray-500">Reserve perches to see the fees.</Text>
           ) : (
             <>
-              <FeeLine label="Entry fee" value={fees.purgeFee} />
+              <FeeLine label={`Entry fee (${reservedBirds} × $${fees.entryFeePerBird.toFixed(2)})`} value={fees.entryFees} />
               <FeeLine label={`Perch fees (${reservedBirds})`} value={fees.perchFees} />
               <FeeLine label="Race fees" value={fees.raceFees} />
               <FeeLine label="Hot spot" value={fees.hotspotBilled} />

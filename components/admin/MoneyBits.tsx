@@ -1,4 +1,5 @@
 import React, { type ReactNode } from "react";
+import { MANUAL_PAYMENT_TYPES, paymentTypeLabel, type PaymentTypeKey } from "@/utils/payment-types";
 import { Pressable, Text, View } from "react-native";
 
 /**
@@ -123,17 +124,8 @@ export function Line({
 }
 
 export type PaymentMethodCode = "CASH" | "CREDIT_CARD" | "PAYPAL" | "BANK_TRANSFER";
-export type PaymentTypeCode =
-  | "PERCH_FEE"
-  | "ENTRY_FEE"
-  | "BETS"
-  | "HOT_SPOT"
-  | "ENTRY_REFUND"
-  | "BETS_REFUND"
-  | "HOT_SPOT_REFUND"
-  | "TRANSFER_DUE"
-  | "WINNER_PAYOUT"
-  | "OTHER";
+/** HayLoft's payment type keys (utils/payment-types), as the portal's API takes them. */
+export type PaymentTypeCode = Exclude<PaymentTypeKey, "REGISTRATION">;
 
 /** In the order the portal stores them: the index is the stored integer. */
 export const PAYMENT_METHODS: Option<PaymentMethodCode>[] = [
@@ -143,32 +135,17 @@ export const PAYMENT_METHODS: Option<PaymentMethodCode>[] = [
   { key: "BANK_TRANSFER", label: "Bank transfer" },
 ];
 
-/** HayLoft's codes (portal lib/payment-types.ts): the index is the stored integer. 10 / null = Registration. */
-export const PAYMENT_TYPES: Option<PaymentTypeCode>[] = [
-  { key: "PERCH_FEE", label: "Perch fee" },
-  { key: "ENTRY_FEE", label: "Entry fee" },
-  { key: "BETS", label: "Bets" },
-  { key: "HOT_SPOT", label: "Hot spot fee" },
-  { key: "ENTRY_REFUND", label: "Entry refund" },
-  { key: "BETS_REFUND", label: "Bets refund" },
-  { key: "HOT_SPOT_REFUND", label: "Hot spot refund" },
-  { key: "TRANSFER_DUE", label: "Transfer due" },
-  { key: "WINNER_PAYOUT", label: "Winner payout" },
-  { key: "OTHER", label: "Other" },
-];
+/** The types an admin may record by hand, HayLoft's list; money-out types are
+ *  entered as a positive amount and stored negative by the API. */
+export const PAYMENT_TYPES: Option<PaymentTypeCode>[] = MANUAL_PAYMENT_TYPES.map((t) => ({
+  key: t.key as PaymentTypeCode,
+  label: t.outgoing ? `${t.label} (money out)` : t.label,
+}));
 
 export const methodLabel = (stored: number | null | undefined) =>
   stored == null ? null : (PAYMENT_METHODS[stored]?.label ?? `Method ${stored}`);
 
-export const typeLabel = (stored: number | null | undefined) =>
-  stored == null || stored === 10 ? "Registration" : (PAYMENT_TYPES[stored]?.label ?? `Type ${stored}`);
-
-/** Money going back out (refunds, payouts); the server stores these negative. */
-export const isOutgoing = (type: number | null | undefined) => type === 4 || type === 5 || type === 6 || type === 8;
-
-/** In is positive, out negative, whatever sign the row has — sum this for a net. */
-export const signedAmount = (p: { paymentValue?: number | null; paymentType?: number | null }) =>
-  isOutgoing(p.paymentType) ? -Math.abs(p.paymentValue ?? 0) : (p.paymentValue ?? 0);
+export const typeLabel = (stored: number | null | undefined) => paymentTypeLabel(stored);
 
 /** A typed amount, or null when it is not a number at all. */
 export function parseAmount(text: string): number | null {

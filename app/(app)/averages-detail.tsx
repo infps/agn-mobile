@@ -1,4 +1,5 @@
 import Header from "@/components/header";
+import { BirdPress } from "@/components/BirdPopupContext";
 import api from "@/service/api.service";
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
@@ -41,7 +42,7 @@ export default function AveragesDetail() {
             renderItem={({ item, index }) => (
               <View className="flex-row p-3 mx-2 border-b border-gray-100 items-center">
                 <Text className="text-sm w-10 text-gray-500">{item.rank ?? index + 1}</Text>
-                <Text className="text-sm flex-1">{item.band || "—"}</Text>
+                <View className="flex-1"><BirdPress band={item.band}><Text className="text-sm text-primary">{item.band || "—"}</Text></BirdPress></View>
                 <Text className="text-sm flex-1 text-gray-600" numberOfLines={1}>{item.breederName}</Text>
                 <Text className="text-sm w-16 text-right font-medium">
                   {item.avgSpeedYPM != null ? item.avgSpeedYPM.toFixed(1) : "—"}

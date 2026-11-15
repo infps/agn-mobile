@@ -79,6 +79,11 @@ export function poolKey(p: { category: string; tierIndex: number }): string {
 // ── Registration fee preview ────────────────────────────────────────────────
 
 export interface RegistrationFees {
+  /** The scheme's entry fee, charged per bird as HayLoft does. */
+  entryFeePerBird: number;
+  /** entryFeePerBird × birds. */
+  entryFees: number;
+  /** @deprecated Same as entryFees: the entry fee is per bird, not once. */
   purgeFee: number;
   perchFees: number;
   raceFees: number;
@@ -99,9 +104,9 @@ export interface RegistrationFees {
 export function registrationFees(feeScheme: any, races: any[], numBirds: number): RegistrationFees | null {
   if (!feeScheme || numBirds <= 0) return null;
 
-  // Entry fee is per bird, as the portal's fee-calculator charges it.
+  // HayLoft charges the entry fee on every bird (ENTRY_FEE_BATCH_SET).
   const entryFeePerBird = feeScheme.entryFee ?? 0;
-  const purgeFee = entryFeePerBird * numBirds;
+  const entryFees = entryFeePerBird * numBirds;
   const gates = [
     feeScheme.hotSpot1Fee ?? 0,
     feeScheme.hotSpot2Fee ?? 0,
@@ -132,11 +137,13 @@ export function registrationFees(feeScheme: any, races: any[], numBirds: number)
 
   const hotspotBilled = duePerBird * numBirds;
   return {
-    purgeFee,
+    entryFeePerBird,
+    entryFees,
+    purgeFee: entryFees,
     perchFees,
     raceFees,
     hotspotBilled,
-    total: purgeFee + perchFees + raceFees + hotspotBilled,
+    total: entryFees + perchFees + raceFees + hotspotBilled,
     perBird,
   };
 }

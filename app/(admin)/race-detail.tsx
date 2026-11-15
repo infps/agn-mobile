@@ -620,6 +620,7 @@ export default function AdminRaceDetail() {
                         </Text>
                       </View>
                     }
+                    bird={{ band: bandOf(item) }}
                     title={`${bandOf(item)}${item.bird?.birdName ? ` · ${item.bird.birdName}` : ""}`}
                     subtitle={`${who}${
                       item.birdPositionHotSpot != null ? ` · hotspot ${item.birdPositionHotSpot}` : ""

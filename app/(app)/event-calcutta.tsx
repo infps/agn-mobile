@@ -1,4 +1,5 @@
 import Header from "@/components/header";
+import { BirdPress } from "@/components/BirdPopupContext";
 import { useToast } from "@/context/ToastContext";
 import api from "@/service/api.service";
 import { Ionicons } from "@expo/vector-icons";
@@ -182,7 +183,7 @@ export default function EventCalcutta() {
                 <View className="flex-row flex-wrap mt-2">
                   {activeGroup.birds.slice(0, 12).map((b, i) => (
                     <View key={i} className="border border-gray-200 rounded-full px-2 py-0.5 mr-1 mb-1">
-                      <Text className="text-[11px] text-gray-700">{b.band || b.name || `Bird ${i + 1}`}</Text>
+                      <BirdPress band={b.band}><Text className="text-[11px] text-gray-700">{b.band || b.name || `Bird ${i + 1}`}</Text></BirdPress>
                     </View>
                   ))}
                   {activeGroup.birds.length > 12 ? (

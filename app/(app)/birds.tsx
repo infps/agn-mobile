@@ -1,4 +1,5 @@
 import Header from "@/components/header";
+import { useBirdPopup } from "@/components/BirdPopup";
 import { getSexLabel } from "@/constants/bird";
 import { useBirds, useToast } from "@/context";
 import { BirdType } from "@/context/BirdContext";
@@ -62,6 +63,8 @@ const EXPORTS = [
 const Birds = () => {
   const { birds, loading, fetchBirds } = useBirds();
   const router = useRouter();
+  // Bird details open in the shared bird popup (components/BirdPopup).
+  const { openBird } = useBirdPopup();
   const toast = useToast();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -200,7 +203,7 @@ const Birds = () => {
             return (
               <TouchableOpacity
                 onPress={() =>
-                  router.push({ pathname: "/bird-detail", params: { birdId: String(item.id) } })
+                  item.id != null && openBird(item.id)
                 }
                 className="mb-2 flex-row items-center rounded-xl border border-gray-200 bg-white p-3"
               >

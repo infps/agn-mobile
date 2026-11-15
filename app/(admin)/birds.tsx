@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useBirdPopup } from "@/components/BirdPopup";
 import { Pressable, Text, View } from "react-native";
-import { useRouter } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import api from "@/service/api.service";
@@ -79,7 +79,8 @@ const NO_FILTERS = { band: "", color: "", sex: "", breederId: "", breederName: "
  */
 export default function AdminBirds() {
   const { canAny } = usePermissions();
-  const router = useRouter();
+  // Bird details open in the shared bird popup (components/BirdPopup).
+  const { openBird } = useBirdPopup();
   const toast = useToast();
 
   const [query, setQuery] = useState("");
@@ -267,7 +268,7 @@ export default function AdminBirds() {
                       }
                       right={b.rfid ?? undefined}
                       rightTone="text-slate-400"
-                      onPress={() => router.push(`/(admin)/bird-detail?birdId=${b.id}` as never)}
+                      onPress={() => openBird(b.id)}
                     />
                   );
                 })}

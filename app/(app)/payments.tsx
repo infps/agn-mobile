@@ -1,4 +1,5 @@
 import BreederExportButton from "@/components/BreederExportButton";
+import { paymentTypeLabel, signedAmount } from "@/utils/payment-types";
 import Header from "@/components/header";
 import { useToast } from "@/context/ToastContext";
 import api from "@/service/api.service";
@@ -16,7 +17,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { signedAmount, typeLabel } from "@/components/admin/MoneyBits";
 
 /**
  * Payments — the portal's /payments page plus paying what is still owed.
@@ -44,7 +44,7 @@ interface Payment {
   } | null;
 }
 
-// Same tables as the portal's payments/columns.tsx.
+// Same tables as the portal (types: utils/payment-types, HayLoft's codes).
 const METHOD_LABELS: Record<number, string> = {
   0: "Cash",
   1: "Credit Card",
@@ -245,7 +245,7 @@ const PaymentsList = () => {
             {eventOf(item)?.name || "-"}
           </Text>
           <Text className="text-xs text-gray-500 mt-0.5">
-            {typeLabel(item.paymentType)}
+            {paymentTypeLabel(item.paymentType)}
             {" · "}
             {item.paymentMethod != null
               ? METHOD_LABELS[item.paymentMethod] ?? String(item.paymentMethod)

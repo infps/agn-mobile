@@ -1,5 +1,6 @@
 import { BETTING_ENABLED } from "@/constants/features";
 import BreederExportButton from "@/components/BreederExportButton";
+import { useBirdPopup } from "@/components/BirdPopupContext";
 import Header from "@/components/header";
 import { RaceRouteMap, RouteLine, RoutePin } from "@/components/RaceRouteMap";
 import { RaceTrackMap } from "@/components/RaceTrackMap";
@@ -107,18 +108,6 @@ interface WindRoute {
   }[];
 }
 
-/** One line of GET /api/birds/[birdId]/history. */
-interface HistoryEntry {
-  type: string;
-  date: string;
-  eventName?: string;
-  raceName?: string;
-  position?: number;
-  distance?: number;
-  ypm?: number;
-  raceTypeName?: string | null;
-}
-
 const REFRESH_INTERVAL = 15_000;
 const WIND_COLOR = { tailwind: "#16a34a", headwind: "#dc2626", crosswind: "#d97706" } as const;
 
@@ -165,8 +154,8 @@ const LiveRace = () => {
   const [windOpen, setWindOpen] = useState(false);
   const [windLoading, setWindLoading] = useState(false);
 
-  const [birdPopup, setBirdPopup] = useState<{ id: number; band: string } | null>(null);
-  const [history, setHistory] = useState<HistoryEntry[] | null>(null);
+  // A bird opens in the shared bird popup (components/BirdPopup).
+  const { openBird } = useBirdPopup();
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -314,14 +303,6 @@ const LiveRace = () => {
     return { lines, pins };
   }, [wind]);
 
-  const openBird = (id: number, band: string) => {
-    setBirdPopup({ id, band });
-    setHistory(null);
-    api
-      .get(`/birds/${id}/history`)
-      .then((r) => setHistory(r.data?.entries ?? []))
-      .catch(() => setHistory([]));
-  };
 
   if (loading) {
     return (
@@ -351,7 +332,6 @@ const LiveRace = () => {
         ? { text: "FINISHED", bg: "#6b7280" }
         : { text: race.status === "REGISTERING" ? "REGISTERING" : race.status, bg: "#189AB4" };
   const hasStream = !!(race.youtubeUrl || race.facebookStreamUrl || race.facebookPageUrl);
-  const arrivedHistory = (history ?? []).filter((e) => e.type === "ARRIVED");
 
   const header = (
     <View>
@@ -531,7 +511,7 @@ const LiveRace = () => {
                 </TouchableOpacity>
                 <TouchableOpacity
                   disabled={!item.bird?.id}
-                  onPress={() => item.bird?.id && openBird(item.bird.id, item.band)}
+                  onPress={() => item.bird?.id && openBird(item.bird.id)}
                 >
                   <Text className="text-xs text-primary" numberOfLines={1}>
                     {item.band}
@@ -626,43 +606,6 @@ const LiveRace = () => {
         </SafeAreaView>
       </Modal>
 
-      {/* A bird's record */}
-      <Modal visible={!!birdPopup} animationType="slide" onRequestClose={() => setBirdPopup(null)}>
-        <SafeAreaView className="flex-1 bg-white">
-          <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-200">
-            <Text className="text-lg font-bold">{birdPopup?.band}</Text>
-            <TouchableOpacity onPress={() => setBirdPopup(null)}>
-              <Ionicons name="close" size={24} color="#374151" />
-            </TouchableOpacity>
-          </View>
-          {history == null ? (
-            <View className="flex-1 items-center justify-center">
-              <ActivityIndicator size="large" color="#189AB4" />
-            </View>
-          ) : arrivedHistory.length === 0 ? (
-            <Text className="text-center text-gray-500 mt-10">No race results recorded for this bird.</Text>
-          ) : (
-            <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: 40 }}>
-              {arrivedHistory.map((e, i) => (
-                <View key={i} className="py-2 border-b border-gray-100">
-                  <View className="flex-row justify-between">
-                    <Text className="text-sm font-semibold text-gray-900 flex-1" numberOfLines={1}>
-                      {e.raceName ?? "Race"}
-                      {e.raceTypeName ? ` (${e.raceTypeName})` : ""}
-                    </Text>
-                    <Text className="text-sm font-bold text-primary">{e.position != null ? `#${e.position}` : "-"}</Text>
-                  </View>
-                  <Text className="text-xs text-gray-500">
-                    {e.eventName ?? ""} · {isValid(new Date(e.date)) ? format(new Date(e.date), "MMM d, yyyy") : "-"}
-                    {e.distance != null ? ` · ${e.distance} mi` : ""}
-                    {e.ypm != null ? ` · ${inUnit(e.ypm, velocityUnit).toFixed(2)} ${velocityUnit}` : ""}
-                  </Text>
-                </View>
-              ))}
-            </ScrollView>
-          )}
-        </SafeAreaView>
-      </Modal>
     </SafeAreaView>
   );
 };

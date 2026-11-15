@@ -1,4 +1,5 @@
 import Header from "@/components/header";
+import { BirdPress } from "@/components/BirdPopupContext";
 import Modal from "@/components/Modal";
 import { useToast } from "@/context";
 import api from "@/service/api.service";
@@ -372,9 +373,11 @@ const Teams = () => {
                       return (
                         <View key={`${bird.id}-${bird.eventId ?? "x"}-${idx}`} className="bg-white rounded-xl p-3 mb-2">
                           <View className="flex-row items-center justify-between">
+                            <BirdPress band={bird.band}>
                             <Text className="text-sm font-bold text-primary">
                               {idx + 1}. {bird.band}
                             </Text>
+                            </BirdPress>
                             {sc ? (
                               <View style={{ backgroundColor: sc.bg }} className="rounded-full px-2 py-0.5">
                                 <Text style={{ color: sc.fg }} className="text-[11px] font-semibold">

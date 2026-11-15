@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { BirdPress } from "@/components/BirdPopupContext";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -661,6 +662,7 @@ export default function EventBaskets() {
                                       } ${b?.attention ? "bg-rose-50" : ""}`}
                                     >
                                       <View className="min-w-0 flex-1">
+                                        <BirdPress birdId={b?.id} band={b?.band}>
                                         <Text
                                           className="text-sm font-medium text-slate-900"
                                           numberOfLines={1}
@@ -668,6 +670,7 @@ export default function EventBaskets() {
                                           {shortBand(b?.band) || "No band"}
                                           {b?.birdName ? ` · ${b.birdName}` : ""}
                                         </Text>
+                                        </BirdPress>
                                         <Text className="text-xs text-slate-500" numberOfLines={1}>
                                           {[who, b?.color, sexLabel(b?.sex)].filter(Boolean).join(" · ") ||
                                             "—"}

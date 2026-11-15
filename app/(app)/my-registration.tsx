@@ -1,4 +1,5 @@
 import BreederExportButton from "@/components/BreederExportButton";
+import { BirdPress } from "@/components/BirdPopupContext";
 import { ApprovalBanner } from "@/components/EventShared";
 import Header from "@/components/header";
 import { useToast } from "@/context/ToastContext";
@@ -45,6 +46,8 @@ interface Payment {
 }
 
 interface Breakdown {
+  /** HayLoft's account for the registration (positive balance: owes; negative: is owed). */
+  account?: { charges: number; payments: number; won: number; balance: number } | null;
   totalOwed: number;
   totalPaid: number;
   balance: number;
@@ -233,10 +236,36 @@ export default function MyRegistration() {
                 ))}
               </View>
             </View>
-            {/* Payment summary */}
+            {/* Account: HayLoft's figures, as the portal shows them. */}
+            {data.account ? (
+              <View className="bg-white border border-gray-200 rounded-xl p-4">
+                <Text className="font-semibold text-gray-800 mb-2">Account</Text>
+                <View className="flex-row justify-between">
+                  <View className="items-center">
+                    <Text className="text-[10px] text-gray-500">Charges</Text>
+                    <Text className="font-bold text-sm">${data.account.charges.toFixed(2)}</Text>
+                  </View>
+                  <View className="items-center">
+                    <Text className="text-[10px] text-gray-500">Paid</Text>
+                    <Text className="font-bold text-sm text-green-600">${data.account.payments.toFixed(2)}</Text>
+                  </View>
+                  <View className="items-center">
+                    <Text className="text-[10px] text-gray-500">Won</Text>
+                    <Text className="font-bold text-sm text-primary">${data.account.won.toFixed(2)}</Text>
+                  </View>
+                  <View className="items-center">
+                    <Text className="text-[10px] text-gray-500">{data.account.balance < 0 ? "Owed to you" : "Balance"}</Text>
+                    <Text className={`font-bold text-sm ${data.account.balance > 0 ? "text-red-500" : data.account.balance < 0 ? "text-amber-600" : "text-green-600"}`}>
+                      ${Math.abs(data.account.balance).toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ) : null}
+            {/* Fees: what Pay balance (PayPal) settles. */}
             <View className="bg-white border border-gray-200 rounded-xl p-4 flex-row justify-between">
               <View className="items-center">
-                <Text className="text-[10px] text-gray-500">Total Owed</Text>
+                <Text className="text-[10px] text-gray-500">Fees owed</Text>
                 <Text className="font-bold text-sm">${data.totalOwed.toFixed(2)}</Text>
               </View>
               <View className="items-center">
@@ -244,7 +273,7 @@ export default function MyRegistration() {
                 <Text className="font-bold text-sm text-green-600">${data.totalPaid.toFixed(2)}</Text>
               </View>
               <View className="items-center">
-                <Text className="text-[10px] text-gray-500">Balance</Text>
+                <Text className="text-[10px] text-gray-500">Fees balance</Text>
                 <Text className={`font-bold text-sm ${data.balance > 0 ? "text-red-500" : "text-green-600"}`}>
                   ${data.balance.toFixed(2)}
                 </Text>
@@ -287,7 +316,7 @@ export default function MyRegistration() {
                 <Text className="font-semibold text-gray-900">
                   {item.birdName ?? `Bird #${item.birdNo}`}
                 </Text>
-                {item.band && <Text className="text-xs text-gray-500">{item.band}</Text>}
+                {item.band && <BirdPress band={item.band}><Text className="text-xs text-primary">{item.band}</Text></BirdPress>}
                 {item.isBackup && (
                   <View className="bg-gray-100 rounded px-1.5 py-0.5 mt-1 self-start">
                     <Text className="text-[10px] text-gray-500">Backup</Text>

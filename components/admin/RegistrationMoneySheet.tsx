@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { isOutgoing, paymentTypeFromKey, paymentTypeKey, signedAmount } from "@/utils/payment-types";
 import { Text, View } from "react-native";
 import { useAdminData } from "@/hooks/useAdminData";
 import { useAdminAction } from "@/hooks/useAdminAction";
@@ -27,7 +28,6 @@ import {
   type PaymentTypeCode,
   methodLabel,
   parseAmount,
-  signedAmount,
   typeLabel,
 } from "@/components/admin/MoneyBits";
 
@@ -169,16 +169,22 @@ export function RegistrationMoneySheet({
   const startEditing = (p: Payment) => {
     setEditing(p);
     setForm({
-      amount: String(Math.abs(p.paymentValue ?? 0)),
+      // Money out is stored negative; the form takes it positive.
+      amount: String(isOutgoing(p.paymentType) ? Math.abs(p.paymentValue ?? 0) : (p.paymentValue ?? 0)),
       method: PAYMENT_METHODS[p.paymentMethod ?? 0]?.key ?? "CASH",
-      type: PAYMENT_TYPES[p.paymentType ?? 9]?.key ?? "OTHER",
+      // A whole-registration payment cannot be re-typed as one; as the portal, it becomes Other.
+      type: (() => {
+        const key = paymentTypeKey(p.paymentType);
+        return (key && key !== "REGISTRATION" ? key : "OTHER") as PaymentTypeCode;
+      })(),
       description: p.paymentDesc ?? "",
       reference: p.transactionId ?? "",
     });
     setMode("payment");
   };
 
-  // Only an adjustment may be negative; refunds/payouts are typed positive and the server stores them negative.
+  // Only an adjustment ("Other") may be negative. A money-out type (refund,
+  // payout) is entered positive; the API stores it negative, as HayLoft does.
   const signed = form.type === "OTHER";
 
   const savePayment = async () => {
@@ -456,11 +462,11 @@ export function RegistrationMoneySheet({
             label="Amount"
             value={form.amount}
             onChange={(v) => setForm({ ...form, amount: v })}
-            // The decimal pad has no minus key, and a refund or an adjustment
-            // is allowed to be negative.
+            // The decimal pad has no minus key, and an adjustment is allowed
+            // to be negative.
             keyboard={signed ? "default" : "decimal-pad"}
             placeholder="0.00"
-            hint={signed ? "An adjustment may be negative." : null}
+            hint={signed ? "An adjustment may be negative." : isOutgoing(paymentTypeFromKey(form.type)) ? "Money out: enter it positive." : null}
           />
           <Chips
             label="Method"

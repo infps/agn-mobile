@@ -300,6 +300,7 @@ export default function EventResult() {
                           </Text>
                         </View>
                       }
+                      bird={{ band: r.bird?.band }}
                       title={`${shortBand(r.bird?.band) || "No band"}${
                         r.bird?.birdName ? ` · ${r.bird.birdName}` : ""
                       }`}
