@@ -1,4 +1,4 @@
-import { useAuth, useEvents } from "@/context";
+import { useAuth, useBirds, useEvents } from "@/context";
 import api from "@/service/api.service";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -37,7 +37,8 @@ export default function HomeScreen() {
   const router = useRouter();
 
   const [liveRaces, setLiveRaces] = useState<LiveRace[]>([]);
-  const [birdCount, setBirdCount] = useState<number | null>(null);
+  // BirdContext shows the phone copy at once and shares the list with the Birds tab.
+  const { birds, fetchBirds } = useBirds();
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const [totalPending, setTotalPending] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -52,14 +53,13 @@ export default function HomeScreen() {
 
   const load = async () => {
     try {
-      const [racesRes, birdsRes, paymentsRes] = await Promise.allSettled([
+      const [racesRes, , paymentsRes] = await Promise.allSettled([
         api.get("/breeder/races/live"),
-        api.get("/breeder/birds"),
+        fetchBirds(),
         api.get("/breeder/payments/pending"),
       ]);
 
       if (racesRes.status === "fulfilled") setLiveRaces(racesRes.value.data?.races ?? []);
-      if (birdsRes.status === "fulfilled") setBirdCount(birdsRes.value.data?.birds?.length ?? 0);
       if (paymentsRes.status === "fulfilled") {
         setPendingPayments(paymentsRes.value.data?.payments ?? []);
         setTotalPending(paymentsRes.value.data?.totalPending ?? 0);
@@ -70,6 +70,8 @@ export default function HomeScreen() {
     }
   };
 
+  // Once, on open.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, []);
 
   const onRefresh = () => {
@@ -111,7 +113,7 @@ export default function HomeScreen() {
               <Ionicons name="egg-outline" size={18} color="#189AB4" />
             </View>
             <Text className="text-2xl font-bold text-gray-900">
-              {loading ? "—" : birdCount ?? 0}
+              {loading && !birds.length ? "—" : birds.length}
             </Text>
             <Text className="text-xs text-gray-500 mt-0.5">Active Birds</Text>
           </TouchableOpacity>

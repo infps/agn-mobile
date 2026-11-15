@@ -1,6 +1,7 @@
 import Header from "@/components/header";
 import { BirdPress } from "@/components/BirdPopupContext";
 import { useToast } from "@/context/ToastContext";
+import { usePolling } from "@/hooks/usePolling";
 import api from "@/service/api.service";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
@@ -13,13 +14,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
  * Calcutta auction — live bidding, the portal's /events/[eventId]/calcutta.
  *
  * The portal hears about bids over Pusher. This app carries no realtime
- * client, so it asks GET /api/calcutta/[eventId]/state every two seconds
+ * client, so it asks GET /api/calcutta/[eventId]/state every three seconds
  * instead: the same route the portal loads from, which already reports the
  * active group, the top bid and when it was placed. Bids go to POST /bid with
  * the amount the server will check is above the current one.
  */
 
-const POLL_MS = 2000;
+const POLL_MS = 3000;
 
 interface CalcuttaConfig {
   antiSnipeDuration: number;
@@ -64,6 +65,59 @@ const GROUP_STATUS: Record<string, string> = {
   COMPLETED: "Completed",
 };
 
+/**
+ * Current bid + anti-snipe countdown, counted from the last bid as the portal
+ * does. Ticks on its own so the 200ms clock re-renders this card, not the screen.
+ */
+function BidCard({
+  base,
+  bidderName,
+  lastBidAt,
+  duration,
+}: {
+  base: number;
+  bidderName: string | null;
+  lastBidAt: string | null;
+  duration: number;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  const counting = !!lastBidAt && !!duration;
+  useEffect(() => {
+    if (!counting) return;
+    const timer = setInterval(() => setNow(Date.now()), 200);
+    return () => clearInterval(timer);
+  }, [counting, lastBidAt]);
+  const remaining = counting ? Math.max(0, duration - (now - new Date(lastBidAt).getTime()) / 1000) : 0;
+  const pct = duration ? Math.min(1, remaining / duration) : 0;
+
+  return (
+    <View className="bg-white rounded-xl p-4 mt-3">
+      <View className="flex-row justify-between items-center">
+        <View>
+          <Text className="text-xs text-gray-500">Current Bid</Text>
+          <Text className="text-3xl font-bold text-gray-900">${base.toFixed(2)}</Text>
+          {bidderName ? (
+            <Text className="text-xs text-gray-500">{bidderName}</Text>
+          ) : (
+            <Text className="text-xs text-gray-400">Starting bid — no bids yet</Text>
+          )}
+        </View>
+        {remaining > 0 ? (
+          <View className="items-end">
+            <Text className="text-xs text-gray-500">Anti-snipe</Text>
+            <Text className="text-lg font-bold text-gray-900">{remaining.toFixed(1)}s</Text>
+          </View>
+        ) : null}
+      </View>
+      {remaining > 0 ? (
+        <View className="h-2 bg-gray-100 rounded-full overflow-hidden mt-3">
+          <View style={{ width: `${pct * 100}%`, height: "100%", backgroundColor: "#eab308" }} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 export default function EventCalcutta() {
   const { eventId, eventName } = useLocalSearchParams<{ eventId: string; eventName?: string }>();
   const toast = useToast();
@@ -75,7 +129,6 @@ export default function EventCalcutta() {
   const [error, setError] = useState<string | null>(null);
   const [selectedRaise, setSelectedRaise] = useState<number | null>(null);
   const [bidding, setBidding] = useState(false);
-  const [antiSnipeRemaining, setAntiSnipeRemaining] = useState(0);
   const raiseChosen = useRef(false);
 
   const load = useCallback(async () => {
@@ -97,29 +150,7 @@ export default function EventCalcutta() {
     }
   }, [eventId]);
 
-  useEffect(() => {
-    if (!eventId) return;
-    load();
-    const timer = setInterval(load, POLL_MS);
-    return () => clearInterval(timer);
-  }, [eventId, load]);
-
-  // Anti-snipe countdown, counted from the last bid as the portal does.
-  const lastBidAt = activeGroup?.lastBidAt ?? null;
-  const antiSnipeDuration = config?.antiSnipeDuration ?? 0;
-  useEffect(() => {
-    if (!lastBidAt || !antiSnipeDuration) {
-      setAntiSnipeRemaining(0);
-      return;
-    }
-    const tick = () => {
-      const elapsed = (Date.now() - new Date(lastBidAt).getTime()) / 1000;
-      setAntiSnipeRemaining(Math.max(0, antiSnipeDuration - elapsed));
-    };
-    tick();
-    const timer = setInterval(tick, 200);
-    return () => clearInterval(timer);
-  }, [lastBidAt, antiSnipeDuration]);
+  usePolling(load, eventId ? POLL_MS : null, true);
 
   const base = activeGroup ? activeGroup.currentBid ?? activeGroup.startingBid : 0;
   const bidAmount = base + (selectedRaise ?? 0);
@@ -139,7 +170,6 @@ export default function EventCalcutta() {
   };
 
   const raiseOptions = config?.bidRaiseOptions ?? [];
-  const antiSnipePct = antiSnipeDuration ? Math.min(1, antiSnipeRemaining / antiSnipeDuration) : 0;
 
   return (
     <SafeAreaView className="flex-1 bg-[#f5f5f5]">
@@ -194,30 +224,12 @@ export default function EventCalcutta() {
                 </View>
               </View>
 
-              <View className="bg-white rounded-xl p-4 mt-3">
-                <View className="flex-row justify-between items-center">
-                  <View>
-                    <Text className="text-xs text-gray-500">Current Bid</Text>
-                    <Text className="text-3xl font-bold text-gray-900">${base.toFixed(2)}</Text>
-                    {activeGroup.bidderName ? (
-                      <Text className="text-xs text-gray-500">{activeGroup.bidderName}</Text>
-                    ) : (
-                      <Text className="text-xs text-gray-400">Starting bid — no bids yet</Text>
-                    )}
-                  </View>
-                  {antiSnipeRemaining > 0 ? (
-                    <View className="items-end">
-                      <Text className="text-xs text-gray-500">Anti-snipe</Text>
-                      <Text className="text-lg font-bold text-gray-900">{antiSnipeRemaining.toFixed(1)}s</Text>
-                    </View>
-                  ) : null}
-                </View>
-                {antiSnipeRemaining > 0 ? (
-                  <View className="h-2 bg-gray-100 rounded-full overflow-hidden mt-3">
-                    <View style={{ width: `${antiSnipePct * 100}%`, height: "100%", backgroundColor: "#eab308" }} />
-                  </View>
-                ) : null}
-              </View>
+              <BidCard
+                base={base}
+                bidderName={activeGroup.bidderName}
+                lastBidAt={activeGroup.lastBidAt}
+                duration={config.antiSnipeDuration ?? 0}
+              />
 
               <View className="mt-3">
                 <View className="flex-row flex-wrap">

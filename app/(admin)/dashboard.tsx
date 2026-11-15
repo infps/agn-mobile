@@ -11,6 +11,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import api from "@/service/api.service";
 import { usePermissions } from "@/context/PermissionContext";
+import { useEvents } from "@/context/EventContext";
 import { useResponsive } from "@/hooks/useResponsive";
 
 interface EventSummary {
@@ -75,21 +76,17 @@ export default function AdminDashboard() {
   const { isWide, isMedium, gutter } = useResponsive();
   const router = useRouter();
 
-  const [events, setEvents] = useState<EventSummary[]>([]);
+  // EventProvider already fetched /breeder/events at sign-in; reuse it.
+  const { events: allEvents, listEvents } = useEvents();
+  const events: EventSummary[] = allEvents.slice(0, 12);
   const [races, setRaces] = useState<RaceSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [eventRes, raceRes] = await Promise.allSettled([
-        api.get("/breeder/events"),
-        api.get("/breeder/races"),
-      ]);
+      const [raceRes] = await Promise.allSettled([api.get("/breeder/races")]);
 
-      if (eventRes.status === "fulfilled") {
-        setEvents((eventRes.value.data?.events ?? []).slice(0, 12));
-      }
       if (raceRes.status === "fulfilled") {
         const all: RaceSummary[] = raceRes.value.data?.races ?? [];
         // Live first, then the ones about to go, then recent history.
@@ -126,6 +123,7 @@ export default function AdminDashboard() {
           refreshing={refreshing}
           onRefresh={() => {
             setRefreshing(true);
+            listEvents().catch(() => undefined);
             load();
           }}
         />

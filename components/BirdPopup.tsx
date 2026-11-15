@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState, type ReactNode } from "react";
-import { Image, Pressable, Text, View } from "react-native";
+import { Image } from "expo-image";
+import { Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import api from "@/service/api.service";
 import { BirdPopupCtx, BirdPress, useBirdPopup } from "@/components/BirdPopupContext";
@@ -159,7 +160,7 @@ function BirdPopup({ birdId, onClose, onOpenBird }: { birdId: number; onClose: (
             <View>
               <View className="mt-3 h-48 items-center justify-center overflow-hidden rounded-xl bg-slate-100">
                 {b.image ? (
-                  <Image source={{ uri: b.image }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                  <Image source={{ uri: b.image }} style={{ width: "100%", height: "100%" }} contentFit="cover" cachePolicy="memory-disk" />
                 ) : (
                   <Ionicons name="image-outline" size={40} color="#94a3b8" />
                 )}

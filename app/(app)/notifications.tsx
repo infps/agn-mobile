@@ -1,10 +1,11 @@
 import Header from "@/components/header";
 import { useToast } from "@/context/ToastContext";
 import { useResponsive } from "@/hooks/useResponsive";
+import { usePolling } from "@/hooks/usePolling";
 import api from "@/service/api.service";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -118,12 +119,8 @@ export default function Notifications() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-    // Race day moves quickly, so the feed refreshes itself — as the portal's does.
-    const timer = setInterval(load, 30000);
-    return () => clearInterval(timer);
-  }, [load]);
+  // Race day moves quickly, so the feed refreshes itself — as the portal's does.
+  usePolling(load, 30000, true);
 
   const markAllRead = async () => {
     setMarking(true);

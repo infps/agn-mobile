@@ -11,6 +11,7 @@ import {
   Rows,
   SearchBar,
   Screen,
+  Truncated,
 } from "@/components/admin/ui";
 
 interface Race {
@@ -120,7 +121,7 @@ export default function EventHistory() {
                   Year: {season}
                 </Text>
                 <Rows>
-                  {list.map((r, index) => (
+                  {list.slice(0, 100).map((r, index) => (
                     <Row
                       key={r.id}
                       title={`${index + 1}. ${r.description ?? r.name ?? "Race"}`}
@@ -135,6 +136,7 @@ export default function EventHistory() {
                     />
                   ))}
                 </Rows>
+                <Truncated shown={Math.min(list.length, 100)} total={list.length} where="a narrower search" />
               </View>
             ))
           )}

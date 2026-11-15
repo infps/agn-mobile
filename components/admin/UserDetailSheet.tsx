@@ -1,5 +1,6 @@
 import React from "react";
-import { Image, Linking, Pressable, Text, View } from "react-native";
+import { Image } from "expo-image";
+import { Linking, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAdminData } from "@/hooks/useAdminData";
 import { usePermissions } from "@/context/PermissionContext";
@@ -109,7 +110,11 @@ export function UserDetailSheet({
         <>
           <View className="mt-3 flex-row items-center gap-3">
             {user.image ? (
-              <Image source={{ uri: user.image }} className="h-14 w-14 rounded-full bg-slate-100" />
+              <Image
+                source={{ uri: user.image }}
+                style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: "#f1f5f9" }}
+                cachePolicy="memory-disk"
+              />
             ) : null}
             <View className="flex-1 flex-row flex-wrap" style={{ gap: 8 }}>
               {user.phoneNumber ? (

@@ -3,6 +3,7 @@ import { BirdPress } from "@/components/BirdPopupContext";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import api from "@/service/api.service";
+import { readListCache, writeListCache } from "@/service/listCache.service";
 import { downloadAndShare } from "@/service/download.service";
 import { Ionicons } from "@expo/vector-icons";
 import { format } from "date-fns";
@@ -51,26 +52,44 @@ function Empty({ icon, text }: { icon: React.ComponentProps<typeof Ionicons>["na
   );
 }
 
+/** Phone copy first (tab switches show at once), then the API's answer. */
 function useLoad<T>(path: string, pick: (data: any) => T, initial: T) {
   const [data, setData] = useState<T>(initial);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const key = `${user?.id}:${path}`;
 
   useEffect(() => {
     let alive = true;
+    let cached = false;
+    let fetched = false;
     setLoading(true);
     setError(null);
+    // ponytail: listCache stores arrays, so a single value rides as [value].
+    readListCache<T>(key).then((rec) => {
+      if (!alive || fetched || !rec?.rows.length) return;
+      cached = true;
+      setData(rec.rows[0]);
+      setLoading(false);
+    });
     api
       .get(path)
-      .then((r) => alive && setData(pick(r.data)))
-      .catch((e) => alive && setError(e?.response?.data?.message ?? "Could not load this."))
+      .then((r) => {
+        if (!alive) return;
+        fetched = true;
+        const fresh = pick(r.data);
+        setData(fresh);
+        writeListCache(key, [fresh]);
+      })
+      .catch((e) => alive && !cached && setError(e?.response?.data?.message ?? "Could not load this."))
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
     };
     // `pick` is a stable inline selector at every call site.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path]);
+  }, [path, key]);
 
   return { data, loading, error };
 }
@@ -175,6 +194,8 @@ export function BreedersTab({ eventId }: { eventId: string }) {
       <FlatList
         data={rows}
         keyExtractor={(inv) => String(inv.id)}
+        initialNumToRender={10}
+        windowSize={7}
         contentContainerStyle={{ padding: 12, paddingBottom: 40 }}
         ListHeaderComponent={
           <View className="mb-2">

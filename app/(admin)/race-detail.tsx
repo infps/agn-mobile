@@ -1,11 +1,12 @@
 import { BETTING_ENABLED } from "@/constants/features";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { usePermissions } from "@/context/PermissionContext";
 import { useToast } from "@/context/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
+import { usePolling } from "@/hooks/usePolling";
 import { useAdminAction } from "@/hooks/useAdminAction";
 import { downloadAndShare } from "@/service/download.service";
 import { PhantomSheet } from "@/components/admin/PhantomSheet";
@@ -78,7 +79,7 @@ const EXPORTS = [
   { key: "csv", label: "CSV", hint: "Plain text, for importing elsewhere" },
 ];
 
-const SHOWN = 300;
+const SHOWN = 100; // ponytail: Screen is one ScrollView; FlatList rewrite if 100 + search is not enough
 
 /** "HH:MM" to minutes past midnight, or null when it is not a time. */
 const minutes = (raw: string) => {
@@ -211,16 +212,7 @@ export default function AdminRaceDetail() {
 
   // While a race is in the air the arrivals list is the whole point of the
   // screen, so it refreshes itself rather than waiting to be pulled.
-  useEffect(() => {
-    if (race?.status !== "STARTED") return;
-    const timer = setInterval(() => {
-      raceReq.reload();
-      itemsReq.reload();
-    }, 20_000);
-    return () => clearInterval(timer);
-    // The reload functions are recreated per request; the race id is what matters.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [race?.status, race?.id]);
+  usePolling(reloadAll, race?.status === "STARTED" ? 20_000 : null);
 
   const counts = useMemo(() => {
     const raw: Record<string, number> = {};

@@ -61,6 +61,10 @@ const cacheKey = (userId: string) => `pigeon_plus_permissions_${userId}`;
 
 export function PermissionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  // Keyed on id/role, not the user object: a refreshed profile (checkSession,
+  // refreshUser) is a new object and must not re-ask /me/permissions.
+  const userId = user?.id;
+  const userRole = user?.role;
   const [permissions, setPermissions] = useState<string[]>([]);
   const [role, setRole] = useState<string | null>(null);
   const [isApproved, setIsApproved] = useState(true);
@@ -78,13 +82,13 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
     setIsUnknown(false);
   }, []);
 
-  // Whose permissions are on screen. A refreshed user object (checkSession,
-  // refreshUser) re-asks quietly: flipping isLoading would make both shell
-  // layouts swap their whole navigator for a spinner and drop every screen.
+  // Whose permissions are on screen. A role change re-asks quietly: flipping
+  // isLoading would make both shell layouts swap their whole navigator for a
+  // spinner and drop every screen.
   const loadedFor = useRef<unknown>(null);
 
   const load = useCallback(async () => {
-    if (!user) {
+    if (!userId) {
       loadedFor.current = null;
       setPermissions([]);
       setRole(null);
@@ -96,24 +100,24 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (loadedFor.current !== user.id) setIsLoading(true);
+    if (loadedFor.current !== userId) setIsLoading(true);
     try {
       const { data } = await api.get("/me/permissions");
       const fresh: Cached = {
         permissions: data?.permissions ?? [],
-        role: data?.role ?? user.role ?? null,
+        role: data?.role ?? userRole ?? null,
         isApproved: data?.isApproved !== false,
         // The server works this out; recomputing it here would mean the rule
         // lived in two places and could drift.
         isAdminCapable: data?.isAdminCapable === true,
       };
       apply(fresh, false);
-      await AsyncStorage.setItem(cacheKey(user.id), JSON.stringify(fresh)).catch(() => undefined);
+      await AsyncStorage.setItem(cacheKey(userId), JSON.stringify(fresh)).catch(() => undefined);
     } catch {
       // Could not ask. Reuse the server's last answer for this account rather
       // than inventing "no permissions", which reads as a demotion.
       try {
-        const raw = await AsyncStorage.getItem(cacheKey(user.id));
+        const raw = await AsyncStorage.getItem(cacheKey(userId));
         if (raw) {
           apply(JSON.parse(raw) as Cached, true);
           return;
@@ -122,16 +126,16 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
         // fall through to unknown
       }
       setPermissions([]);
-      setRole(user.role ?? null);
+      setRole(userRole ?? null);
       setIsApproved(true);
       setIsAdminCapable(false);
       setIsStale(false);
       setIsUnknown(true);
     } finally {
-      loadedFor.current = user.id;
+      loadedFor.current = userId;
       setIsLoading(false);
     }
-  }, [user, apply]);
+  }, [userId, userRole, apply]);
 
   useEffect(() => {
     load();

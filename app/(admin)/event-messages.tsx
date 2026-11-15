@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { ActivityIndicator, Image, Linking, Pressable, Text, View } from "react-native";
+import { Image } from "expo-image";
+import { ActivityIndicator, Linking, Pressable, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -76,7 +77,7 @@ function Attachments({
     const picked = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
-      quality: 0.8,
+      quality: 0.5,
     });
     if (picked.canceled || picked.assets.length === 0) return;
 
@@ -115,7 +116,7 @@ function Attachments({
       <View className="flex-row flex-wrap items-center" style={{ gap: 8 }}>
         {urls.map((url, index) => (
           <View key={`${url}-${index}`}>
-            <Image source={{ uri: url }} className="h-16 w-16 rounded-lg" resizeMode="cover" />
+            <Image source={{ uri: url }} style={{ width: 64, height: 64, borderRadius: 8 }} contentFit="cover" cachePolicy="memory-disk" />
             <Pressable
               onPress={() => onChange(urls.filter((_, i) => i !== index))}
               hitSlop={8}
@@ -306,7 +307,7 @@ export default function EventMessages() {
                   <View key={m.id} className="rounded-xl border border-slate-200 bg-white p-4">
                     <View className="flex-row items-center gap-3">
                       {m.author?.image ? (
-                        <Image source={{ uri: m.author.image }} className="h-9 w-9 rounded-full" />
+                        <Image source={{ uri: m.author.image }} style={{ width: 36, height: 36, borderRadius: 18 }} cachePolicy="memory-disk" />
                       ) : (
                         <View className="h-9 w-9 items-center justify-center rounded-full bg-slate-100">
                           <Text className="text-sm font-semibold text-slate-500">
@@ -334,8 +335,9 @@ export default function EventMessages() {
                           <Pressable key={`${url}-${index}`} onPress={() => Linking.openURL(url)}>
                             <Image
                               source={{ uri: url }}
-                              className="h-20 w-20 rounded-lg"
-                              resizeMode="cover"
+                              style={{ width: 80, height: 80, borderRadius: 8 }}
+                              contentFit="cover"
+                              cachePolicy="memory-disk"
                             />
                           </Pressable>
                         ))}

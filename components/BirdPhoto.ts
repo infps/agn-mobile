@@ -28,7 +28,7 @@ export async function pickBirdPhoto(from: "camera" | "library"): Promise<PickedP
     mediaTypes: ["images"],
     allowsEditing: true,
     aspect: [1, 1],
-    quality: 0.8,
+    quality: 0.5,
   };
   const result =
     from === "camera"

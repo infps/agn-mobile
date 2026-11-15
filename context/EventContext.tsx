@@ -1,3 +1,4 @@
+import { useAuth } from "@/context/AuthContext";
 import api from "@/service/api.service";
 import {
   createContext,
@@ -127,10 +128,6 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    listEvents();
-  }, []);
-
   const listEvents = useCallback(
     async (isOpen?: boolean) => {
       setLoading(true);
@@ -157,6 +154,13 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
     },
     []
   );
+
+  // Signed-in only: before that the call is a guaranteed 401 on every cold open.
+  const { user } = useAuth();
+  const userId = user?.id;
+  useEffect(() => {
+    if (userId) listEvents().catch(() => undefined);
+  }, [userId, listEvents]);
 
   const getEvent = useCallback(async (id: string) => {
     setLoading(true);

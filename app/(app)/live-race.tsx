@@ -8,6 +8,7 @@ import { inUnit, sexLabel, useDisplaySettings } from "@/components/admin/display
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import api from "@/service/api.service";
+import { usePolling } from "@/hooks/usePolling";
 import { Ionicons } from "@expo/vector-icons";
 import { format, isValid } from "date-fns";
 import { router, useLocalSearchParams } from "expo-router";
@@ -157,12 +158,17 @@ const LiveRace = () => {
   // A bird opens in the shared bird popup (components/BirdPopup).
   const { openBird } = useBirdPopup();
 
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Last payload as text: an unchanged poll then skips the re-render (cf. useAdminData).
+  const lastItemsJson = useRef("");
 
   const fetchRaceItems = useCallback(async () => {
     try {
       const res = await api.get(`/breeder/races/${raceId}/items`);
-      setRaceItems(res.data.raceItems || []);
+      const items = res.data.raceItems || [];
+      const json = JSON.stringify(items);
+      if (json === lastItemsJson.current) return;
+      lastItemsJson.current = json;
+      setRaceItems(items);
     } catch {
       // silent refresh failure
     }
@@ -176,7 +182,9 @@ const LiveRace = () => {
           api.get(`/breeder/races/${raceId}/items`),
         ]);
         setRace(raceRes.data.race);
-        setRaceItems(itemsRes.data.raceItems || []);
+        const items = itemsRes.data.raceItems || [];
+        lastItemsJson.current = JSON.stringify(items);
+        setRaceItems(items);
       } catch (err: any) {
         setError(err?.response?.data?.message || "Failed to load race");
       } finally {
@@ -189,13 +197,7 @@ const LiveRace = () => {
   const isLive = race?.status === "STARTED";
 
   // Only a race in the air changes, so only that one is polled.
-  useEffect(() => {
-    if (!isLive) return;
-    intervalRef.current = setInterval(fetchRaceItems, REFRESH_INTERVAL);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [fetchRaceItems, isLive]);
+  usePolling(fetchRaceItems, isLive ? REFRESH_INTERVAL : null);
 
   const rows: Row[] = useMemo(() => {
     const startMs = race?.startTime ? new Date(race.startTime).getTime() : null;
@@ -485,6 +487,8 @@ const LiveRace = () => {
       <FlatList
         data={visible}
         keyExtractor={(item) => String(item.id)}
+        initialNumToRender={20}
+        windowSize={7}
         ListHeaderComponent={header}
         renderItem={({ item }) => {
           const pos = item.rank;

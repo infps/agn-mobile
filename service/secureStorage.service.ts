@@ -130,10 +130,19 @@ const deleteItem = async (key:string) => {
   }
 };
 
+// In-memory copy of the access token: api.service reads it on every request, and
+// each SecureStore read is two native bridge hops. Every write goes through
+// setTokens/clearTokens below. Empty → read storage (cold start, a headless
+// background task such as liberation's GPS, or signed out).
+let accessTokenMem: string | null = null;
+let tokenWrites = 0; // a read that raced a set/clear must not resurrect the old value
+
 // Token management functions
 const SecureStorageService = {
   // Token management
   setTokens: async (accessToken: string, refreshToken: string) => {
+    accessTokenMem = accessToken;
+    tokenWrites++;
     await setSecureItem(SECURE_KEYS.ACCESS_TOKEN, accessToken);
     if (refreshToken) {
       await setSecureItem(SECURE_KEYS.REFRESH_TOKEN, refreshToken);
@@ -141,7 +150,11 @@ const SecureStorageService = {
   },
 
   getAccessToken: async () => {
-    return await getSecureItem(SECURE_KEYS.ACCESS_TOKEN);
+    if (accessTokenMem) return accessTokenMem;
+    const writes = tokenWrites;
+    const stored = await getSecureItem(SECURE_KEYS.ACCESS_TOKEN);
+    if (writes === tokenWrites) accessTokenMem = stored;
+    return stored;
   },
 
   getRefreshToken: async () => {
@@ -149,6 +162,8 @@ const SecureStorageService = {
   },
 
   clearTokens: async () => {
+    accessTokenMem = null;
+    tokenWrites++;
     await deleteSecureItem(SECURE_KEYS.ACCESS_TOKEN);
     await deleteSecureItem(SECURE_KEYS.REFRESH_TOKEN);
   },

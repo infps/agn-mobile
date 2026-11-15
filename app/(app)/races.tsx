@@ -1,6 +1,7 @@
 import Header from "@/components/header";
 import { RaceRouteMap, RouteLine, RoutePin } from "@/components/RaceRouteMap";
 import { useResponsive } from "@/hooks/useResponsive";
+import { usePolling } from "@/hooks/usePolling";
 import api from "@/service/api.service";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
@@ -177,24 +178,15 @@ const Races = () => {
 
   // The map is only fetched once somebody asks for it, then kept fresh every
   // 30s while it is on screen — the same cadence the portal uses.
-  useEffect(() => {
-    if (view !== "map") return;
-    let cancelled = false;
-    const fetchMap = async () => {
-      try {
-        const { data } = await api.get("/breeder/races/live-map");
-        if (!cancelled) setMapRaces(data?.races ?? []);
-      } catch {
-        if (!cancelled) setMapRaces((prev) => prev ?? []);
-      }
-    };
-    fetchMap();
-    const t = setInterval(fetchMap, 30_000);
-    return () => {
-      cancelled = true;
-      clearInterval(t);
-    };
-  }, [view]);
+  const fetchMap = useCallback(async () => {
+    try {
+      const { data } = await api.get("/breeder/races/live-map");
+      setMapRaces(data?.races ?? []);
+    } catch {
+      setMapRaces((prev) => prev ?? []);
+    }
+  }, []);
+  usePolling(fetchMap, view === "map" ? 30_000 : null, true);
 
   const openRace = useCallback(
     (id: number) => router.push({ pathname: "/live-race", params: { raceId: String(id) } }),
@@ -373,6 +365,8 @@ const Races = () => {
         <FlatList
           data={sortedLive}
           keyExtractor={(item) => String(item.id)}
+          initialNumToRender={10}
+          windowSize={7}
           contentContainerStyle={{ padding: gutter, gap: 12 }}
           refreshing={refreshing}
           onRefresh={refresh}

@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import MapView, { Marker, Polyline, UrlTile } from "react-native-maps";
 import { MAPS_AVAILABLE, MapUnavailable } from "@/components/MapUnavailable";
+import { usePolling } from "@/hooks/usePolling";
 import api from "@/service/api.service";
 
 interface Ping {
@@ -102,33 +103,26 @@ export function RaceTrackMap({
   const [layer, setLayer] = useState<(typeof LAYERS)[number]["key"]>("street");
   const mapRef = useRef<MapView | null>(null);
 
+  const fetchTrack = useCallback(
+    () =>
+      api
+        .get(`/public/race/${raceId}/track`)
+        .then(({ data }) => (data ? sanitize(data) : null))
+        .catch(() => null),
+    [raceId]
+  );
   useEffect(() => {
     let cancelled = false;
-
-    const load = async () => {
-      try {
-        const { data } = await api.get(`/public/race/${raceId}/track`);
-        if (!cancelled) setTrack(data ? sanitize(data) : null);
-      } catch {
-        if (!cancelled) setTrack(null);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    load();
-    if (!live) {
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const timer = setInterval(load, 30_000);
+    fetchTrack().then((t) => {
+      if (cancelled) return;
+      setTrack(t);
+      setLoading(false);
+    });
     return () => {
       cancelled = true;
-      clearInterval(timer);
     };
-  }, [raceId, live]);
+  }, [fetchTrack]);
+  usePolling(() => fetchTrack().then(setTrack), live ? 30_000 : null);
 
   const route = useMemo(
     () => (track?.pings ?? []).map((p) => ({ latitude: p.lat, longitude: p.lng })),

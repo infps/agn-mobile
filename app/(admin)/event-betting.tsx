@@ -21,6 +21,7 @@ import {
   Rows,
   Screen,
   money,
+  Truncated,
 } from "@/components/admin/ui";
 import { Segments } from "@/components/admin/MoneyBits";
 
@@ -441,27 +442,30 @@ export default function EventBetting() {
               {allBets.length === 0 ? (
                 <Empty>Nobody has bet on this race.</Empty>
               ) : (
-                <Rows>
-                  {allBets.map((e) => (
-                    <Row
-                      key={e.betId}
-                      title={e.bettorName || e.bettorEmail || "Unnamed"}
-                      subtitle={
-                        [
-                          e.band ?? "no band",
-                          backer(e) ?? (e.ownerName ? `owner ${e.ownerName}` : null),
-                          e.poolLabel,
-                          e.stakePaid ? null : "stake not paid",
-                        ]
-                          .filter(Boolean)
-                          .join(" · ") || undefined
-                      }
-                      right={money(e.amountIn)}
-                      rightSub={e.bettorName ? (e.bettorEmail ?? undefined) : undefined}
-                      badge={entryBadge(e)}
-                    />
-                  ))}
-                </Rows>
+                <>
+                  <Rows>
+                    {allBets.slice(0, 200).map((e) => (
+                      <Row
+                        key={e.betId}
+                        title={e.bettorName || e.bettorEmail || "Unnamed"}
+                        subtitle={
+                          [
+                            e.band ?? "no band",
+                            backer(e) ?? (e.ownerName ? `owner ${e.ownerName}` : null),
+                            e.poolLabel,
+                            e.stakePaid ? null : "stake not paid",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") || undefined
+                        }
+                        right={money(e.amountIn)}
+                        rightSub={e.bettorName ? (e.bettorEmail ?? undefined) : undefined}
+                        badge={entryBadge(e)}
+                      />
+                    ))}
+                  </Rows>
+                  <Truncated shown={Math.min(allBets.length, 200)} total={allBets.length} />
+                </>
               )}
             </View>
           ) : null}

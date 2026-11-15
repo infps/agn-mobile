@@ -21,6 +21,7 @@ import {
   Screen,
   Sheet,
   tabular,
+  Truncated,
 } from "@/components/admin/ui";
 import { BasketEntries, type StatusData } from "@/components/admin/BasketEntries";
 import { Caption, Pill, Segments, sexLabel, shortBand } from "@/components/admin/scan";
@@ -557,7 +558,7 @@ export default function EventBaskets() {
               ) : baskets.length === 0 ? (
                 <Empty>No {phase === "LOFT" ? "loft" : "race"} baskets yet.</Empty>
               ) : (
-                baskets.map((basket) => {
+                baskets.slice(0, 100).map((basket) => {
                   const count = filled(basket);
                   const over = count > basket.capacity;
                   const isFull = count >= basket.capacity;
@@ -692,6 +693,7 @@ export default function EventBaskets() {
                   );
                 })
               )}
+              <Truncated shown={Math.min(baskets.length, 100)} total={baskets.length} />
             </View>
           )}
         </>

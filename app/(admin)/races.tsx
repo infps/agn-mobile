@@ -22,6 +22,7 @@ import {
   Notice,
   Screen,
   SearchBar,
+  Truncated,
 } from "@/components/admin/ui";
 
 /**
@@ -146,7 +147,7 @@ export default function AdminRaces() {
             </Empty>
           ) : (
             <View className={isWide || isMedium ? "flex-row flex-wrap" : ""} style={{ gap: 10 }}>
-              {visible.map((race) => {
+              {visible.slice(0, 100).map((race) => {
                 const tone = RACE_STATUS[race.status] ?? RACE_STATUS.ENDED;
                 const canToggle = canBet && race.status === "REGISTERING";
                 return (
@@ -238,6 +239,7 @@ export default function AdminRaces() {
               })}
             </View>
           )}
+          <Truncated shown={Math.min(visible.length, 100)} total={visible.length} where="a narrower search" />
 
           {!canManage && races.length > 0 ? (
             <Text className="mt-4 text-center text-xs text-slate-400">

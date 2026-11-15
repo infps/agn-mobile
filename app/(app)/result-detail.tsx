@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Pressable,
   RefreshControl,
-  ScrollView,
+  FlatList,
   Text,
   TextInput,
   View,
@@ -120,7 +120,11 @@ export default function ResultDetail() {
           <ActivityIndicator size="large" />
         </View>
       ) : (
-        <ScrollView
+        <FlatList
+          data={results}
+          keyExtractor={(item) => String(item.id)}
+          initialNumToRender={20}
+          windowSize={7}
           style={{ paddingHorizontal: gutter }}
           refreshControl={
             <RefreshControl
@@ -131,14 +135,14 @@ export default function ResultDetail() {
               }}
             />
           }
-        >
-          {error ? (
-            <View className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-              <Text className="text-sm text-amber-800">{error}</Text>
-            </View>
-          ) : null}
-
-          {results.length === 0 ? (
+          ListHeaderComponent={
+            error ? (
+              <View className="mb-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <Text className="text-sm text-amber-800">{error}</Text>
+              </View>
+            ) : undefined
+          }
+          ListEmptyComponent={
             <View className="rounded-xl border border-gray-200 p-8">
               <Text className="text-center text-sm text-gray-500">
                 {items.length === 0
@@ -146,81 +150,70 @@ export default function ResultDetail() {
                   : "No bird matches that search."}
               </Text>
             </View>
-          ) : (
-            <View className="overflow-hidden rounded-xl border border-gray-200">
-              {results.slice(0, 300).map((item, index) => {
-                const who = `${item.bird?.breeder?.firstName ?? ""} ${
-                  item.bird?.breeder?.lastName ?? ""
-                }`.trim();
-                const moved =
-                  item.previousPosition != null && item.birdPosition != null
-                    ? item.previousPosition - item.birdPosition
-                    : null;
-                return (
-                  <View
-                    key={item.id}
-                    className={`flex-row items-center gap-3 px-4 py-3 ${
-                      index > 0 ? "border-t border-gray-100" : ""
-                    }`}
+          }
+          ListFooterComponent={<View style={{ height: 40 }} />}
+          renderItem={({ item, index }) => {
+            const who = `${item.bird?.breeder?.firstName ?? ""} ${
+              item.bird?.breeder?.lastName ?? ""
+            }`.trim();
+            const moved =
+              item.previousPosition != null && item.birdPosition != null
+                ? item.previousPosition - item.birdPosition
+                : null;
+            return (
+              <View
+                className={`flex-row items-center gap-3 border-x border-gray-200 px-4 py-3 ${
+                  index > 0 ? "border-t border-t-gray-100" : "rounded-t-xl border-t"
+                } ${index === results.length - 1 ? "rounded-b-xl border-b" : ""}`}
+              >
+                <View className="w-9 items-center">
+                  <Text
+                    className="text-base font-bold text-gray-900"
+                    style={{ fontVariant: ["tabular-nums"] }}
                   >
-                    <View className="w-9 items-center">
-                      <Text
-                        className="text-base font-bold text-gray-900"
-                        style={{ fontVariant: ["tabular-nums"] }}
-                      >
-                        {item.birdPosition ?? "—"}
-                      </Text>
-                    </View>
+                    {item.birdPosition ?? "—"}
+                  </Text>
+                </View>
 
-                    <View className="flex-1">
-                      <Text className="text-sm font-medium text-gray-900" onPress={() => item.bird?.id != null && openBird(item.bird.id)}>
-                        {item.bird?.band ?? "No band"}
-                        {item.bird?.birdName ? ` · ${item.bird.birdName}` : ""}
-                      </Text>
-                      <Text className="text-xs text-gray-500">
-                        {who || item.bird?.color || "—"}
-                      </Text>
-                    </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-medium text-gray-900" onPress={() => item.bird?.id != null && openBird(item.bird.id)}>
+                    {item.bird?.band ?? "No band"}
+                    {item.bird?.birdName ? ` · ${item.bird.birdName}` : ""}
+                  </Text>
+                  <Text className="text-xs text-gray-500">
+                    {who || item.bird?.color || "—"}
+                  </Text>
+                </View>
 
-                    {moved != null && moved !== 0 && (
-                      <View className="flex-row items-center gap-0.5">
-                        <Ionicons
-                          name={moved > 0 ? "caret-up" : "caret-down"}
-                          size={12}
-                          color={moved > 0 ? "#059669" : "#e11d48"}
-                        />
-                        <Text
-                          className={`text-xs ${
-                            moved > 0 ? "text-emerald-600" : "text-rose-600"
-                          }`}
-                        >
-                          {Math.abs(moved)}
-                        </Text>
-                      </View>
-                    )}
-
+                {moved != null && moved !== 0 && (
+                  <View className="flex-row items-center gap-0.5">
+                    <Ionicons
+                      name={moved > 0 ? "caret-up" : "caret-down"}
+                      size={12}
+                      color={moved > 0 ? "#059669" : "#e11d48"}
+                    />
                     <Text
-                      className="text-xs text-gray-500"
-                      style={{ fontVariant: ["tabular-nums"] }}
+                      className={`text-xs ${
+                        moved > 0 ? "text-emerald-600" : "text-rose-600"
+                      }`}
                     >
-                      {item.arrivalTime
-                        ? new Date(item.arrivalTime).toLocaleTimeString()
-                        : "no clock"}
+                      {Math.abs(moved)}
                     </Text>
                   </View>
-                );
-              })}
-            </View>
-          )}
+                )}
 
-          {results.length > 300 && (
-            <Text className="mt-3 text-center text-xs text-gray-400">
-              Showing the first 300 of {results.length}.
-            </Text>
-          )}
-
-          <View style={{ height: 40 }} />
-        </ScrollView>
+                <Text
+                  className="text-xs text-gray-500"
+                  style={{ fontVariant: ["tabular-nums"] }}
+                >
+                  {item.arrivalTime
+                    ? new Date(item.arrivalTime).toLocaleTimeString()
+                    : "no clock"}
+                </Text>
+              </View>
+            );
+          }}
+        />
       )}
     </SafeAreaView>
   );

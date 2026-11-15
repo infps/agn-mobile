@@ -9,6 +9,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { Alert } from "react-native";
@@ -70,13 +71,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize auth state
-  const initializeAuth = useCallback(async () => {
+  // Session just verified (restore / sign-in): app/index's checkSession then
+  // reuses that answer instead of a second round-trip on every open.
+  const verified = useRef<{ at: number; ok: Promise<boolean> } | null>(null);
+
+  const restore = useCallback(async (): Promise<boolean> => {
     try {
       setIsLoading(true);
       const storedToken = await SecureStorageService.getAccessToken();
       if (!storedToken) {
-        return;
+        return false;
       }
       (api as any).defaults.headers.common["Authorization"] =
         `Bearer ${storedToken}`;
@@ -88,7 +92,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // A reinstall or a restore issues a new push token, so a restored
         // session re-registers rather than assuming the old one still works.
         registerForPush();
+        return true;
       }
+      return false;
     } catch (error: any) {
       if (error.response?.status === 401) {
         // No valid session — user needs to log in, not an error
@@ -97,10 +103,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } else {
         console.error("Failed to initialize auth:", error);
       }
+      return false;
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+  const initializeAuth = useCallback(async () => {
+    const ok = restore();
+    verified.current = { at: Date.now(), ok };
+    await ok;
+  }, [restore]);
 
   // Initialize on mount
   useEffect(() => {
@@ -199,6 +212,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       setToken(token);
       setUser(userData);
+      verified.current = { at: Date.now(), ok: Promise.resolve(true) };
 
       // Now that the account is known and the bearer header is set, tell the
       // portal where to reach this phone. Deliberately not awaited: the sign-in
@@ -219,6 +233,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
   const checkSession = useCallback(async () => {
+    const recent = verified.current;
+    if (recent && Date.now() - recent.at < 30_000 && (await recent.ok)) return true;
     try {
       const token = await SecureStorageService.getAccessToken();
       const userData = await SecureStorageService.getUserData();
@@ -264,6 +280,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       await SecureStorageService.clearAll();
       delete (api as any).defaults.headers.common["Authorization"];
+      verified.current = null;
       setUser(null);
       setToken(null);
       router.push("/login");

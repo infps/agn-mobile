@@ -113,7 +113,7 @@ export function BirdEventMedia({
           return;
         }
       }
-      const options: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 0.7 };
+      const options: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 0.5 };
       const result =
         from === "camera"
           ? await ImagePicker.launchCameraAsync(options)

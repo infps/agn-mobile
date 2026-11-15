@@ -3,6 +3,7 @@ import { Linking, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import api from "@/service/api.service";
 import { useAdminData } from "@/hooks/useAdminData";
+import { usePolling } from "@/hooks/usePolling";
 import { useAdminAction } from "@/hooks/useAdminAction";
 import { usePermissions } from "@/context/PermissionContext";
 import { useToast } from "@/context/ToastContext";
@@ -88,6 +89,29 @@ const BLANK_SETUP = {
 
 const wholeNumber = (text: string) => (/^\d+$/.test(text.trim()) ? parseInt(text.trim(), 10) : null);
 
+/** Ticks on its own so the 500ms clock re-renders this bar, not the whole screen. */
+function SnipeClock({ lastBidAt, antiSnipe }: { lastBidAt: number; antiSnipe: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(timer);
+  }, []);
+  const elapsed = Math.max(0, Math.floor((now - lastBidAt) / 1000));
+  return (
+    <View className="mt-3">
+      <Text className="text-xs text-slate-600">
+        {elapsed < antiSnipe ? `Anti-snipe: ${antiSnipe - elapsed}s remaining` : "Anti-snipe cleared"}
+      </Text>
+      <View className="mt-1 h-1.5 overflow-hidden rounded-full bg-emerald-100">
+        <View
+          className="h-full bg-amber-500"
+          style={{ width: `${Math.min(100, antiSnipe > 0 ? (elapsed / antiSnipe) * 100 : 100)}%` }}
+        />
+      </View>
+    </View>
+  );
+}
+
 /**
  * The Calcutta, set up, watched and run.
  *
@@ -129,7 +153,6 @@ export default function EventCalcutta() {
   const [buyer, setBuyer] = useState<{ id: string; name: string } | null>(null);
 
   const [setup, setSetup] = useState(BLANK_SETUP);
-  const [now, setNow] = useState(() => Date.now());
 
   const base = eventId ? `/admin/event/${eventId}/calcutta` : null;
 
@@ -153,23 +176,23 @@ export default function EventCalcutta() {
 
   // Only while something is actually being bid on. Polling a finished auction
   // is just noise on somebody's data plan.
-  useEffect(() => {
-    if (!live) return;
-    const timer = setInterval(() => {
-      groupsReq.reload();
-      configReq.reload();
-    }, 4000);
-    return () => clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live]);
+  usePolling(() => {
+    groupsReq.reload();
+    configReq.reload();
+  }, live ? 4000 : null);
 
   // The anti-snipe countdown only needs a clock while there is a bid to count from.
   const lastBidAt = activeGroup?.lastBidAt ? new Date(activeGroup.lastBidAt).getTime() : null;
+  // The screen only needs to know when it ends (Close button); the ticking lives in <SnipeClock>.
+  const antiSnipe = config?.antiSnipeDuration ?? 10;
+  const [clearedFor, setClearedFor] = useState<number | null>(null);
   useEffect(() => {
     if (lastBidAt == null) return;
-    const timer = setInterval(() => setNow(Date.now()), 500);
-    return () => clearInterval(timer);
-  }, [lastBidAt]);
+    const left = Math.max(0, lastBidAt + antiSnipe * 1000 - Date.now());
+    const timer = setTimeout(() => setClearedFor(lastBidAt), left);
+    return () => clearTimeout(timer);
+  }, [lastBidAt, antiSnipe]);
+  const sniping = lastBidAt != null && clearedFor !== lastBidAt;
 
   // The form follows the saved config, so reopening Setup never shows stale boxes.
   useEffect(() => {
@@ -384,9 +407,6 @@ export default function EventCalcutta() {
       hint: u.email,
     }));
 
-  const antiSnipe = config?.antiSnipeDuration ?? 10;
-  const elapsed = lastBidAt != null ? Math.max(0, Math.floor((now - lastBidAt) / 1000)) : null;
-  const sniping = elapsed != null && elapsed < antiSnipe;
   const topBid = activeGroup?.currentBid ?? null;
 
   const tabs: { key: Tab; label: string }[] = [
@@ -471,23 +491,7 @@ export default function EventCalcutta() {
                       : `starts at ${money(activeGroup.startingBid)}`}
                   </Text>
 
-                  {elapsed != null ? (
-                    <View className="mt-3">
-                      <Text className="text-xs text-slate-600">
-                        {sniping
-                          ? `Anti-snipe: ${antiSnipe - elapsed}s remaining`
-                          : "Anti-snipe cleared"}
-                      </Text>
-                      <View className="mt-1 h-1.5 overflow-hidden rounded-full bg-emerald-100">
-                        <View
-                          className="h-full bg-amber-500"
-                          style={{
-                            width: `${Math.min(100, antiSnipe > 0 ? (elapsed / antiSnipe) * 100 : 100)}%`,
-                          }}
-                        />
-                      </View>
-                    </View>
-                  ) : null}
+                  {lastBidAt != null ? <SnipeClock lastBidAt={lastBidAt} antiSnipe={antiSnipe} /> : null}
 
                   {mayManage ? (
                     <>
