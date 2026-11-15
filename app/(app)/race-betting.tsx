@@ -1,4 +1,5 @@
 import Header from "@/components/header";
+import { BirdPress } from "@/components/BirdPopupContext";
 import { useToast } from "@/context/ToastContext";
 import api from "@/service/api.service";
 import { Ionicons } from "@expo/vector-icons";
@@ -340,7 +341,7 @@ const RaceBetting = () => {
             >
               <View className="flex-row items-center justify-between mb-2">
                 <View className="flex-row items-center gap-2">
-                  <Text className="font-bold text-sm">{item.band}</Text>
+                  <BirdPress band={item.band}><Text className="font-bold text-sm">{item.band}</Text></BirdPress>
                   {item.isOwnBird && (
                     <View className="bg-green-500 px-2 py-0.5 rounded-full">
                       <Text className="text-white text-[10px] font-bold">Yours</Text>

@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
+import { BirdPress } from "@/components/BirdPopupContext";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -514,10 +515,12 @@ export default function AdminCheckin() {
                       color={item.hasRfid ? "#059669" : "#cbd5e1"}
                     />
                     <View className="min-w-0 flex-1">
+                      <BirdPress band={item.bird?.band}>
                       <Text className="text-sm font-medium text-slate-900" numberOfLines={1}>
                         {shortBand(item.bird?.band) || "No band"}
                         {item.bird?.birdName ? ` · ${item.bird.birdName}` : ""}
                       </Text>
+                      </BirdPress>
                       <Text className="text-xs text-slate-500" numberOfLines={1}>
                         {personName(item.breeder) || "Unassigned"}
                         {item.bird?.rfid ? ` · ${item.bird.rfid}` : ""}

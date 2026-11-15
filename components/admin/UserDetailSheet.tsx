@@ -225,6 +225,7 @@ export function UserDetailSheet({
                     {birds.slice(0, 100).map((b) => (
                       <Row
                         key={b.id}
+                        bird={{ id: b.id, band: b.band }}
                         title={[b.band ?? "No band", b.birdName].filter(Boolean).join(" · ")}
                         subtitle={[b.color, SEX[b.sex ?? 0] ?? "Unknown"].filter(Boolean).join(" · ")}
                         right={b.rfid ?? "no tag"}

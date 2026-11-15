@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
+import { useBirdPopup } from "@/components/BirdPopup";
 import { Pressable, Text, View } from "react-native";
-import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Directory, File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
@@ -173,7 +173,8 @@ export function BasketEntries({
 }) {
   const { can, canAny } = usePermissions();
   const toast = useToast();
-  const router = useRouter();
+  // Bird details open in the shared bird popup (components/BirdPopup).
+  const { openBird } = useBirdPopup();
   const action = useAdminAction();
 
   const { data, loading, forbidden, error, reload } = useAdminData<StatusData>(
@@ -456,7 +457,7 @@ export function BasketEntries({
                   onPress={() => {
                     const id = current.birdId;
                     setOpenId(null);
-                    router.push(`/(admin)/bird-detail?birdId=${id}` as never);
+                    if (id != null) openBird(id);
                   }}
                 />
               ) : null}

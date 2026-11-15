@@ -1,4 +1,5 @@
 import Header from "@/components/header";
+import { useBirdPopup } from "@/components/BirdPopupContext";
 import api from "@/service/api.service";
 import { useResponsive } from "@/hooks/useResponsive";
 import { Ionicons } from "@expo/vector-icons";
@@ -42,6 +43,7 @@ interface RaceItem {
  * not make it home" is a result somebody is looking for.
  */
 export default function ResultDetail() {
+  const { openBird } = useBirdPopup();
   const { raceId, name } = useLocalSearchParams<{ raceId?: string; name?: string }>();
   const { gutter } = useResponsive();
 
@@ -171,7 +173,7 @@ export default function ResultDetail() {
                     </View>
 
                     <View className="flex-1">
-                      <Text className="text-sm font-medium text-gray-900">
+                      <Text className="text-sm font-medium text-gray-900" onPress={() => item.bird?.id != null && openBird(item.bird.id)}>
                         {item.bird?.band ?? "No band"}
                         {item.bird?.birdName ? ` · ${item.bird.birdName}` : ""}
                       </Text>

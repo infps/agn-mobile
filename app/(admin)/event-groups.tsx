@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
+import { useBirdPopup } from "@/components/BirdPopup";
 import { Pressable, Switch, Text, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import api from "@/service/api.service";
 import { useAdminData } from "@/hooks/useAdminData";
@@ -206,7 +207,8 @@ export default function EventGroups() {
   const { eventId, name } = useLocalSearchParams<{ eventId?: string; name?: string }>();
   const { can, canAny } = usePermissions();
   const toast = useToast();
-  const router = useRouter();
+  // Bird details open in the shared bird popup (components/BirdPopup).
+  const { openBird } = useBirdPopup();
   const action = useAdminAction();
 
   const [open, setOpen] = useState<number | null>(null);
@@ -756,7 +758,7 @@ export default function EventGroups() {
                   onPress={() => {
                     const id = picked.item.bird!.id;
                     closePicked();
-                    router.push(`/(admin)/bird-detail?birdId=${id}` as never);
+                    openBird(id);
                   }}
                 />
               ) : null}

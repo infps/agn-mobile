@@ -1,4 +1,5 @@
 import React, { type ReactNode } from "react";
+import { BirdPress } from "@/components/BirdPopupContext";
 import {
   ActivityIndicator,
   Pressable,
@@ -172,6 +173,7 @@ export function Row({
   onLongPress,
   leading,
   badge,
+  bird,
 }: {
   title: string;
   subtitle?: string | null;
@@ -183,14 +185,27 @@ export function Row({
   onLongPress?: () => void;
   leading?: ReactNode;
   badge?: { label: string; bg: string; text: string } | null;
+  /** The bird this row shows: tapping it opens the bird popup. A row with an
+   *  action of its own keeps it, and only its title opens the bird. */
+  bird?: { id?: number | null; band?: string | null } | null;
 }) {
+  const hasBird = !!bird && (bird.id != null || !!bird.band);
+  const titleText = (
+    <Text className="text-sm font-medium text-slate-900" numberOfLines={1}>
+      {title}
+    </Text>
+  );
   const body = (
     <View className="flex-row items-center gap-3 px-4 py-3">
       {leading}
       <View className="min-w-0 flex-1">
-        <Text className="text-sm font-medium text-slate-900" numberOfLines={1}>
-          {title}
-        </Text>
+        {hasBird && (onPress || onLongPress) ? (
+          <BirdPress birdId={bird!.id} band={bird!.band}>
+            {titleText}
+          </BirdPress>
+        ) : (
+          titleText
+        )}
         {subtitle ? (
           <Text className="text-xs text-slate-500" numberOfLines={1}>
             {subtitle}
@@ -216,7 +231,15 @@ export function Row({
     </View>
   );
 
-  if (!onPress && !onLongPress) return body;
+  if (!onPress && !onLongPress) {
+    return hasBird ? (
+      <BirdPress birdId={bird!.id} band={bird!.band}>
+        {body}
+      </BirdPress>
+    ) : (
+      body
+    );
+  }
   return (
     <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={400}>
       {body}

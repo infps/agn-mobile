@@ -1,4 +1,5 @@
 import BreederExportButton from "@/components/BreederExportButton";
+import { BirdPress } from "@/components/BirdPopupContext";
 import { ApprovalBanner } from "@/components/EventShared";
 import Header from "@/components/header";
 import { useToast } from "@/context/ToastContext";
@@ -287,7 +288,7 @@ export default function MyRegistration() {
                 <Text className="font-semibold text-gray-900">
                   {item.birdName ?? `Bird #${item.birdNo}`}
                 </Text>
-                {item.band && <Text className="text-xs text-gray-500">{item.band}</Text>}
+                {item.band && <BirdPress band={item.band}><Text className="text-xs text-primary">{item.band}</Text></BirdPress>}
                 {item.isBackup && (
                   <View className="bg-gray-100 rounded px-1.5 py-0.5 mt-1 self-start">
                     <Text className="text-[10px] text-gray-500">Backup</Text>

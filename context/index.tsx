@@ -6,6 +6,7 @@ import { EventProvider, useEvents } from './EventContext';
 import { PaymentProvider, usePayments } from './PaymentContext';
 import { PermissionProvider, usePermissions } from './PermissionContext';
 import { ToastProvider, useToast } from './ToastContext';
+import { BirdPopupProvider } from '@/components/BirdPopup';
 
 export const AppProviders = ({ children }: { children: React.ReactNode }) => {
   return (
@@ -16,7 +17,8 @@ export const AppProviders = ({ children }: { children: React.ReactNode }) => {
             <BirdProvider>
               <EventProvider>
                 <PaymentProvider>
-                  {children}
+                  {/* Any bird list can open the bird popup (useBirdPopup / BirdPress). */}
+                  <BirdPopupProvider>{children}</BirdPopupProvider>
                 </PaymentProvider>
               </EventProvider>
             </BirdProvider>

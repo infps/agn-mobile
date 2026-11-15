@@ -1,4 +1,5 @@
 import { bandOf, htmlToText, isLiveRace, raceRoute } from "@/components/EventShared";
+import { BirdPress } from "@/components/BirdPopupContext";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import api from "@/service/api.service";
@@ -121,7 +122,7 @@ function BirdRows({ birds }: { birds: any[] }) {
       </View>
       {birds.map((b, i) => (
         <View key={b?.id ?? i} className="flex-row px-2 py-2 border-b border-gray-100">
-          <Text className="text-xs flex-1 font-mono">{bandOf(b) || "-"}</Text>
+          <View className="flex-1"><BirdPress band={bandOf(b)}><Text className="text-xs font-mono text-cyan-700">{bandOf(b) || "-"}</Text></BirdPress></View>
           <Text className="text-xs flex-1">{b?.birdName || "-"}</Text>
           <Text className="text-xs w-14">{b?.color || "-"}</Text>
           <Text className="text-xs w-12">{sexText(b?.sex)}</Text>
@@ -412,7 +413,7 @@ export function BirdsTab({ eventId }: { eventId: string }) {
                 <Text className={`text-sm text-cyan-700 ${mine ? "font-bold" : "font-medium"}`}>
                   {item?.bird?.birdName || "-"}
                 </Text>
-                <Text className="text-xs text-gray-500 font-mono">{bandOf(item?.bird) || "No band"}</Text>
+                <BirdPress band={bandOf(item?.bird)}><Text className="text-xs text-gray-500 font-mono">{bandOf(item?.bird) || "No band"}</Text></BirdPress>
               </View>
               <View className="items-end">
                 <View className="flex-row items-center">

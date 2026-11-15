@@ -385,6 +385,7 @@ export default function EventClasses() {
                             </Text>
                           }
                           title={shortBand(r.band) || "No band"}
+                          bird={{ band: r.band }}
                           subtitle={r.breederName}
                           right={money(r.payout)}
                         />

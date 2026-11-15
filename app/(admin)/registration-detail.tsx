@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useBirdPopup } from "@/components/BirdPopupContext";
 import { Linking, Pressable, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -185,6 +186,7 @@ function Card({ children }: { children: React.ReactNode }) {
  * would pay, and it never counts as money received.
  */
 export default function RegistrationDetail() {
+  const { openBird } = useBirdPopup();
   const { eventId, inventoryId, name } = useLocalSearchParams<{
     eventId?: string;
     inventoryId?: string;
@@ -640,7 +642,7 @@ export default function RegistrationDetail() {
                   }`}
                 >
                   <View className="flex-row items-center gap-2">
-                    <Text className="flex-1 text-sm font-medium text-slate-900" numberOfLines={1}>
+                    <Text className="flex-1 text-sm font-medium text-slate-900" numberOfLines={1} onPress={() => (bird?.id != null ? openBird(bird.id) : undefined)}>
                       {item?.birdNo != null ? `#${item.birdNo} · ` : ""}
                       {bird?.band ?? "No band"}
                       {bird?.birdName ? ` · ${bird.birdName}` : ""}
