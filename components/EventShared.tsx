@@ -99,7 +99,9 @@ export interface RegistrationFees {
 export function registrationFees(feeScheme: any, races: any[], numBirds: number): RegistrationFees | null {
   if (!feeScheme || numBirds <= 0) return null;
 
-  const purgeFee = feeScheme.entryFee ?? 0;
+  // Entry fee is per bird, as the portal's fee-calculator charges it.
+  const entryFeePerBird = feeScheme.entryFee ?? 0;
+  const purgeFee = entryFeePerBird * numBirds;
   const gates = [
     feeScheme.hotSpot1Fee ?? 0,
     feeScheme.hotSpot2Fee ?? 0,
@@ -117,7 +119,7 @@ export function registrationFees(feeScheme: any, races: any[], numBirds: number)
     const item = birdFeeItems.find((b) => b.birdNo === i);
     const perchFee = item?.birdFee ?? item?.fee ?? 0;
     perchFees += perchFee;
-    perBird.push({ position: i, perchFee, hotspot: duePerBird, purge: i === 1 ? purgeFee : 0 });
+    perBird.push({ position: i, perchFee, hotspot: duePerBird, purge: entryFeePerBird });
   }
 
   let raceFees = 0;

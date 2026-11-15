@@ -115,7 +115,7 @@ const blankBird = (): Slot => ({
  * price, not the four added together.
  */
 function previewFees(scheme: FeeScheme, races: { raceTypeId: number | null }[], birds: number) {
-  const entry = scheme.entryFee ?? 0;
+  const entry = (scheme.entryFee ?? 0) * birds; // per bird, as the server charges
   let perBird = 0;
   for (let n = 1; n <= birds; n++) {
     perBird += (scheme.birdFeeItems ?? []).find((b) => b.birdNo === n)?.birdFee ?? 0;

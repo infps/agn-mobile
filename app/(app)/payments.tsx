@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { signedAmount, typeLabel } from "@/components/admin/MoneyBits";
 
 /**
  * Payments — the portal's /payments page plus paying what is still owed.
@@ -44,13 +45,6 @@ interface Payment {
 }
 
 // Same tables as the portal's payments/columns.tsx.
-const TYPE_LABELS: Record<number, string> = {
-  0: "Perch Fee",
-  1: "Per Bird Fee",
-  2: "Races Fee",
-  3: "Payouts",
-  4: "Other",
-};
 const METHOD_LABELS: Record<number, string> = {
   0: "Cash",
   1: "Credit Card",
@@ -118,7 +112,7 @@ const PaymentsList = () => {
     let t = 0;
     let pd = 0;
     for (const p of visible) {
-      const v = p.paymentValue ?? 0;
+      const v = signedAmount(p);
       t += v;
       if (p.status === 1) pd += v;
     }
@@ -131,7 +125,10 @@ const PaymentsList = () => {
   const selectedTotal = useMemo(
     () =>
       Array.from(selected).reduce(
-        (sum, id) => sum + (payments.find((p) => p.id === id)?.paymentValue || 0),
+        (sum, id) => {
+          const p = payments.find((q) => q.id === id);
+          return sum + (p ? signedAmount(p) : 0);
+        },
         0
       ),
     [selected, payments]
@@ -248,7 +245,7 @@ const PaymentsList = () => {
             {eventOf(item)?.name || "-"}
           </Text>
           <Text className="text-xs text-gray-500 mt-0.5">
-            {item.paymentType != null ? TYPE_LABELS[item.paymentType] ?? String(item.paymentType) : "-"}
+            {typeLabel(item.paymentType)}
             {" · "}
             {item.paymentMethod != null
               ? METHOD_LABELS[item.paymentMethod] ?? String(item.paymentMethod)
@@ -259,7 +256,7 @@ const PaymentsList = () => {
         </View>
         <View className="items-end">
           <Text className="text-sm font-bold text-gray-800">
-            ${(item.paymentValue ?? 0).toFixed(2)}
+            ${Math.abs(item.paymentValue ?? 0).toFixed(2)}
           </Text>
           <Text className={`text-xs font-semibold ${st?.className ?? "text-gray-600"}`}>
             {st?.label ?? String(item.status)}

@@ -123,7 +123,17 @@ export function Line({
 }
 
 export type PaymentMethodCode = "CASH" | "CREDIT_CARD" | "PAYPAL" | "BANK_TRANSFER";
-export type PaymentTypeCode = "PERCH_FEE" | "BIRD_FEE" | "RACES_FEE" | "PAYOUTS" | "OTHER";
+export type PaymentTypeCode =
+  | "PERCH_FEE"
+  | "ENTRY_FEE"
+  | "BETS"
+  | "HOT_SPOT"
+  | "ENTRY_REFUND"
+  | "BETS_REFUND"
+  | "HOT_SPOT_REFUND"
+  | "TRANSFER_DUE"
+  | "WINNER_PAYOUT"
+  | "OTHER";
 
 /** In the order the portal stores them: the index is the stored integer. */
 export const PAYMENT_METHODS: Option<PaymentMethodCode>[] = [
@@ -133,12 +143,17 @@ export const PAYMENT_METHODS: Option<PaymentMethodCode>[] = [
   { key: "BANK_TRANSFER", label: "Bank transfer" },
 ];
 
-/** Type 3 is sent as PAYOUTS and read back as a refund, exactly as the portal labels it. */
+/** HayLoft's codes (portal lib/payment-types.ts): the index is the stored integer. 10 / null = Registration. */
 export const PAYMENT_TYPES: Option<PaymentTypeCode>[] = [
   { key: "PERCH_FEE", label: "Perch fee" },
-  { key: "BIRD_FEE", label: "Per bird fee" },
-  { key: "RACES_FEE", label: "Races fee" },
-  { key: "PAYOUTS", label: "Refund" },
+  { key: "ENTRY_FEE", label: "Entry fee" },
+  { key: "BETS", label: "Bets" },
+  { key: "HOT_SPOT", label: "Hot spot fee" },
+  { key: "ENTRY_REFUND", label: "Entry refund" },
+  { key: "BETS_REFUND", label: "Bets refund" },
+  { key: "HOT_SPOT_REFUND", label: "Hot spot refund" },
+  { key: "TRANSFER_DUE", label: "Transfer due" },
+  { key: "WINNER_PAYOUT", label: "Winner payout" },
   { key: "OTHER", label: "Other" },
 ];
 
@@ -146,7 +161,14 @@ export const methodLabel = (stored: number | null | undefined) =>
   stored == null ? null : (PAYMENT_METHODS[stored]?.label ?? `Method ${stored}`);
 
 export const typeLabel = (stored: number | null | undefined) =>
-  stored == null ? null : (PAYMENT_TYPES[stored]?.label ?? `Type ${stored}`);
+  stored == null || stored === 10 ? "Registration" : (PAYMENT_TYPES[stored]?.label ?? `Type ${stored}`);
+
+/** Money going back out (refunds, payouts); the server stores these negative. */
+export const isOutgoing = (type: number | null | undefined) => type === 4 || type === 5 || type === 6 || type === 8;
+
+/** In is positive, out negative, whatever sign the row has — sum this for a net. */
+export const signedAmount = (p: { paymentValue?: number | null; paymentType?: number | null }) =>
+  isOutgoing(p.paymentType) ? -Math.abs(p.paymentValue ?? 0) : (p.paymentValue ?? 0);
 
 /** A typed amount, or null when it is not a number at all. */
 export function parseAmount(text: string): number | null {

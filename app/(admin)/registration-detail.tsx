@@ -26,6 +26,7 @@ import {
   money,
   tabular,
 } from "@/components/admin/ui";
+import { isOutgoing, typeLabel } from "@/components/admin/MoneyBits";
 
 type Approval = "WAITING" | "APPROVED" | "REJECTED";
 
@@ -112,13 +113,6 @@ const APPROVAL: Record<Approval, { label: string; box: string; text: string }> =
 };
 
 const METHOD: Record<number, string> = { 0: "Cash", 1: "Credit card", 2: "PayPal", 3: "Bank transfer" };
-const TYPE: Record<number, string> = {
-  0: "Perch fee",
-  1: "Per bird fee",
-  2: "Races fee",
-  3: "Refund",
-  4: "Other",
-};
 const SEX: Record<number, string> = { 0: "Unknown", 1: "Cock", 2: "Hen" };
 const CATEGORY: Record<string, string> = {
   BELGIAN: "Belgian",
@@ -293,10 +287,10 @@ export default function RegistrationDetail() {
   const refunds = entryRefund + hotspotRefund;
   // Only PAID rows are money that has moved; a PENDING row is an unpaid order.
   const paidOut = payments
-    .filter((p) => p.paymentType === 3 && p.status === "PAID")
+    .filter((p) => isOutgoing(p.paymentType) && p.status === "PAID")
     .reduce((s, p) => s + Math.abs(p.paymentValue ?? 0), 0);
   const paid = payments
-    .filter((p) => p.paymentType !== 3 && p.status === "PAID")
+    .filter((p) => !isOutgoing(p.paymentType) && p.status === "PAID")
     .reduce((s, p) => s + (p.paymentValue ?? 0), 0);
   const transferDue = sum((i) => i.transferDue);
   const balance = fees - refunds - paid + paidOut;
@@ -607,7 +601,7 @@ export default function RegistrationDetail() {
                   key={p.id}
                   title={
                     [
-                      p.paymentType != null ? (TYPE[p.paymentType] ?? String(p.paymentType)) : null,
+                      typeLabel(p.paymentType),
                       p.paymentMethod != null
                         ? (METHOD[p.paymentMethod] ?? String(p.paymentMethod))
                         : null,
@@ -616,7 +610,7 @@ export default function RegistrationDetail() {
                       .join(" · ") || "Payment"
                   }
                   subtitle={[day(p.paymentDate), p.paymentDesc].filter(Boolean).join(" · ")}
-                  right={money(p.paymentValue ?? 0)}
+                  right={money(Math.abs(p.paymentValue ?? 0))}
                   rightSub={p.status && p.status !== "PAID" ? p.status.toLowerCase() : undefined}
                   rightTone={p.status === "PAID" ? "text-slate-900" : "text-slate-400"}
                 />

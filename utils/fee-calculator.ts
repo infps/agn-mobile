@@ -42,8 +42,8 @@ export interface FeeBreakdown {
 export function calculateFees(input: FeeCalculationInput): FeeBreakdown {
   const { numBirds, feeScheme, races } = input;
 
-  // Purge Fee = 1-time flat fee (NOT per bird)
-  const purgeFee = feeScheme.entryFee ?? 0;
+  // Entry (purge) fee is charged on every bird, as the portal does
+  const purgeFee = (feeScheme.entryFee ?? 0) * numBirds;
 
   // Perch Fee = sum of graduated per-bird fees by position
   let perchFees = 0;

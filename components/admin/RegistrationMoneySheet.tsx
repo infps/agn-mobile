@@ -27,6 +27,7 @@ import {
   type PaymentTypeCode,
   methodLabel,
   parseAmount,
+  signedAmount,
   typeLabel,
 } from "@/components/admin/MoneyBits";
 
@@ -168,17 +169,17 @@ export function RegistrationMoneySheet({
   const startEditing = (p: Payment) => {
     setEditing(p);
     setForm({
-      amount: String(p.paymentValue ?? 0),
+      amount: String(Math.abs(p.paymentValue ?? 0)),
       method: PAYMENT_METHODS[p.paymentMethod ?? 0]?.key ?? "CASH",
-      type: PAYMENT_TYPES[p.paymentType ?? 4]?.key ?? "OTHER",
+      type: PAYMENT_TYPES[p.paymentType ?? 9]?.key ?? "OTHER",
       description: p.paymentDesc ?? "",
       reference: p.transactionId ?? "",
     });
     setMode("payment");
   };
 
-  // A refund or an adjustment may be negative; a fee payment may not.
-  const signed = form.type === "PAYOUTS" || form.type === "OTHER";
+  // Only an adjustment may be negative; refunds/payouts are typed positive and the server stores them negative.
+  const signed = form.type === "OTHER";
 
   const savePayment = async () => {
     if (id == null) return;
@@ -313,7 +314,7 @@ export function RegistrationMoneySheet({
   const subtitle =
     mode === "payment"
       ? editing
-        ? `${money(editing.paymentValue)} · ${who}`
+        ? `${money(Math.abs(editing.paymentValue ?? 0))} · ${who}`
         : balance != null && balance > 0
           ? `They owe ${money(balance)}`
           : "Nothing is outstanding — this records a payment anyway"
@@ -430,7 +431,7 @@ export function RegistrationMoneySheet({
                       .filter(Boolean)
                       .join(" · ") || undefined
                   }
-                  right={money(p.paymentValue ?? 0)}
+                  right={money(Math.abs(p.paymentValue ?? 0))}
                   rightTone={p.status === "PAID" ? "text-emerald-600" : "text-slate-500"}
                   badge={
                     p.status && p.status !== "PAID"
@@ -459,7 +460,7 @@ export function RegistrationMoneySheet({
             // is allowed to be negative.
             keyboard={signed ? "default" : "decimal-pad"}
             placeholder="0.00"
-            hint={signed ? "A refund or adjustment may be negative." : null}
+            hint={signed ? "An adjustment may be negative." : null}
           />
           <Chips
             label="Method"
@@ -546,9 +547,9 @@ export function RegistrationMoneySheet({
 
       <Confirm
         open={deleting}
-        title={`Delete this ${money(editing?.paymentValue ?? 0)} payment?`}
+        title={`Delete this ${money(Math.abs(editing?.paymentValue ?? 0))} payment?`}
         body={`It is removed from ${who}'s registration outright, and their balance goes back up by ${money(
-          editing?.paymentValue ?? 0
+          editing ? signedAmount(editing) : 0
         )}. If money is being handed back, record a refund instead — that keeps the payment on the books.`}
         confirmLabel="Delete it"
         pending={action.pending}
