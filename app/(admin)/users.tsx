@@ -5,6 +5,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { usePermissions } from "@/context/PermissionContext";
 import { useToast } from "@/context/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
+import { useCachedList } from "@/hooks/useCachedList";
+import { useAuth } from "@/context/AuthContext";
+import api from "@/service/api.service";
 import { useAdminAction } from "@/hooks/useAdminAction";
 import { downloadAndShare } from "@/service/download.service";
 import { Chips } from "@/components/admin/Chips";
@@ -148,23 +151,47 @@ export default function AdminUsers() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState<string | null>(null);
 
-  // Role and event narrow the query itself, exactly as the portal's do; the
-  // rest are applied to what came back.
+  // Event-scoped list is small → server-filtered. Full directory → paged,
+  // cached on the phone, role filtered locally. The rest apply to what came back.
+  const { user: me } = useAuth();
+  const eventScoped = eventFilter !== "all";
   const listQuery = [
-    eventFilter !== "all" ? `eventId=${eventFilter}` : null,
+    `eventId=${eventFilter}`,
     roleFilter !== "all" ? `role=${roleFilter}` : null,
   ]
     .filter(Boolean)
     .join("&");
-  const accounts = useAdminData<{ users?: DirectoryUser[] }>(
-    mayList ? `/admin/users${listQuery ? `?${listQuery}` : ""}` : null,
+  const eventAccounts = useAdminData<{ users?: DirectoryUser[] }>(
+    mayList && eventScoped ? `/admin/users?${listQuery}` : null,
     [listQuery, mayList]
   );
+  const allAccounts = useCachedList<DirectoryUser>(
+    mayList && !eventScoped ? "/admin/users" : null,
+    "users",
+    `${me?.id}:admin-users`
+  );
+  const accounts = eventScoped ? eventAccounts : allAccounts;
+
+  // List rows omit SSN/tax/doc keys; the detail sheet (and edit from it) needs the full record.
+  const openDetail = async (u: DirectoryUser) => {
+    try {
+      const res = await api.get("/admin/users", { params: { id: u.id } });
+      setOverlay({ kind: "detail", user: res.data.user });
+    } catch {
+      toast.error("Could not load this user just now.");
+    }
+  };
   const events = useAdminData<{ events?: EventOption[] }>(
     mayList && canAny("events.view", "events.manage") ? "/admin/event" : null
   );
 
-  const users = useMemo(() => accounts.data?.users ?? [], [accounts.data]);
+  const users = useMemo(
+    () =>
+      eventScoped
+        ? eventAccounts.data?.users ?? []
+        : (allAccounts.data ?? []).filter((u) => roleFilter === "all" || u.role === roleFilter),
+    [eventScoped, eventAccounts.data, allAccounts.data, roleFilter]
+  );
   const countries = useMemo(
     () => Array.from(new Set(users.map((u) => u.country).filter(Boolean))) as string[],
     [users]
@@ -579,7 +606,7 @@ export default function AdminUsers() {
                         ) : undefined
                       }
                       onPress={() =>
-                        selecting ? toggle(u.id) : setOverlay({ kind: "detail", user: u })
+                        selecting ? toggle(u.id) : openDetail(u)
                       }
                     />
                   );

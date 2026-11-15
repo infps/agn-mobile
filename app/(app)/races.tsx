@@ -36,6 +36,7 @@ interface LiveRace {
   id: number;
   name: string | null;
   description: string | null;
+  raceNumber: number | null;
   location: string | null;
   startTime: string | null;
   distance: number | null;
@@ -428,12 +429,16 @@ const Races = () => {
                     </View>
                   )}
                   <View className="flex-1">
-                    <Text className="text-sm font-bold text-gray-900" numberOfLines={1}>
-                      {item.event?.name}
+                    <Text className="text-base font-bold text-gray-900" numberOfLines={2}>
+                      {item.name || item.description || item.event?.name || "Race"}
                     </Text>
                     <Text className="text-sm text-gray-500" numberOfLines={1}>
-                      {item.name || item.description}
-                      {item.raceType?.name ? ` · ${item.raceType.name}` : ""}
+                      {[
+                        item.raceNumber != null ? `Race #${item.raceNumber}` : null,
+                        item.raceType?.name,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </Text>
                     <View className="mt-1 flex-row items-center gap-3">
                       {item.location ? (

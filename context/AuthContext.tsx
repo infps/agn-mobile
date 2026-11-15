@@ -1,6 +1,7 @@
 // context/AuthContext.tsx
 
 import SecureStorageService from "@/service/secureStorage.service";
+import { clearListCache } from "@/service/listCache.service";
 import { router } from "expo-router";
 import {
   createContext,
@@ -252,6 +253,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // shared handset the next person would otherwise keep receiving the
       // previous one's announcements.
       await unregisterPush();
+      await clearListCache();
 
       // Notify server
       try {

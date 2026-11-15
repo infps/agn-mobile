@@ -1,4 +1,6 @@
 import api from "@/service/api.service";
+import { readListCache, writeListCache } from "@/service/listCache.service";
+import { useAuth } from "./AuthContext";
 import { router } from "expo-router";
 import {
   createContext,
@@ -44,20 +46,27 @@ export const BirdProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { user } = useAuth();
+  const cacheKey = `${user?.id}:breeder-birds`;
+
   const fetchBirds = useCallback(async () => {
-    setLoading(true);
     setError(null);
+    // Phone copy first (instant), then refresh from the API.
+    const cached = await readListCache<BirdType>(cacheKey);
+    if (cached) setBirds((prev) => (prev.length ? prev : cached.rows));
+    else setLoading(true);
     try {
       const response = await api.get("/breeder/birds");
       const data = response.data.birds || [];
       setBirds(data);
+      writeListCache(cacheKey, data);
     } catch (err: any) {
       setError(err.message || "Failed to fetch birds");
-      Alert.alert("Error", "Failed to fetch birds");
+      if (!cached) Alert.alert("Error", "Failed to fetch birds");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [cacheKey]);
 
   const addBird = useCallback(
     async (birdData: Omit<BirdType, "id">): Promise<boolean> => {
