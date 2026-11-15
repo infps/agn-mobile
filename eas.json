@@ -21,14 +21,14 @@
       },
       "env": {
         "EXPO_PUBLIC_NODE_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "https://pigeonpulse.com/api"
+        "EXPO_PUBLIC_API_URL": "https://app.pigeonpulse.com/api"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_NODE_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "https://pigeonpulse.com/api",
+        "EXPO_PUBLIC_API_URL": "https://app.pigeonpulse.com/api",
         "EXPO_PUBLIC_HIDE_BETTING": "1"
       }
     },

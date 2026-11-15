@@ -5,7 +5,7 @@ import { withChosenSeason } from './season.service';
 
 // Where the deployed portal lives. Overridable per build profile so a staging
 // APK can be pointed somewhere else without touching code.
-const PRODUCTION_API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://pigeonpulse.com/api';
+const PRODUCTION_API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://app.pigeonpulse.com/api';
 
 /**
  * Whether this build should talk to the deployed portal.
