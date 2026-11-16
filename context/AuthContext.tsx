@@ -76,6 +76,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const verified = useRef<{ at: number; ok: Promise<boolean> } | null>(null);
 
   const restore = useCallback(async (): Promise<boolean> => {
+    let cached: User | null = null;
     try {
       setIsLoading(true);
       const storedToken = await SecureStorageService.getAccessToken();
@@ -84,11 +85,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
       (api as any).defaults.headers.common["Authorization"] =
         `Bearer ${storedToken}`;
+      // Last profile first so the app opens at once; the fetch below confirms
+      // the session (a 401 still signs out) and swaps in the fresh profile.
+      cached = await SecureStorageService.getUserData().catch(() => null);
+      if (cached?.id) {
+        setToken(storedToken);
+        setUser(cached);
+        setIsLoading(false);
+      }
       const profileResponse = await api.get("/user/profile");
       const userData = profileResponse.data.user;
       if (userData) {
         setToken(storedToken);
         setUser(userData);
+        SecureStorageService.setUserData(userData).catch(() => undefined);
         // A reinstall or a restore issues a new push token, so a restored
         // session re-registers rather than assuming the old one still works.
         registerForPush();
@@ -100,10 +110,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // No valid session — user needs to log in, not an error
         await SecureStorageService.clearTokens();
         delete (api as any).defaults.headers.common["Authorization"];
-      } else {
-        console.error("Failed to initialize auth:", error);
+        setUser(null);
+        setToken(null);
+        return false;
       }
-      return false;
+      console.error("Failed to initialize auth:", error);
+      // Offline or a slow server says nothing about the session: keep the saved profile.
+      return !!cached?.id;
     } finally {
       setIsLoading(false);
     }

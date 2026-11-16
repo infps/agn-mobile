@@ -60,7 +60,7 @@ const RacePavilion = () => {
         {error ? (
           <Text className="px-4 text-red-500">Error loading events: {error}</Text>
         ) : (
-          <Carousel data={ongoing} loading={loading} />
+          <Carousel data={ongoing} loading={loading && !events.length} />
         )}
 
         <View className="mx-4 mt-8 bg-white flex-row shadow">
@@ -81,7 +81,7 @@ const RacePavilion = () => {
         </View>
 
         <Text className="text-xl font-bold px-4 mt-8 mb-3">Open to enter</Text>
-        {error ? null : <Carousel data={upcoming} loading={loading} />}
+        {error ? null : <Carousel data={upcoming} loading={loading && !events.length} />}
 
         <View style={{ height: 32 }} />
       </ScrollView>

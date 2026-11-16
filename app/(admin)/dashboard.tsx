@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import api from "@/service/api.service";
+import { fetchAllPages } from "@/service/listCache.service";
 import { usePermissions } from "@/context/PermissionContext";
 import { useEvents } from "@/context/EventContext";
 import { useResponsive } from "@/hooks/useResponsive";
@@ -85,15 +85,14 @@ export default function AdminDashboard() {
 
   const load = useCallback(async () => {
     try {
-      const [raceRes] = await Promise.allSettled([api.get("/breeder/races")]);
-
-      if (raceRes.status === "fulfilled") {
-        const all: RaceSummary[] = raceRes.value.data?.races ?? [];
-        // Live first, then the ones about to go, then recent history.
-        const rank = (r: RaceSummary) =>
-          r.status === "STARTED" ? 0 : r.status === "REGISTERING" ? 1 : 2;
+      // Live first, then the ones about to go, then recent history.
+      const rank = (r: RaceSummary) =>
+        r.status === "STARTED" ? 0 : r.status === "REGISTERING" ? 1 : 2;
+      // First page shows at once; later pages re-rank in the background.
+      await fetchAllPages<RaceSummary>("/breeder/races", "races", (all) => {
         setRaces([...all].sort((a, b) => rank(a) - rank(b)).slice(0, 10));
-      }
+        setLoading(false);
+      }, 50).catch(() => undefined);
     } finally {
       setLoading(false);
       setRefreshing(false);

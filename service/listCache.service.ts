@@ -36,15 +36,25 @@ export async function clearListCache(): Promise<void> {
   } catch {}
 }
 
-/** Every page of a cursor-paginated endpoint ({ [field]: T[], nextCursor }). */
-export async function fetchAllPages<T>(path: string, field: string): Promise<T[]> {
+/**
+ * Every page of a cursor-paginated endpoint ({ [field]: T[], nextCursor }).
+ * onPage gets the rows so far after each page, so a screen can show page 1
+ * while the rest loads in the background.
+ */
+export async function fetchAllPages<T>(
+  path: string,
+  field: string,
+  onPage?: (rowsSoFar: T[]) => void,
+  limit = 500
+): Promise<T[]> {
   let rows: T[] = [];
   let cursor: string | null = null;
   do {
     const res: { data?: Record<string, any> } = await api.get(path, {
-      params: { limit: 500, ...(cursor ? { cursor } : {}) },
+      params: { limit, ...(cursor ? { cursor } : {}) },
     });
     rows = rows.concat(res.data?.[field] ?? []);
+    onPage?.(rows);
     cursor = res.data?.nextCursor != null ? String(res.data.nextCursor) : null;
   } while (cursor);
   return rows;

@@ -1,11 +1,13 @@
 import { useAuth } from "@/context/AuthContext";
 import api from "@/service/api.service";
+import { readListCache, writeListCache } from "@/service/listCache.service";
 import {
   createContext,
   ReactNode,
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { Alert } from "react-native";
@@ -127,6 +129,8 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Who the cached list belongs to; listEvents is defined before useAuth below.
+  const cacheUser = useRef<string | null>(null);
 
   const listEvents = useCallback(
     async (isOpen?: boolean) => {
@@ -141,6 +145,9 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
         const totalCount = response.data.count || events.length;
 
         setEvents(events);
+        if (isOpen === undefined && cacheUser.current) {
+          writeListCache(`${cacheUser.current}:events`, events);
+        }
         return { events, totalCount };
       } catch (err: any) {
         console.error("Error fetching events:", err);
@@ -158,8 +165,16 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
   // Signed-in only: before that the call is a guaranteed 401 on every cold open.
   const { user } = useAuth();
   const userId = user?.id;
+  cacheUser.current = userId ?? null;
   useEffect(() => {
-    if (userId) listEvents().catch(() => undefined);
+    if (!userId) return;
+    // Phone copy first (instant), then refresh from the API.
+    // Read before fetching so a slow disk can't overwrite the fresh list.
+    readListCache<EventType>(`${userId}:events`)
+      .then((rec) => {
+        if (rec) setEvents(rec.rows);
+      })
+      .finally(() => listEvents().catch(() => undefined));
   }, [userId, listEvents]);
 
   const getEvent = useCallback(async (id: string) => {

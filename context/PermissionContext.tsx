@@ -100,7 +100,20 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (loadedFor.current !== userId) setIsLoading(true);
+    if (loadedFor.current !== userId) {
+      // Last answer for this account first, so the shell opens at once; the
+      // fetch below then corrects it quietly. Only a first-ever sign-in waits.
+      const raw = await AsyncStorage.getItem(cacheKey(userId)).catch(() => null);
+      if (raw) {
+        try {
+          apply(JSON.parse(raw) as Cached, true);
+          loadedFor.current = userId;
+          setIsLoading(false);
+        } catch {
+          setIsLoading(true);
+        }
+      } else setIsLoading(true);
+    }
     try {
       const { data } = await api.get("/me/permissions");
       const fresh: Cached = {

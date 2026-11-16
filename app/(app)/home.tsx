@@ -41,7 +41,9 @@ export default function HomeScreen() {
   const { birds, fetchBirds } = useBirds();
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const [totalPending, setTotalPending] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [racesLoading, setRacesLoading] = useState(true);
+  const [paymentsLoading, setPaymentsLoading] = useState(true);
+  const [birdsDone, setBirdsDone] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const firstName = user?.name?.split(" ")[0] ?? "Breeder";
@@ -51,23 +53,23 @@ export default function HomeScreen() {
   );
   const openEvents = (events ?? []).filter((e) => e.isOpen === 1);
 
+  // Each card fills in as its own request lands; the slowest no longer holds the rest.
   const load = async () => {
-    try {
-      const [racesRes, , paymentsRes] = await Promise.allSettled([
-        api.get("/breeder/races/live"),
-        fetchBirds(),
-        api.get("/breeder/payments/pending"),
-      ]);
-
-      if (racesRes.status === "fulfilled") setLiveRaces(racesRes.value.data?.races ?? []);
-      if (paymentsRes.status === "fulfilled") {
-        setPendingPayments(paymentsRes.value.data?.payments ?? []);
-        setTotalPending(paymentsRes.value.data?.totalPending ?? 0);
-      }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+    const races = api
+      .get("/breeder/races/live")
+      .then((r) => setLiveRaces(r.data?.races ?? []))
+      .catch(() => undefined)
+      .finally(() => setRacesLoading(false));
+    const payments = api
+      .get("/breeder/payments/pending")
+      .then((r) => {
+        setPendingPayments(r.data?.payments ?? []);
+        setTotalPending(r.data?.totalPending ?? 0);
+      })
+      .catch(() => undefined)
+      .finally(() => setPaymentsLoading(false));
+    await Promise.allSettled([races, payments, fetchBirds().finally(() => setBirdsDone(true))]);
+    setRefreshing(false);
   };
 
   // Once, on open.
@@ -113,7 +115,7 @@ export default function HomeScreen() {
               <Ionicons name="egg-outline" size={18} color="#189AB4" />
             </View>
             <Text className="text-2xl font-bold text-gray-900">
-              {loading && !birds.length ? "—" : birds.length}
+              {!birdsDone && !birds.length ? "—" : birds.length}
             </Text>
             <Text className="text-xs text-gray-500 mt-0.5">Active Birds</Text>
           </TouchableOpacity>
@@ -127,7 +129,7 @@ export default function HomeScreen() {
               <Ionicons name="card-outline" size={18} color="#ef4444" />
             </View>
             <Text className="text-2xl font-bold text-gray-900">
-              {loading ? "—" : `$${totalPending.toFixed(0)}`}
+              {paymentsLoading ? "—" : `$${totalPending.toFixed(0)}`}
             </Text>
             <Text className="text-xs text-gray-500 mt-0.5">
               Due · {pendingPayments.length} bill{pendingPayments.length !== 1 ? "s" : ""}
@@ -143,7 +145,7 @@ export default function HomeScreen() {
               <Ionicons name="calendar-outline" size={18} color="#22c55e" />
             </View>
             <Text className="text-2xl font-bold text-gray-900">
-              {eventsLoading ? "—" : openEvents.length}
+              {eventsLoading && !events.length ? "—" : openEvents.length}
             </Text>
             <Text className="text-xs text-gray-500 mt-0.5">Open Events</Text>
           </TouchableOpacity>
@@ -180,7 +182,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {loading ? (
+          {racesLoading ? (
             <View className="mx-4 bg-white rounded-2xl p-6 items-center">
               <ActivityIndicator size="small" color="#189AB4" />
             </View>
@@ -234,7 +236,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {eventsLoading ? (
+          {eventsLoading && !events.length ? (
             <View className="mx-4 bg-white rounded-2xl p-6 items-center">
               <ActivityIndicator size="small" color="#189AB4" />
             </View>

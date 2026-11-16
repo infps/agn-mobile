@@ -1,5 +1,5 @@
 import Header from "@/components/header";
-import api from "@/service/api.service";
+import { fetchAllPages } from "@/service/listCache.service";
 import { useResponsive } from "@/hooks/useResponsive";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -42,15 +42,17 @@ export default function Result() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const { data } = await api.get("/breeder/races");
-      const all: Race[] = data?.races ?? [];
-      setRaces(
-        [...all].sort(
-          (a, b) =>
-            (a.status === "ENDED" ? 0 : 1) - (b.status === "ENDED" ? 0 : 1) ||
-            new Date(b.startTime ?? 0).getTime() - new Date(a.startTime ?? 0).getTime()
-        )
-      );
+      // First page shows at once; the rest streams in behind it.
+      await fetchAllPages<Race>("/breeder/races", "races", (all) => {
+        setRaces(
+          [...all].sort(
+            (a, b) =>
+              (a.status === "ENDED" ? 0 : 1) - (b.status === "ENDED" ? 0 : 1) ||
+              new Date(b.startTime ?? 0).getTime() - new Date(a.startTime ?? 0).getTime()
+          )
+        );
+        setLoading(false);
+      }, 50);
     } catch {
       setError("Could not load results just now.");
       setRaces([]);

@@ -62,7 +62,7 @@ const EventsList = () => {
     });
   }, [events, search, statusFilter]);
 
-  const displayData = loading ? skeletonData : filtered;
+  const displayData = loading && !events.length ? skeletonData : filtered;
   const renderEventItem = ({
     item,
   }: {

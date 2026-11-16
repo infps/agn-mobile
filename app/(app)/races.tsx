@@ -3,6 +3,7 @@ import { RaceRouteMap, RouteLine, RoutePin } from "@/components/RaceRouteMap";
 import { useResponsive } from "@/hooks/useResponsive";
 import { usePolling } from "@/hooks/usePolling";
 import api from "@/service/api.service";
+import { fetchAllPages } from "@/service/listCache.service";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
@@ -156,14 +157,16 @@ const Races = () => {
 
   const load = useCallback(async () => {
     setError(null);
+    // First page of races shows at once; the rest streams in behind it.
     const [all, liveRes] = await Promise.allSettled([
-      api.get("/breeder/races"),
+      fetchAllPages<Race>("/breeder/races", "races", (rows) => {
+        setRaces(rows);
+        setLoading(false);
+      }, 50),
       api.get("/breeder/races/live"),
     ]);
-    if (all.status === "fulfilled") setRaces(all.value.data?.races ?? []);
-    else {
+    if (all.status === "rejected") {
       setError("Could not load races just now.");
-      setRaces([]);
     }
     if (liveRes.status === "fulfilled") {
       setLive(((liveRes.value.data?.races ?? []) as LiveRace[]).filter((r) => r.event));
