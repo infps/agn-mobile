@@ -16,6 +16,7 @@ import {
 
 interface Race {
   id: number;
+  raceNumber: number | null;
   name: string | null;
   description: string | null;
   location: string | null;
@@ -124,7 +125,7 @@ export default function EventHistory() {
                   {list.slice(0, 100).map((r, index) => (
                     <Row
                       key={r.id}
-                      title={`${index + 1}. ${r.description ?? r.name ?? "Race"}`}
+                      title={`${index + 1}. ${r.description || r.name || `Race ${r.raceNumber ?? r.id}`}`}
                       subtitle={
                         [liberation(r.startTime), r.location, r.raceType?.name]
                           .filter(Boolean)

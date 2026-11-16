@@ -1,7 +1,7 @@
 import React from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
-import { Redirect, Slot, useGlobalSearchParams, usePathname, useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Redirect, Stack, useGlobalSearchParams, usePathname, useRouter } from "expo-router";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionContext";
@@ -84,6 +84,7 @@ export default function AdminLayout() {
   const { user, isLoading: authLoading } = useAuth();
   const { canAny, isAdminCapable, isLoading: permsLoading } = usePermissions();
   const { isWide, gutter } = useResponsive();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const pathname = usePathname();
   const { raceId } = useGlobalSearchParams<{ raceId?: string }>();
@@ -122,7 +123,8 @@ export default function AdminLayout() {
 
   const isActive = (href: string) => pathname?.startsWith(href.replace("/(admin)", ""));
 
-  // The shell renders screens through a Slot, which keeps history but draws no
+  // The shell renders screens through a headerless Stack (a native stack, so
+  // Android back press/gesture pops it like the breeder app), which draws no
   // header, and an iPhone has no back button of its own. So the shell draws the
   // one back button, top left, on every screen that is not a tab root.
   //
@@ -208,12 +210,16 @@ export default function AdminLayout() {
               </Pressable>
             </View>
           )}
-          <Slot />
+          <Stack screenOptions={{ headerShown: false }} />
         </View>
       </View>
 
       {!isWide && (
-        <View className="flex-row border-t border-slate-200 bg-white pb-1">
+        // Android draws edge-to-edge: keep the bar clear of the system nav/gesture area.
+        <View
+          className="flex-row border-t border-slate-200 bg-white"
+          style={{ paddingBottom: Math.max(insets.bottom, 4) }}
+        >
           {barItems.map((item) => (
             <NavButton key={item.href} item={item} rail={false} />
           ))}

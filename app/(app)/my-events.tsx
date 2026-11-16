@@ -66,7 +66,7 @@ const MyEvent = () => {
               className="flex-row justify-between p-4 border-b mx-2 border-gray-200 items-center"
               onPress={() => router.push({
                 pathname: "/my-registration",
-                params: { eventId: item.event?.eventId ?? item.event?.id, eventName: item.event?.name },
+                params: { eventId: item.season?.event?.id, eventName: item.season?.event?.name },
               })}
             >
               <View className="w-16">
@@ -74,12 +74,12 @@ const MyEvent = () => {
               </View>
               <View className="w-30">
                 <Text className="text-sm text-left">
-                  {item?.event?.eventDate ? format(new Date(item.event.eventDate), "MMM dd, yyyy") : "Unknown Date"}
+                  {item?.season?.event?.eventDate ? format(new Date(item.season.event.eventDate), "MMM dd, yyyy") : "Unknown Date"}
                 </Text>
               </View>
               <View className="w-32">
                 <Text className="text-sm text-center">
-                  {item?.event?.name || "Not specified"}
+                  {item?.season?.event?.name || "Not specified"}
                 </Text>
               </View>
               <View className="w-[20%]">

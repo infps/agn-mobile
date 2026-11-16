@@ -69,7 +69,7 @@ export default function MyRegistration() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!eventId) return;
+    if (!eventId) { setLoading(false); return; }
     api.get(`/breeder/event/${eventId}/fee-breakdown`)
       .then((res) => setData(res.data))
       .catch(() => setError("Could not load registration details."))

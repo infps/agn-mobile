@@ -85,8 +85,9 @@ export interface AdminRaceItem {
   eventInventoryItem?: { eventInventory?: { loft?: string | null } | null };
 }
 
-export const raceLabel = (r: { id: number; name?: string | null; raceNumber?: number | null }) =>
-  r.name || `Race ${r.raceNumber ?? r.id}`;
+// Older (HayLoft) races have no name; their description/release location is what they were known by.
+export const raceLabel = (r: { id: number; name?: string | null; description?: string | null; location?: string | null; raceNumber?: number | null }) =>
+  r.name?.trim() || r.description?.trim() || r.location?.trim() || `Race ${r.raceNumber ?? r.id}`;
 
 /** The portal's list form of a band: country-year-first four letters-number. */
 export function shortBand(band: string | null | undefined): string {

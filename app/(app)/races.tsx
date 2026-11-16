@@ -65,8 +65,8 @@ type RacesView = "live" | "all" | "map";
 
 // Same title the event detail card shows. Older (HayLoft) races have no name or
 // description — their release location is what they were known by.
-const raceTitle = (r: { description?: string | null; name?: string | null; location?: string | null; raceType?: { name?: string | null } | null }) =>
-  r.description || r.name || r.location || r.raceType?.name || "Race";
+const raceTitle = (r: { id: number; raceNumber?: number | null; description?: string | null; name?: string | null; location?: string | null; raceType?: { name?: string | null } | null }) =>
+  r.name?.trim() || r.description || r.location || r.raceType?.name || `Race ${r.raceNumber ?? r.id}`;
 type SortKey = "recentlyCreated" | "longestRunning" | "mostBirds" | "longestDistance";
 type StatusFilter = "ALL" | "STARTED" | "REGISTERING" | "ENDED";
 
