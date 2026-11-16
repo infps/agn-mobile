@@ -308,8 +308,11 @@ const LiveRace = () => {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center">
-        <ActivityIndicator size="large" />
+      <SafeAreaView className="flex-1">
+        <Header title="Race" fallback="/races" />
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" />
+        </View>
       </SafeAreaView>
     );
   }
@@ -317,7 +320,7 @@ const LiveRace = () => {
   if (error || !race) {
     return (
       <SafeAreaView className="flex-1">
-        <Header title="Race" />
+        <Header title="Race" fallback="/races" />
         <View className="flex-1 items-center justify-center p-6">
           <Text className="text-red-500">{error || "Race not found"}</Text>
         </View>
@@ -482,7 +485,7 @@ const LiveRace = () => {
 
   return (
     <SafeAreaView className="flex-1 bg-[#f5f5f5]">
-      <Header title={isLive ? "Live Race" : "Race"} />
+      <Header title={isLive ? "Live Race" : "Race"} fallback="/races" />
 
       <FlatList
         data={visible}

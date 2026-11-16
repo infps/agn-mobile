@@ -536,7 +536,7 @@ function RaceCard({ race }: { race: any }) {
     >
       <View className="flex-row items-center flex-wrap" style={{ gap: 6 }}>
         <Text className="font-semibold text-gray-900 text-base" numberOfLines={1}>
-          {race.description ?? race.name ?? "Race"}
+          {race.description || race.name || race.location || race.raceType?.name || "Race"}
         </Text>
         {isLiveRace(race) && (
           <View className="bg-red-500 rounded-full px-2 py-0.5">

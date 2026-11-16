@@ -62,6 +62,11 @@ interface MapRace {
 }
 
 type RacesView = "live" | "all" | "map";
+
+// Same title the event detail card shows. Older (HayLoft) races have no name or
+// description — their release location is what they were known by.
+const raceTitle = (r: { description?: string | null; name?: string | null; location?: string | null; raceType?: { name?: string | null } | null }) =>
+  r.description || r.name || r.location || r.raceType?.name || "Race";
 type SortKey = "recentlyCreated" | "longestRunning" | "mostBirds" | "longestDistance";
 type StatusFilter = "ALL" | "STARTED" | "REGISTERING" | "ENDED";
 
@@ -226,7 +231,7 @@ const Races = () => {
     const ps: RoutePin[] = [];
     (mapRaces ?? []).forEach((r) => {
       const isLive = r.status === "STARTED";
-      const title = `${r.description || r.name || "Race"} · ${isLive ? "LIVE" : "UPCOMING"}`;
+      const title = `${raceTitle(r)} · ${isLive ? "LIVE" : "UPCOMING"}`;
       const dist = r.distance != null ? ` · ${r.distance} mi` : "";
       ls.push({
         id: `l-${r.id}`,
@@ -347,7 +352,7 @@ const Races = () => {
             >
               <View className="flex-1">
                 <Text className="text-sm font-semibold text-gray-900">
-                  {r.description || r.name || "Race"}
+                  {raceTitle(r)}
                 </Text>
                 <Text className="text-xs text-gray-500">
                   {r.station.name || "-"} → {r.loft.name || "-"}
@@ -427,7 +432,7 @@ const Races = () => {
                   )}
                   <View className="flex-1">
                     <Text className="text-base font-bold text-gray-900" numberOfLines={2}>
-                      {item.name || item.description || item.event?.name || "Race"}
+                      {raceTitle(item)}
                     </Text>
                     <Text className="text-sm text-gray-500" numberOfLines={1}>
                       {[
@@ -560,7 +565,7 @@ const Races = () => {
               >
                 <View className="flex-row items-start justify-between gap-2">
                   <Text className="flex-1 font-semibold text-gray-900">
-                    {item.name || item.description || `Race ${item.raceNumber ?? item.id}`}
+                    {raceTitle(item)}
                   </Text>
                   <View className={`rounded-full px-2 py-0.5 ${tone.bg}`}>
                     <Text className={`text-[10px] font-medium ${tone.text}`}>{tone.label}</Text>

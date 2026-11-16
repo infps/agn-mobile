@@ -139,7 +139,8 @@ export default function AdminLayout() {
 
   const goBack = () => {
     if (router.canGoBack()) router.back();
-    else router.replace("/(admin)/dashboard");
+    // A race opened by deep link has no history; its parent is the races list.
+    else router.replace(pathname === "/race-detail" ? "/(admin)/races" : "/(admin)/dashboard");
   };
 
   const NavButton = ({ item, rail }: { item: NavItem; rail: boolean }) => {
