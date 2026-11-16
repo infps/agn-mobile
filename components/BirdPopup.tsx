@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState, type ReactNode } from "react";
 import { Image } from "expo-image";
 import { Pressable, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import api from "@/service/api.service";
 import { BirdPopupCtx, BirdPress, useBirdPopup } from "@/components/BirdPopupContext";
 import { useAdminData } from "@/hooks/useAdminData";
@@ -161,16 +162,7 @@ function BirdPopup({ birdId, onClose, onOpenBird }: { birdId: number; onClose: (
                 {b.image ? (
                   <Image source={{ uri: b.image }} style={{ width: "100%", height: "100%" }} contentFit="cover" cachePolicy="memory-disk" />
                 ) : (
-                  // No photo uploaded yet: show the Pigeon Pulse pigeon rather
-                  // than an empty frame, labelled so it isn't taken for this bird.
-                  <>
-                    <Image
-                      source={require("@/assets/images/bird-placeholder.png")}
-                      style={{ width: "100%", height: "88%" }}
-                      contentFit="contain"
-                    />
-                    <Text className="text-[11px] text-slate-400">No photo yet</Text>
-                  </>
+                  <Ionicons name="image-outline" size={40} color="#94a3b8" />
                 )}
               </View>
               <Block title="Bird">
