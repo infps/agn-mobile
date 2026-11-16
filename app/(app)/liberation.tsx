@@ -22,6 +22,31 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+/**
+ * Google Play's "prominent disclosure" for background location.
+ *
+ * Must appear in the app, during normal use, before the system permission
+ * prompt, and say what data is collected, what for, and that it continues
+ * when the app is closed or not in use. Resolves true only on "Continue".
+ */
+const showBackgroundLocationDisclosure = (): Promise<boolean> =>
+  new Promise((resolve) => {
+    Alert.alert(
+      "Share the truck's location",
+      "Pigeon Pulse collects location data to share the transport truck's live position " +
+        "with race organisers and breeders, and to record the release point, even when the " +
+        "app is closed or not in use.\n\n" +
+        "Location is only collected while transport tracking is on for this race. A " +
+        "notification shows the whole time, and tracking stops when you tap Stop.\n\n" +
+        'On the next screens, allow location and choose "Allow all the time".',
+      [
+        { text: "No thanks", style: "cancel", onPress: () => resolve(false) },
+        { text: "Continue", onPress: () => resolve(true) },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) }
+    );
+  });
+
 /* ------------------------------------------------------------------ *
  * Constants / storage keys
  * ------------------------------------------------------------------ */
@@ -235,6 +260,16 @@ const Liberation = () => {
     }
     setBusy(true);
     try {
+      // 0. Prominent disclosure (Google Play's background location policy):
+      // say what is collected, why, and that it continues when the app is
+      // closed — before any system prompt. Skipped once "Allow all the time"
+      // is already granted.
+      const bgNow = await Location.getBackgroundPermissionsAsync();
+      if (bgNow.status !== "granted") {
+        const agreed = await showBackgroundLocationDisclosure();
+        if (!agreed) return;
+      }
+
       // 1. Permissions — foreground then background.
       const fg = await Location.requestForegroundPermissionsAsync();
       if (fg.status !== "granted") {
