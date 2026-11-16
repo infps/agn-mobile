@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchAllPages, readListCache, writeListCache } from "@/service/listCache.service";
+import { describeLoadError } from "@/service/loadError";
 
 const STALE = 5 * 60 * 1000;
 
@@ -25,7 +26,7 @@ export function useCachedList<T>(path: string | null, field: string, cacheKey: s
     } catch (err: any) {
       const status = err?.response?.status;
       if (status === 401 || status === 403) setForbidden(true);
-      else setError(err?.response?.data?.message ?? "Could not load this just now.");
+      else setError(describeLoadError(err));
     } finally {
       setLoading(false);
       setRefreshing(false);

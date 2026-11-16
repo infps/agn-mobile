@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import api from "@/service/api.service";
+import { describeLoadError } from "@/service/loadError";
 
 export interface AdminData<T> {
   data: T | null;
@@ -57,7 +58,7 @@ export function useAdminData<T = any>(
       if (status === 401 || status === 403) {
         setForbidden(true);
       } else {
-        setError(err?.response?.data?.message ?? "Could not load this just now.");
+        setError(describeLoadError(err));
       }
       // No response = network blip (often a background poll); keep what is on
       // screen rather than swapping a live race for "not found".
