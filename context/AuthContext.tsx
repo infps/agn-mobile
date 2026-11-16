@@ -149,7 +149,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const response = await api.post("/auth/sign-up/email", {
           email: userData.email,
           password: userData.password,
-          name: `${userData.firstName} ${userData.lastName}`,
+          name: userData.firstName,
+          lastName: userData.lastName,
           username: userData.username,
         });
         const { token, user } = response.data;
@@ -167,7 +168,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Set lastName via profile update
         try {
           const formData = new FormData();
-          formData.append("name", `${userData.firstName} ${userData.lastName}`);
+          formData.append("name", userData.firstName);
           formData.append("lastName", userData.lastName);
           await api.put("/user/profile", formData, {
             headers: { "Content-Type": "multipart/form-data" },
